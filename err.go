@@ -7,9 +7,9 @@ import (
 )
 
 // Err augments an error with labels (a categorization system) and
-// context (a map of data used to track the context surrounding the
-// error at the time it occurred, primarily use in upstream logging
-// and other telemetry),
+// data (a map of contextual data used to record the state of the
+// process at the time the error occurred, primarily for use in
+// upstream logging and other telemetry),
 type Err struct {
 	// e holds the base error.
 	e error
@@ -19,9 +19,9 @@ type Err struct {
 	// categorization without applying an error type.
 	labels map[string]struct{}
 
-	// context is the record of contextual data produced,
+	// data is the record of contextual data produced,
 	// presumably, at the time the error is created or wrapped.
-	context map[string]any
+	data map[string]any
 }
 
 func newErr(e error) *Err {
@@ -64,24 +64,24 @@ func Label(err error, label string) *Err {
 }
 
 // ------------------------------------------------------------
-// context
+// data
 // ------------------------------------------------------------
 
-// With adds the key,value pair to the Err's context map.
+// With adds the key,value pair to the Err's data map.
 func (err *Err) With(key string, value any) *Err {
 	if err == nil {
 		return nil
 	}
 
-	if len(err.context) == 0 {
-		err.context = map[string]any{}
+	if len(err.data) == 0 {
+		err.data = map[string]any{}
 	}
 
-	err.context[key] = value
+	err.data[key] = value
 	return err
 }
 
-// With adds the key,value pair to the Err's context map.
+// With adds the key,value pair to the Err's data map.
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
 func With(err error, key string, value any) *Err {
@@ -97,15 +97,15 @@ func With(err error, key string, value any) *Err {
 	return e.With(key, value)
 }
 
-// WithAll adds every two context as a key,value pair to
-// the Err's context map.
+// WithAll adds every two values as a key,value pair to
+// the Err's data map.
 func (err *Err) WithAll(kvs ...any) *Err {
 	if err == nil {
 		return nil
 	}
 
-	if len(err.context) == 0 {
-		err.context = map[string]any{}
+	if len(err.data) == 0 {
+		err.data = map[string]any{}
 	}
 
 	for i := 0; i < len(kvs); i += 2 {
@@ -116,14 +116,14 @@ func (err *Err) WithAll(kvs ...any) *Err {
 			value = kvs[i+1]
 		}
 
-		err.context[key] = value
+		err.data[key] = value
 	}
 
 	return err
 }
 
-// WithAll adds every two context as a key,value pair to
-// the Err's context map.
+// WithAll adds every two values as a key,value pair to
+// the Err's data map.
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
 func WithAll(err error, kvs ...any) *Err {
@@ -139,24 +139,24 @@ func WithAll(err error, kvs ...any) *Err {
 	return e.WithAll(kvs...)
 }
 
-// WithMap copies the map to the Err's context map.
+// WithMap copies the map to the Err's data map.
 func (err *Err) WithMap(m map[string]any) *Err {
 	if err == nil {
 		return nil
 	}
 
-	if len(err.context) == 0 {
-		err.context = map[string]any{}
+	if len(err.data) == 0 {
+		err.data = map[string]any{}
 	}
 
 	for k, v := range m {
-		err.context[k] = v
+		err.data[k] = v
 	}
 
 	return err
 }
 
-// WithMap copies the map to the Err's context map.
+// WithMap copies the map to the Err's data map.
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
 func WithMap(err error, m map[string]any) *Err {
@@ -172,30 +172,30 @@ func WithMap(err error, m map[string]any) *Err {
 	return e.WithMap(m)
 }
 
-// Context returns all of the context in the error.  Each error
-// in the stack is unwrapped and all context are unioned.
-// In case of collision, lower level error context take least
+// Values returns all of the contextual data in the error.  Each
+// error in the stack is unwrapped and all maps are unioned.
+// In case of collision, lower level error data take least
 // priority.
-func (err *Err) Context() map[string]any {
+func (err *Err) Values() map[string]any {
 	if err == nil {
 		return map[string]any{}
 	}
 
 	child := err.Unwrap()
-	vals := Context(child)
+	vals := ErrValues(child)
 
-	for k, v := range err.context {
+	for k, v := range err.data {
 		vals[k] = v
 	}
 
 	return vals
 }
 
-// Context returns all of the context in the error.  Each error
-// in the stack is unwrapped and all context are unioned.
-// In case of collision, lower level error context take least
-// priority.
-func Context(err error) map[string]any {
+// ErrValues returns all of the contextual data in the error.
+// Each error in the stack is unwrapped and all maps are
+// unioned. In case of collision, lower level error data
+// take least priority.
+func ErrValues(err error) map[string]any {
 	if err == nil {
 		return map[string]any{}
 	}
@@ -205,7 +205,7 @@ func Context(err error) map[string]any {
 		return map[string]any{}
 	}
 
-	return e.Context()
+	return e.Values()
 }
 
 // ------------------------------------------------------------
