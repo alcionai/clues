@@ -1,21 +1,21 @@
 # CLUES
 
-A golang library for tracking and presenting clues about process runtime state.
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/ryanfkeepers/clues)](https://pkg.go.dev/github.com/ryanfkeepers/clues) [![goreportcard](https://goreportcard.com/badge/github.com/ryanfkeepers/clues)](https://goreportcard.com/report/github.com/ryanfkeepers/clues)
 
-Rather than have you standardize around emitting telemetry within every error handler or fmting contextual details into the error message (or worse, both), Clues provides an interface to accumulate stateful data throughout the process tree, and pack that data into an error as an upstream-readable map.
+A golang library for tracking runtime variables via ctx, passing them upstream within errors, and retrieving context- and error-bound variables for logging.
 
-## Usage Examples
+## Aggregate in Context
 
+Track runtime variables by adding them to the context.
 ```go
-// aggregate state during processing
 func foo(ctx context.Context, someID string) error {
     ctx = clues.Add(ctx, "importantID", someID)
     return bar(ctx, someID)
 }
 ```
 
+Keep error messages readable, and augment your telemetry, by packing errors with structured data.
 ```go
-// wrap an error with the recording data
 func bar(ctx context.Context, someID string) error {
     err := doThing(ctx, someID)
     if err != nil {
@@ -25,8 +25,8 @@ func bar(ctx context.Context, someID string) error {
 }
 ```
 
+Retrive structured values from your errors for logging and other telemetry.
 ```go
-// back upstream, retrive values from the error
 func main() {
     err := foo(context.Background(), "importantID")
     if err != nil {
@@ -38,12 +38,46 @@ func main() {
 }
 ```
 
+## Labeling Errors
+
+Rather than build an errors.As-compliant local error to annotate downstream errors, labels allow you to categorize errors with expected qualities.
+
+Augment downstream errors with labels
+```go
+func foo(ctx context.Context, someID string) error {
+    err := externalPkg.DoThing(ctx, someID)
+    if err != nil {
+        return clues.Wrap(err).Label("retryable")
+    }
+    return nil
+}
+```
+
+Check your labels upstream.
+```go
+func main() {
+    err := foo(context.Background(), "importantID")
+    if err != nil {
+        if clues.HasLabel(err, "retryable")) {
+            err := foo(context.Background(), "importantID")
+        }
+    }
+}
+```
+
 ## Design
 
-Clues is not the first of its kind: ctx-err-combo packages already exist.  However, other packages tend to couple the two notions, packing both into a single handler.  This is, in my opinion, an anti-pattern.  Errors are not context, and context are not errors.  Unifying the two introduces problematic coupling, maintenance woes from coupling are not worth the syntactical sugar.
+Clues is not the first of its kind: ctx-err-combo packages already exist.  Most other packages tend to couple the two notions, packing both into a single handler.  This is, in my opinion, an anti-pattern.  Errors are not context, and context are not errors.  Unifying the two can couple layers together, and your maintenance woes from handling that coupling are not worth the tradeoff in syntactical sugar.
 
-In turn, this package maintains a clear separation between accumulating data into a context and passing data back in an error.  Both handlers operate independent of the other, so you can choose to only use the ctx (accumulate data into the context, but maybe log it instead of returning data in the err) or the err (only pack immedaite details into the error).
+In turn, Clues maintains a clear separation between accumulating data into a context and passing data back in an error.  Both handlers operate independent of the other, so you can choose to only use the ctx (accumulate data into the context, but maybe log it instead of returning data in the err) or the err (only pack immedaite details into the error).
 
-## Similar Packages
+### References
 * [https://github.com/mvndaai/ctxerr](ctxerr)
 * [https://github.com/suzuki-shunsuke/go-errctx](go-errctx)
+
+## Similar Art
+
+Fault is most similar in design to this package, and also attempts to maintain separation between errors and contexts.  The differences are largely syntactical: Fault prefers a composable interface with decorator packages.  I like to keep error production as terse as possible, thus preferring a more populated interface of methods over the decorator design.
+
+### References
+* [https://github.com/Southclaws/fault](fault)
