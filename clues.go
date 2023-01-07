@@ -96,7 +96,7 @@ func AddAll(ctx context.Context, kvs ...any) context.Context {
 }
 
 // AddMap adds a shallow clone of the map to a namespaced set of clues.
-func AddMapT[K comparable, V any](ctx context.Context, m map[K]V) context.Context {
+func AddMap[K comparable, V any](ctx context.Context, m map[K]V) context.Context {
 	nc := from(ctx)
 	for k, v := range m {
 		nc.add(defaultNamespace, marshal(k), v)
