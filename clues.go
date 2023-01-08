@@ -40,24 +40,26 @@ func (nc namespacedClues) addAll(name string, kvs ...any) {
 			value = kvs[i+1]
 		}
 
-		nc.add(defaultNamespace, key, value)
+		nc.add(name, key, value)
 	}
 }
 
 type cluesCtxKey struct{}
 
-func from(ctx context.Context) namespacedClues {
-	am := ctx.Value(cluesCtxKey{})
+var key = cluesCtxKey{}
 
-	if am == nil {
+func from(ctx context.Context) namespacedClues {
+	nc := ctx.Value(key)
+
+	if nc == nil {
 		return newClueMap()
 	}
 
-	return am.(namespacedClues)
+	return nc.(namespacedClues)
 }
 
 func set(ctx context.Context, nc namespacedClues) context.Context {
-	return context.WithValue(ctx, cluesCtxKey{}, nc)
+	return context.WithValue(ctx, key, nc)
 }
 
 func marshal(a any) string {

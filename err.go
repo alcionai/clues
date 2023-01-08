@@ -2,8 +2,6 @@ package clues
 
 import (
 	"fmt"
-
-	"github.com/pkg/errors"
 )
 
 // Err augments an error with labels (a categorization system) and
@@ -13,6 +11,9 @@ import (
 type Err struct {
 	// e holds the base error.
 	e error
+
+	// msg is the message for this error.
+	msg string
 
 	// labels contains a map of the labels applied
 	// to this error.  Can be used to identify error
@@ -24,8 +25,8 @@ type Err struct {
 	data map[string]any
 }
 
-func newErr(e error) *Err {
-	return &Err{e: e}
+func asErr(e error, msg string) *Err {
+	return &Err{e: e, msg: msg}
 }
 
 // ------------------------------------------------------------
@@ -37,8 +38,23 @@ func (err *Err) HasLabel(label string) bool {
 		return false
 	}
 
-	_, ok := err.labels[label]
-	return ok
+	if _, ok := err.labels[label]; ok {
+		return true
+	}
+
+	return HasLabel(err.e, label)
+}
+
+func HasLabel(err error, label string) bool {
+	if err == nil {
+		return false
+	}
+
+	if e, ok := err.(*Err); ok {
+		return e.HasLabel(label)
+	}
+
+	return HasLabel(Unwrap(err), label)
 }
 
 func (err *Err) Label(label string) *Err {
@@ -57,7 +73,7 @@ func Label(err error, label string) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = newErr(err)
+		e = asErr(err, "")
 	}
 
 	return e.Label(label)
@@ -91,7 +107,7 @@ func With(err error, key string, value any) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = newErr(err)
+		e = asErr(err, "")
 	}
 
 	return e.With(key, value)
@@ -133,7 +149,7 @@ func WithAll(err error, kvs ...any) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = newErr(err)
+		e = asErr(err, "")
 	}
 
 	return e.WithAll(kvs...)
@@ -166,7 +182,7 @@ func WithMap(err error, m map[string]any) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = newErr(err)
+		e = asErr(err, "")
 	}
 
 	return e.WithMap(m)
@@ -181,8 +197,7 @@ func (err *Err) Values() map[string]any {
 		return map[string]any{}
 	}
 
-	child := err.Unwrap()
-	vals := ErrValues(child)
+	vals := ErrValues(err.e)
 
 	for k, v := range err.data {
 		vals[k] = v
@@ -200,20 +215,24 @@ func ErrValues(err error) map[string]any {
 		return map[string]any{}
 	}
 
-	e, ok := err.(*Err)
-	if !ok {
-		return map[string]any{}
+	if e, ok := err.(*Err); ok {
+		return e.Values()
 	}
 
-	return e.Values()
+	return ErrValues(Unwrap(err))
 }
 
 // ------------------------------------------------------------
 // eror interface compliance
 // ------------------------------------------------------------
 
+var _ error = &Err{}
+
 func (err *Err) Error() string {
-	return err.e.Error()
+	if len(err.msg) == 0 {
+		return err.e.Error()
+	}
+	return err.msg + ": " + err.e.Error()
 }
 
 func (err *Err) Format(s fmt.State, verb rune) {
@@ -221,27 +240,8 @@ func (err *Err) Format(s fmt.State, verb rune) {
 	if !ok {
 		return
 	}
+
 	f.Format(s, verb)
-}
-
-// Cause returns the Cause() of the base error, if it implements
-// the causer interface:
-//
-//	type causer interface {
-//	       Cause() error
-//	}
-//
-// If the error does not implement Cause, returns the base error.
-func (err *Err) Cause() error {
-	if err.e == nil {
-		return nil
-	}
-
-	f, ok := err.e.(interface{ Cause() error })
-	if !ok {
-		return err.e
-	}
-	return f.Cause()
 }
 
 // Unwrap provides compatibility for Go 1.13 error chains.
@@ -252,18 +252,40 @@ func (err *Err) Cause() error {
 //	       Unwrap() error
 //	}
 //
-// If the error does not implement Unwrap, returns the base error
+// If the error does not implement Unwrap, returns the base error.
 func (err *Err) Unwrap() error {
-	if err.e == nil {
+	if err == nil {
 		return nil
 	}
 
-	f, ok := err.e.(interface{ Unwrap() error })
-	if !ok {
-		return err.e
+	return err.e
+}
+
+// Unwrap provides compatibility for Go 1.13 error chains.
+// Unwrap returns the Unwrap()ped base error, if it implements
+// the unwrapper interface:
+//
+//	type unwrapper interface {
+//	       Unwrap() error
+//	}
+//
+// If the error does not implement Unwrap, returns the error.
+func Unwrap(err error) error {
+	if err == nil {
+		return nil
 	}
 
-	return f.Unwrap()
+	if e, ok := err.(*Err); ok {
+		return e.e
+	}
+
+	u, ok := err.(interface{ Unwrap() error })
+	if !ok {
+		return nil
+	}
+
+	ue := u.Unwrap()
+	return ue
 }
 
 // ------------------------------------------------------------
@@ -271,30 +293,23 @@ func (err *Err) Unwrap() error {
 // ------------------------------------------------------------
 
 func New(msg string) *Err {
-	return newErr(errors.New(msg))
+	return asErr(nil, msg)
 }
 
-func Newf(template string, values ...any) *Err {
-	return newErr(errors.Errorf(template, values...))
-}
-
+// Wrap returns a  clues.Err with a new message wrapping the old error.
 func Wrap(err error, msg string) *Err {
 	if err == nil {
 		return nil
 	}
-	return newErr(errors.Wrap(err, msg))
+
+	return asErr(err, msg)
 }
 
-func Wrapf(err error, template string, values ...any) *Err {
+// Stack returns a clues.Err holding the error..
+func Stack(err error) *Err {
 	if err == nil {
 		return nil
 	}
-	return newErr(errors.Wrapf(err, template, values...))
-}
 
-func WithStack(err error) *Err {
-	if err == nil {
-		return nil
-	}
-	return newErr(errors.WithStack(err))
+	return asErr(err, "")
 }
