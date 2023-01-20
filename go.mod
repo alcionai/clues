@@ -1,4 +1,4 @@
-module github.com/ryanfkeepers/clues
+module github.com/alcionai/clues
 
 go 1.19
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ryanfkeepers/clues"
+	"github.com/alcionai/clues"
 )
 
 type msa map[string]any
