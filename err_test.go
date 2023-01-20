@@ -5,7 +5,8 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-	"github.com/ryanfkeepers/clues"
+
+	"github.com/alcionai/clues"
 )
 
 func TestLabel(t *testing.T) {
