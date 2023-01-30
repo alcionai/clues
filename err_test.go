@@ -255,3 +255,214 @@ func TestUnwrap(t *testing.T) {
 		t.Errorf("expected nil unwrap input to return nil")
 	}
 }
+
+func TestErr_Error(t *testing.T) {
+	sentinel := errors.New("sentinel")
+
+	table := []struct {
+		name   string
+		err    error
+		expect string
+	}{
+		{
+			name:   "new error",
+			err:    clues.New("new"),
+			expect: "new",
+		},
+		{
+			name:   "stacked error",
+			err:    clues.Stack(sentinel),
+			expect: sentinel.Error(),
+		},
+		{
+			name:   "wrapped new error",
+			err:    clues.Wrap(clues.New("new"), "wrap"),
+			expect: "wrap: new",
+		},
+		{
+			name:   "wrapped non-clues error",
+			err:    clues.Wrap(sentinel, "wrap"),
+			expect: "wrap: " + sentinel.Error(),
+		},
+		{
+			name:   "wrapped stacked error",
+			err:    clues.Wrap(clues.Stack(sentinel), "wrap"),
+			expect: "wrap: " + sentinel.Error(),
+		},
+		{
+			name:   "multiple wraps",
+			err:    clues.Wrap(clues.Wrap(clues.New("new"), "wrap"), "wrap2"),
+			expect: "wrap2: wrap: new",
+		},
+		{
+			name:   "wrap-stack-wrap-new",
+			err:    clues.Wrap(clues.Stack(clues.Wrap(clues.New("new"), "wrap")), "wrap2"),
+			expect: "wrap2: wrap: new",
+		},
+		{
+			name:   "many stacked errors",
+			err:    clues.Stack(sentinel, errors.New("middle"), errors.New("base")),
+			expect: sentinel.Error() + ": middle: base",
+		},
+		{
+			name: "stacked stacks",
+			err: clues.Stack(
+				clues.Stack(sentinel, errors.New("left")),
+				clues.Stack(errors.New("right"), errors.New("base")),
+			),
+			expect: sentinel.Error() + ": left: right: base",
+		},
+		{
+			name: "wrapped stacks",
+			err: clues.Stack(
+				clues.Wrap(clues.Stack(errors.New("top"), errors.New("left")), "left-stack"),
+				clues.Wrap(clues.Stack(errors.New("right"), errors.New("base")), "right-stack"),
+			),
+			expect: "left-stack: top: left: right-stack: right: base",
+		},
+		{
+			name: "wrapped stacks, all clues.New",
+			err: clues.Stack(
+				clues.Wrap(clues.Stack(clues.New("top"), clues.New("left")), "left-stack"),
+				clues.Wrap(clues.Stack(clues.New("right"), clues.New("base")), "right-stack"),
+			),
+			expect: "left-stack: top: left: right-stack: right: base",
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			result := test.err.Error()
+			if result != test.expect {
+				t.Errorf("expected error message [%s], got [%s]", test.expect, result)
+			}
+		})
+	}
+}
+
+func TestErrValues_stacks(t *testing.T) {
+	table := []struct {
+		name   string
+		err    error
+		expect msa
+	}{
+		{
+			name:   "single err",
+			err:    clues.Stack(clues.New("an err").With("k", "v")),
+			expect: msa{"k": "v"},
+		},
+		{
+			name: "two stack",
+			err: clues.Stack(
+				clues.New("an err").With("k", "v"),
+				clues.New("other").With("k2", "v2"),
+			),
+			expect: msa{"k": "v", "k2": "v2"},
+		},
+		{
+			name: "sandvitch",
+			err: clues.Stack(
+				clues.New("top").With("k", "v"),
+				errors.New("mid"),
+				clues.New("base").With("k2", "v2"),
+			),
+			expect: msa{"k": "v", "k2": "v2"},
+		},
+		{
+			name: "value collision",
+			err: clues.Stack(
+				clues.New("top").With("k", "v"),
+				clues.New("mid").With("k2", "v2"),
+				clues.New("base").With("k", "v3"),
+			),
+			expect: msa{"k": "v", "k2": "v2"},
+		},
+		{
+			name: "double double",
+			err: clues.Stack(
+				clues.Stack(
+					clues.New("top").With("k", "v"),
+					clues.New("left").With("k2", "v2"),
+				),
+				clues.Stack(
+					clues.New("right").With("k3", "v3"),
+					clues.New("base").With("k4", "v4"),
+				),
+			),
+			expect: msa{
+				"k":  "v",
+				"k2": "v2",
+				"k3": "v3",
+				"k4": "v4",
+			},
+		},
+		{
+			name: "double double collision",
+			err: clues.Stack(
+				clues.Stack(
+					clues.New("top").With("k", "v"),
+					clues.New("left").With("k2", "v2"),
+				),
+				clues.Stack(
+					clues.New("right").With("k3", "v3"),
+					clues.New("base").With("k", "v4"),
+				),
+			),
+			expect: msa{
+				"k":  "v",
+				"k2": "v2",
+				"k3": "v3",
+			},
+		},
+		{
+			name: "double double animal wrap",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("top").With("k", "v"),
+						clues.New("left").With("k2", "v2"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right").With("k3", "v3"),
+						clues.New("base").With("k4", "v4"),
+					),
+					"right-stack"),
+			),
+			expect: msa{
+				"k":  "v",
+				"k2": "v2",
+				"k3": "v3",
+				"k4": "v4",
+			},
+		},
+		{
+			name: "double double animal wrap collision",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("top").With("k", "v"),
+						clues.New("left").With("k2", "v2"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right").With("k3", "v3"),
+						clues.New("base").With("k", "v4"),
+					),
+					"right-stack"),
+			),
+			expect: msa{
+				"k":  "v",
+				"k2": "v2",
+				"k3": "v3",
+			},
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			vs := clues.ErrValues(test.err)
+			test.expect.equals(t, vs)
+		})
+	}
+}
