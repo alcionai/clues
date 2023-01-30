@@ -1,6 +1,7 @@
 package clues
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -186,6 +187,28 @@ func WithMap(err error, m map[string]any) *Err {
 	}
 
 	return e.WithMap(m)
+}
+
+// WithClues is syntactical-sugar that assumes you're using
+// the clues package to store structured data in the context.
+// The values in the default namespace are retrieved and added
+// to the error.
+//
+// clues.Stack(err).WithClues(ctx) adds the same data as
+// clues.Stack(err).WithMap(clues.Values(ctx)).
+func (err *Err) WithClues(ctx context.Context) *Err {
+	return err.WithMap(Values(ctx))
+}
+
+// WithClues is syntactical-sugar that assumes you're using
+// the clues package to store structured data in the context.
+// The values in the default namespace are retrieved and added
+// to the error.
+//
+// clues.WithClues(err, ctx) adds the same data as
+// clues.WithMap(err, clues.Values(ctx)).
+func WithClues(err error, ctx context.Context) *Err {
+	return WithMap(err, Values(ctx))
 }
 
 // Values returns all of the contextual data in the error.  Each
