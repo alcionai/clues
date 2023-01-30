@@ -1,6 +1,7 @@
 package clues_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -179,6 +180,44 @@ func TestWithMap(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			err := clues.WithMap(test.initial, test.kv)
+			err.WithMap(test.with)
+			test.expect.equals(t, clues.ErrValues(err))
+			test.expect.equals(t, err.Values())
+		})
+	}
+}
+
+func TestWithClues(t *testing.T) {
+	ctx := context.Background()
+
+	table := []struct {
+		name    string
+		initial error
+		kv      msa
+		with    msa
+		expect  msa
+	}{
+		{"nil error", nil, msa{"k": "v"}, msa{"k2": "v2"}, msa{}},
+		{"only base error vals", base, msa{"k": "v"}, nil, msa{"k": "v"}},
+		{"empty base error vals", base, msa{"": ""}, nil, msa{"": ""}},
+		{"standard", base, msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2"}},
+		{"duplicates", base, msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2"}},
+		{"multi", base, msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3"}},
+		{"only clue error vals", cerr(), msa{"k": "v"}, nil, msa{"k": "v"}},
+		{"empty clue error vals", cerr(), msa{"": ""}, nil, msa{"": ""}},
+		{"standard cerr", cerr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2"}},
+		{"duplicates cerr", cerr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2"}},
+		{"multi cerr", cerr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3"}},
+		{"only wrapped error vals", werr(), msa{"k": "v"}, nil, msa{"k": "v", "z": 0}},
+		{"empty wrapped error vals", werr(), msa{"": ""}, nil, msa{"": "", "z": 0}},
+		{"standard wrapped", werr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2", "z": 0}},
+		{"duplicates wrapped", werr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2", "z": 0}},
+		{"multi wrapped", werr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			tctx := clues.AddMap(ctx, test.kv)
+			err := clues.WithClues(test.initial, tctx)
 			err.WithMap(test.with)
 			test.expect.equals(t, clues.ErrValues(err))
 			test.expect.equals(t, err.Values())
