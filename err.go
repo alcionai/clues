@@ -26,7 +26,7 @@ type Err struct {
 	data map[string]any
 }
 
-func asErr(e error, msg string) *Err {
+func toErr(e error, msg string) *Err {
 	return &Err{e: e, msg: msg}
 }
 
@@ -74,7 +74,7 @@ func Label(err error, label string) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = asErr(err, "")
+		e = toErr(err, "")
 	}
 
 	return e.Label(label)
@@ -108,7 +108,7 @@ func With(err error, key string, value any) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = asErr(err, "")
+		e = toErr(err, "")
 	}
 
 	return e.With(key, value)
@@ -150,7 +150,7 @@ func WithAll(err error, kvs ...any) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = asErr(err, "")
+		e = toErr(err, "")
 	}
 
 	return e.WithAll(kvs...)
@@ -183,7 +183,7 @@ func WithMap(err error, m map[string]any) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = asErr(err, "")
+		e = toErr(err, "")
 	}
 
 	return e.WithMap(m)
@@ -252,10 +252,20 @@ func ErrValues(err error) map[string]any {
 var _ error = &Err{}
 
 func (err *Err) Error() string {
-	if len(err.msg) == 0 {
-		return err.e.Error()
+	var inner string
+	if err.e != nil {
+		inner = err.e.Error()
 	}
-	return err.msg + ": " + err.e.Error()
+
+	if len(err.msg) == 0 {
+		return inner
+	}
+
+	if len(inner) == 0 {
+		return err.msg
+	}
+
+	return err.msg + ": " + inner
 }
 
 func (err *Err) Format(s fmt.State, verb rune) {
@@ -316,7 +326,7 @@ func Unwrap(err error) error {
 // ------------------------------------------------------------
 
 func New(msg string) *Err {
-	return asErr(nil, msg)
+	return toErr(nil, msg)
 }
 
 // Wrap returns a  clues.Err with a new message wrapping the old error.
@@ -325,14 +335,29 @@ func Wrap(err error, msg string) *Err {
 		return nil
 	}
 
-	return asErr(err, msg)
+	return toErr(err, msg)
 }
 
-// Stack returns a clues.Err holding the error..
-func Stack(err error) *Err {
-	if err == nil {
+// Stack returns the error as a clues.Err.  If additional errors are
+// provided, the entire stack is flattened and returned as a single
+// error chain.  All messages and stored structure is aggregated into
+// the returned err.
+//
+// Ex: Stack(sentinel, errors.New("base")).Error() => "sentinel: base"
+func Stack(errs ...error) *Err {
+	var inner *Err
+
+	switch len(errs) {
+	case 0:
 		return nil
+	case 1:
+		return toErr(errs[0], "")
+	default:
+		inner = Stack(errs[1:]...)
 	}
 
-	return asErr(err, "")
+	stk := toErr(inner, errs[0].Error())
+	stk.WithMap(ErrValues(errs[0]))
+
+	return stk
 }
