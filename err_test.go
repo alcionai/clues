@@ -466,3 +466,449 @@ func TestErrValues_stacks(t *testing.T) {
 		})
 	}
 }
+
+func TestIs(t *testing.T) {
+	sentinel := errors.New("sentinel")
+
+	table := []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "plain stack",
+			err:  clues.Stack(sentinel),
+		},
+		{
+			name: "plain wrap",
+			err:  clues.Wrap(sentinel, "wrap"),
+		},
+		{
+			name: "two stack; top",
+			err:  clues.Stack(sentinel, errors.New("other")),
+		},
+		{
+			name: "two stack; base",
+			err:  clues.Stack(errors.New("other"), sentinel),
+		},
+		{
+			name: "two wrap",
+			err:  clues.Wrap(clues.Wrap(sentinel, "inner"), "outer"),
+		},
+		{
+			name: "wrap stack",
+			err:  clues.Wrap(clues.Stack(sentinel), "wrap"),
+		},
+		{
+			name: "wrap two stack: top",
+			err:  clues.Wrap(clues.Stack(sentinel, errors.New("other")), "wrap"),
+		},
+		{
+			name: "wrap two stack: base",
+			err:  clues.Wrap(clues.Stack(errors.New("other"), sentinel), "wrap"),
+		},
+		{
+			name: "double double stack; left top",
+			err: clues.Stack(
+				clues.Stack(
+					sentinel,
+					clues.New("left-base"),
+				),
+				clues.Stack(
+					clues.New("right-top"),
+					clues.New("right-base"),
+				),
+			),
+		},
+		{
+			name: "double double stack; left base",
+			err: clues.Stack(
+				clues.Stack(
+					clues.New("left-top"),
+					sentinel,
+				),
+				clues.Stack(
+					clues.New("right-top"),
+					clues.New("right-base"),
+				),
+			),
+		},
+		{
+			name: "double double stack; right top",
+			err: clues.Stack(
+				clues.Stack(
+					clues.New("left-top"),
+					clues.New("left-base"),
+				),
+				clues.Stack(
+					sentinel,
+					clues.New("right-base"),
+				),
+			),
+		},
+		{
+			name: "double double animal wrap; right base",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						sentinel,
+					),
+					"right-stack"),
+			),
+		},
+		{
+			name: "double double animal wrap; left top",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						sentinel,
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						clues.New("right-base"),
+					),
+					"right-stack"),
+			),
+		},
+		{
+			name: "double double animal wrap; left base",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						sentinel,
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						clues.New("right-base"),
+					),
+					"right-stack"),
+			),
+		},
+		{
+			name: "double double animal wrap; right top",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						sentinel,
+						clues.New("right-base"),
+					),
+					"right-stack"),
+			),
+		},
+		{
+			name: "double double animal wrap; right base",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						sentinel,
+					),
+					"right-stack"),
+			),
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			if !errors.Is(test.err, sentinel) {
+				t.Errorf("expected err [%v] to be true for errors.Is with [%s]", test.err, sentinel)
+			}
+		})
+	}
+
+	notSentinel := clues.New("sentinel")
+
+	// NOT Is checks
+	table = []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "plain stack",
+			err:  clues.Stack(notSentinel),
+		},
+		{
+			name: "plain wrap",
+			err:  clues.Wrap(notSentinel, "wrap"),
+		},
+		{
+			name: "double double animal wrap",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						notSentinel,
+					),
+					"right-stack"),
+			),
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			if errors.Is(test.err, sentinel) {
+				t.Errorf("expected err [%v] to be FALSE for errors.Is with [%s]", test.err, sentinel)
+			}
+		})
+	}
+}
+
+type mockTarget struct {
+	err error
+}
+
+func (mt mockTarget) Error() string {
+	return mt.err.Error()
+}
+
+func (mt mockTarget) Cause() error {
+	return mt.err
+}
+
+func (mt mockTarget) Unwrap() error {
+	return mt.err
+}
+
+func TestAs(t *testing.T) {
+	target := mockTarget{errors.New("target")}
+
+	table := []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "plain stack",
+			err:  clues.Stack(target),
+		},
+		{
+			name: "plain wrap",
+			err:  clues.Wrap(target, "wrap"),
+		},
+		{
+			name: "two stack; top",
+			err:  clues.Stack(target, errors.New("other")),
+		},
+		{
+			name: "two stack; base",
+			err:  clues.Stack(errors.New("other"), target),
+		},
+		{
+			name: "two wrap",
+			err:  clues.Wrap(clues.Wrap(target, "inner"), "outer"),
+		},
+		{
+			name: "wrap stack",
+			err:  clues.Wrap(clues.Stack(target), "wrap"),
+		},
+		{
+			name: "wrap two stack: top",
+			err:  clues.Wrap(clues.Stack(target, errors.New("other")), "wrap"),
+		},
+		{
+			name: "wrap two stack: base",
+			err:  clues.Wrap(clues.Stack(errors.New("other"), target), "wrap"),
+		},
+		{
+			name: "double double stack; left top",
+			err: clues.Stack(
+				clues.Stack(
+					target,
+					clues.New("left-base"),
+				),
+				clues.Stack(
+					clues.New("right-top"),
+					clues.New("right-base"),
+				),
+			),
+		},
+		{
+			name: "double double stack; left base",
+			err: clues.Stack(
+				clues.Stack(
+					clues.New("left-top"),
+					target,
+				),
+				clues.Stack(
+					clues.New("right-top"),
+					clues.New("right-base"),
+				),
+			),
+		},
+		{
+			name: "double double stack; right top",
+			err: clues.Stack(
+				clues.Stack(
+					clues.New("left-top"),
+					clues.New("left-base"),
+				),
+				clues.Stack(
+					target,
+					clues.New("right-base"),
+				),
+			),
+		},
+		{
+			name: "double double animal wrap; right base",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						target,
+					),
+					"right-stack"),
+			),
+		},
+		{
+			name: "double double animal wrap; left top",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						target,
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						clues.New("right-base"),
+					),
+					"right-stack"),
+			),
+		},
+		{
+			name: "double double animal wrap; left base",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						target,
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						clues.New("right-base"),
+					),
+					"right-stack"),
+			),
+		},
+		{
+			name: "double double animal wrap; right top",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						target,
+						clues.New("right-base"),
+					),
+					"right-stack"),
+			),
+		},
+		{
+			name: "double double animal wrap; right base",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						target,
+					),
+					"right-stack"),
+			),
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			mt := mockTarget{}
+			if !errors.As(test.err, &mt) {
+				t.Errorf("expected err [%v] to be true for errors.As with [%s]", test.err, target)
+			}
+		})
+	}
+
+	notTarget := errors.New("target")
+
+	// NOT As checks
+	table = []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "plain stack",
+			err:  clues.Stack(notTarget),
+		},
+		{
+			name: "plain wrap",
+			err:  clues.Wrap(notTarget, "wrap"),
+		},
+		{
+			name: "double double animal wrap",
+			err: clues.Stack(
+				clues.Wrap(
+					clues.Stack(
+						clues.New("left-top"),
+						clues.New("left-base"),
+					),
+					"left-stack"),
+				clues.Wrap(
+					clues.Stack(
+						clues.New("right-top"),
+						notTarget,
+					),
+					"right-stack"),
+			),
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			mt := mockTarget{}
+			if errors.As(test.err, &mt) {
+				t.Errorf("expected err [%v] to be FALSE for errors.As with [%s]", test.err, target)
+			}
+		})
+	}
+}
