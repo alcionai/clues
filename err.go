@@ -2,7 +2,9 @@ package clues
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 )
 
 // Err augments an error with labels (a categorization system) and
@@ -12,6 +14,12 @@ import (
 type Err struct {
 	// e holds the base error.
 	e error
+
+	// stack is a chain of errors that this error is stacked onto.
+	// stacks may contain other stacks, forming a tree.
+	// Funcs that examine or flatten the tree will walk its structure
+	// in pre-order traversal.
+	stack []error
 
 	// msg is the message for this error.
 	msg string
@@ -28,6 +36,10 @@ type Err struct {
 
 func toErr(e error, msg string) *Err {
 	return &Err{e: e, msg: msg}
+}
+
+func toStack(e error, stack []error) *Err {
+	return &Err{e: e, stack: stack}
 }
 
 // ------------------------------------------------------------
@@ -220,7 +232,17 @@ func (err *Err) Values() map[string]any {
 		return map[string]any{}
 	}
 
-	vals := ErrValues(err.e)
+	vals := make(map[string]any)
+
+	for _, se := range err.stack {
+		for k, v := range ErrValues(se) {
+			vals[k] = v
+		}
+	}
+
+	for k, v := range ErrValues(err.e) {
+		vals[k] = v
+	}
 
 	for k, v := range err.data {
 		vals[k] = v
@@ -252,20 +274,21 @@ func ErrValues(err error) map[string]any {
 var _ error = &Err{}
 
 func (err *Err) Error() string {
-	var inner string
+	msg := []string{}
+
+	if len(err.msg) > 0 {
+		msg = append(msg, err.msg)
+	}
+
 	if err.e != nil {
-		inner = err.e.Error()
+		msg = append(msg, err.e.Error())
 	}
 
-	if len(err.msg) == 0 {
-		return inner
+	for _, se := range err.stack {
+		msg = append(msg, se.Error())
 	}
 
-	if len(inner) == 0 {
-		return err.msg
-	}
-
-	return err.msg + ": " + inner
+	return strings.Join(msg, ": ")
 }
 
 func (err *Err) Format(s fmt.State, verb rune) {
@@ -275,6 +298,42 @@ func (err *Err) Format(s fmt.State, verb rune) {
 	}
 
 	f.Format(s, verb)
+}
+
+// Is overrides the standard Is check for Err.e, allowing us to check
+// the conditional for both Err.e and Err.next.  This allows clues to
+// Stack() maintain multiple error pointers without failing the otherwise
+// linear errors.Is check.
+func (err *Err) Is(target error) bool {
+	if errors.Is(err.e, target) {
+		return true
+	}
+
+	for _, se := range err.stack {
+		if errors.Is(se, target) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// As overrides the standard As check for Err.e, allowing us to check
+// the conditional for both Err.e and Err.next.  This allows clues to
+// Stack() maintain multiple error pointers without failing the otherwise
+// linear errors.As check.
+func (err *Err) As(target any) bool {
+	if errors.As(err.e, target) {
+		return true
+	}
+
+	for _, se := range err.stack {
+		if errors.As(se, target) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Unwrap provides compatibility for Go 1.13 error chains.
@@ -345,19 +404,12 @@ func Wrap(err error, msg string) *Err {
 //
 // Ex: Stack(sentinel, errors.New("base")).Error() => "sentinel: base"
 func Stack(errs ...error) *Err {
-	var inner *Err
-
 	switch len(errs) {
 	case 0:
 		return nil
 	case 1:
 		return toErr(errs[0], "")
-	default:
-		inner = Stack(errs[1:]...)
 	}
 
-	stk := toErr(inner, errs[0].Error())
-	stk.WithMap(ErrValues(errs[0]))
-
-	return stk
+	return toStack(errs[0], errs[1:])
 }
