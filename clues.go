@@ -8,18 +8,30 @@ import (
 
 const defaultNamespace = "clue_ns_default"
 
-// outer map tracks namespaces
-// inner map tracks key/value pairs
-type namespacedClues map[string]map[string]any
+type values map[string]any
 
-func newClueMap() namespacedClues {
-	return namespacedClues{defaultNamespace: map[string]any{}}
+func (vs values) Slice() []any {
+	s := make([]any, 0, 2*len(vs))
+
+	for k, v := range vs {
+		s = append(s, k, v)
+	}
+
+	return s
 }
 
-func (nc namespacedClues) namespace(name string) map[string]any {
+// outer map tracks namespaces
+// inner map tracks key/value pairs
+type namespacedClues map[string]values
+
+func newClueMap() namespacedClues {
+	return namespacedClues{defaultNamespace: values{}}
+}
+
+func (nc namespacedClues) namespace(name string) values {
 	ns, ok := nc[name]
 	if !ok {
-		ns = map[string]any{}
+		ns = values{}
 		nc[name] = ns
 	}
 
@@ -129,38 +141,14 @@ func AddMapTo[K comparable, V any](ctx context.Context, namespace string, m map[
 	return set(ctx, nc)
 }
 
-// Values returns the map of values in the default namespace.
-func Values(ctx context.Context) map[string]any {
+// In returns the map of values in the default namespace.
+func In(ctx context.Context) values {
 	nc := from(ctx)
 	return nc.namespace(defaultNamespace)
 }
 
-// Namespace returns the map of values in the given namespace.
-func Namespace(ctx context.Context, namespace string) map[string]any {
+// InNamespace returns the map of values in the given namespace.
+func InNamespace(ctx context.Context, namespace string) values {
 	nc := from(ctx)
 	return nc.namespace(namespace)
-}
-
-func asSlice(ns map[string]any) []any {
-	s := make([]any, 0, 2*len(ns))
-
-	for k, v := range ns {
-		s = append(s, k, v)
-	}
-
-	return s
-}
-
-// Slice returns all the values in the default namespace as a slice
-// of alternating key, value pairs.
-func Slice(ctx context.Context) []any {
-	ns := Values(ctx)
-	return asSlice(ns)
-}
-
-// NameSlice returns all the values in the given namespace as a slice
-// of alternating key, value pairs.
-func NameSlice(ctx context.Context, namespace string) []any {
-	ns := Namespace(ctx, namespace)
-	return asSlice(ns)
 }

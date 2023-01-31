@@ -95,10 +95,12 @@ func assert(
 	eM, eMns msa,
 	eS, eSns sa,
 ) {
-	eM.equals(t, clues.Values(ctx))
-	eMns.equals(t, clues.Namespace(ctx, ns))
-	eS.equals(t, clues.Slice(ctx))
-	eSns.equals(t, clues.NameSlice(ctx, ns))
+	vs := clues.In(ctx)
+	nvs := clues.InNamespace(ctx, ns)
+	eM.equals(t, vs)
+	eMns.equals(t, nvs)
+	eS.equals(t, vs.Slice())
+	eSns.equals(t, nvs.Slice())
 }
 
 type testCtx struct{}
@@ -118,12 +120,12 @@ func TestAdd(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			check.equals(t, clues.Values(ctx))
+			check.equals(t, clues.In(ctx))
 
 			for _, kv := range test.kvs {
 				ctx = clues.Add(ctx, kv[0], kv[1])
 				check[kv[0]] = kv[1]
-				check.equals(t, clues.Values(ctx))
+				check.equals(t, clues.In(ctx))
 			}
 
 			assert(
@@ -150,12 +152,12 @@ func TestAddAll(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			check.equals(t, clues.Values(ctx))
+			check.equals(t, clues.In(ctx))
 
 			for _, kv := range test.kvs {
 				ctx = clues.AddAll(ctx, kv[0], kv[1])
 				check[kv[0]] = kv[1]
-				check.equals(t, clues.Values(ctx))
+				check.equals(t, clues.In(ctx))
 			}
 
 			assert(
@@ -182,14 +184,14 @@ func TestAddMap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			check.equals(t, clues.Values(ctx))
+			check.equals(t, clues.In(ctx))
 
 			for _, m := range test.ms {
 				ctx = clues.AddMap(ctx, m)
 				for k, v := range m {
 					check[k] = v
 				}
-				check.equals(t, clues.Values(ctx))
+				check.equals(t, clues.In(ctx))
 			}
 
 			assert(
@@ -215,12 +217,12 @@ func TestAddTo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			check.equals(t, clues.Namespace(ctx, "ns"))
+			check.equals(t, clues.InNamespace(ctx, "ns"))
 
 			for _, kv := range test.kvs {
 				ctx = clues.AddTo(ctx, "ns", kv[0], kv[1])
 				check[kv[0]] = kv[1]
-				check.equals(t, clues.Namespace(ctx, "ns"))
+				check.equals(t, clues.InNamespace(ctx, "ns"))
 			}
 
 			assert(
@@ -247,12 +249,12 @@ func TestAddAllTo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			check.equals(t, clues.Namespace(ctx, "ns"))
+			check.equals(t, clues.InNamespace(ctx, "ns"))
 
 			for _, kv := range test.kvs {
 				ctx = clues.AddAllTo(ctx, "ns", kv[0], kv[1])
 				check[kv[0]] = kv[1]
-				check.equals(t, clues.Namespace(ctx, "ns"))
+				check.equals(t, clues.InNamespace(ctx, "ns"))
 			}
 
 			assert(
@@ -279,14 +281,14 @@ func TestAddMapTo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			check.equals(t, clues.Namespace(ctx, "ns"))
+			check.equals(t, clues.InNamespace(ctx, "ns"))
 
 			for _, m := range test.ms {
 				ctx = clues.AddMapTo(ctx, "ns", m)
 				for k, v := range m {
 					check[k] = v
 				}
-				check.equals(t, clues.Namespace(ctx, "ns"))
+				check.equals(t, clues.InNamespace(ctx, "ns"))
 			}
 
 			assert(

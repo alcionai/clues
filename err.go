@@ -31,7 +31,7 @@ type Err struct {
 
 	// data is the record of contextual data produced,
 	// presumably, at the time the error is created or wrapped.
-	data map[string]any
+	data values
 }
 
 func toErr(e error, msg string) *Err {
@@ -103,7 +103,7 @@ func (err *Err) With(key string, value any) *Err {
 	}
 
 	if len(err.data) == 0 {
-		err.data = map[string]any{}
+		err.data = values{}
 	}
 
 	err.data[key] = value
@@ -134,7 +134,7 @@ func (err *Err) WithAll(kvs ...any) *Err {
 	}
 
 	if len(err.data) == 0 {
-		err.data = map[string]any{}
+		err.data = values{}
 	}
 
 	for i := 0; i < len(kvs); i += 2 {
@@ -175,7 +175,7 @@ func (err *Err) WithMap(m map[string]any) *Err {
 	}
 
 	if len(err.data) == 0 {
-		err.data = map[string]any{}
+		err.data = values{}
 	}
 
 	for k, v := range m {
@@ -209,7 +209,7 @@ func WithMap(err error, m map[string]any) *Err {
 // clues.Stack(err).WithClues(ctx) adds the same data as
 // clues.Stack(err).WithMap(clues.Values(ctx)).
 func (err *Err) WithClues(ctx context.Context) *Err {
-	return err.WithMap(Values(ctx))
+	return err.WithMap(In(ctx))
 }
 
 // WithClues is syntactical-sugar that assumes you're using
@@ -220,27 +220,27 @@ func (err *Err) WithClues(ctx context.Context) *Err {
 // clues.WithClues(err, ctx) adds the same data as
 // clues.WithMap(err, clues.Values(ctx)).
 func WithClues(err error, ctx context.Context) *Err {
-	return WithMap(err, Values(ctx))
+	return WithMap(err, In(ctx))
 }
 
 // Values returns all of the contextual data in the error.  Each
 // error in the stack is unwrapped and all maps are unioned.
 // In case of collision, lower level error data take least
 // priority.
-func (err *Err) Values() map[string]any {
+func (err *Err) Values() values {
 	if err == nil {
-		return map[string]any{}
+		return values{}
 	}
 
-	vals := make(map[string]any)
+	vals := make(values)
 
 	for _, se := range err.stack {
-		for k, v := range ErrValues(se) {
+		for k, v := range InErr(se) {
 			vals[k] = v
 		}
 	}
 
-	for k, v := range ErrValues(err.e) {
+	for k, v := range InErr(err.e) {
 		vals[k] = v
 	}
 
@@ -251,20 +251,20 @@ func (err *Err) Values() map[string]any {
 	return vals
 }
 
-// ErrValues returns all of the contextual data in the error.
+// InErr returns the map of contextual values in the error.
 // Each error in the stack is unwrapped and all maps are
 // unioned. In case of collision, lower level error data
 // take least priority.
-func ErrValues(err error) map[string]any {
+func InErr(err error) values {
 	if err == nil {
-		return map[string]any{}
+		return values{}
 	}
 
 	if e, ok := err.(*Err); ok {
 		return e.Values()
 	}
 
-	return ErrValues(Unwrap(err))
+	return InErr(Unwrap(err))
 }
 
 // ------------------------------------------------------------

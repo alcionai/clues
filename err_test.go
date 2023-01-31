@@ -109,7 +109,7 @@ func TestWith(t *testing.T) {
 			for _, kv := range test.with {
 				err.With(kv[0], kv[1])
 			}
-			test.expect.equals(t, clues.ErrValues(err))
+			test.expect.equals(t, clues.InErr(err))
 			test.expect.equals(t, err.Values())
 		})
 	}
@@ -146,7 +146,7 @@ func TestWithAll(t *testing.T) {
 			for _, kv := range test.with {
 				err.WithAll(kv...)
 			}
-			test.expect.equals(t, clues.ErrValues(err))
+			test.expect.equals(t, clues.InErr(err))
 			test.expect.equals(t, err.Values())
 		})
 	}
@@ -181,7 +181,7 @@ func TestWithMap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			err := clues.WithMap(test.initial, test.kv)
 			err.WithMap(test.with)
-			test.expect.equals(t, clues.ErrValues(err))
+			test.expect.equals(t, clues.InErr(err))
 			test.expect.equals(t, err.Values())
 		})
 	}
@@ -219,7 +219,7 @@ func TestWithClues(t *testing.T) {
 			tctx := clues.AddMap(ctx, test.kv)
 			err := clues.WithClues(test.initial, tctx)
 			err.WithMap(test.with)
-			test.expect.equals(t, clues.ErrValues(err))
+			test.expect.equals(t, clues.InErr(err))
 			test.expect.equals(t, err.Values())
 		})
 	}
@@ -461,7 +461,7 @@ func TestErrValues_stacks(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			vs := clues.ErrValues(test.err)
+			vs := clues.InErr(test.err)
 			test.expect.equals(t, vs)
 		})
 	}
