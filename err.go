@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"runtime"
 	"strings"
 )
 
@@ -21,6 +23,9 @@ type Err struct {
 	// in pre-order traversal.
 	stack []error
 
+	// location is used for printing %+v stack traces
+	location string
+
 	// msg is the message for this error.
 	msg string
 
@@ -35,7 +40,13 @@ type Err struct {
 }
 
 func toErr(e error, msg string) *Err {
-	return &Err{e: e, msg: msg}
+	_, file, line, _ := runtime.Caller(2)
+
+	return &Err{
+		e:        e,
+		location: fmt.Sprintf("%s:%d", file, line),
+		msg:      msg,
+	}
 }
 
 func toStack(e error, stack []error) *Err {
@@ -291,13 +302,106 @@ func (err *Err) Error() string {
 	return strings.Join(msg, ": ")
 }
 
-func (err *Err) Format(s fmt.State, verb rune) {
-	f, ok := err.e.(fmt.Formatter)
-	if !ok {
+func format(err error, s fmt.State, verb rune) {
+	if err == nil {
 		return
 	}
 
-	f.Format(s, verb)
+	f, ok := err.(fmt.Formatter)
+	if ok {
+		f.Format(s, verb)
+	} else {
+		write(s, verb, err.Error())
+	}
+}
+
+// For all formatting besides %+v, the error printout should closely
+// mimic that of err.Error().
+func formatReg(err *Err, s fmt.State, verb rune) {
+	write(s, verb, err.msg)
+
+	if len(err.msg) > 0 && err.e != nil {
+		io.WriteString(s, ": ")
+	}
+
+	format(err.e, s, verb)
+
+	if (len(err.msg) > 0 || err.e != nil) && len(err.stack) > 0 {
+		io.WriteString(s, ": ")
+	}
+
+	for _, e := range err.stack {
+		format(e, s, verb)
+	}
+}
+
+// in %+v formatting, we output errors FIFO (ie, read from the
+// bottom of the stack first).
+func formatPlusV(err *Err, s fmt.State, verb rune) {
+	for i := len(err.stack) - 1; i >= 0; i-- {
+		e := err.stack[i]
+		format(e, s, verb)
+	}
+
+	if len(err.stack) > 0 && err.e != nil {
+		io.WriteString(s, "\n")
+	}
+
+	format(err.e, s, verb)
+
+	if (len(err.stack) > 0 || err.e != nil) && len(err.msg) > 0 {
+		io.WriteString(s, "\n")
+	}
+
+	write(s, verb, err.msg)
+	write(s, verb, "\n\t%s", err.location)
+}
+
+// Format ensures stack traces are printed appropariately.
+//
+//	%s    same as err.Error()
+//	%v    equivalent to %s
+//
+// Format accepts flags that alter the printing of some verbs, as follows:
+//
+//	%+v   Prints filename, function, and line number for each error in the stack.
+func (err *Err) Format(s fmt.State, verb rune) {
+	if verb == 'v' && s.Flag('+') {
+		formatPlusV(err, s, verb)
+		return
+	}
+
+	formatReg(err, s, verb)
+}
+
+func write(
+	s fmt.State,
+	verb rune,
+	msgs ...string,
+) {
+	if len(msgs) == 0 || len(msgs[0]) == 0 {
+		return
+	}
+
+	switch verb {
+	case 'v':
+		if s.Flag('+') {
+			if len(msgs) == 1 {
+				io.WriteString(s, msgs[0])
+			} else if len(msgs[1]) > 0 {
+				fmt.Fprintf(s, msgs[0], msgs[1])
+			}
+			return
+		}
+
+		fallthrough
+
+	case 's':
+		io.WriteString(s, msgs[0])
+
+	case 'q':
+		fmt.Fprintf(s, "%q", msgs[0])
+	}
 }
 
 // Is overrides the standard Is check for Err.e, allowing us to check
