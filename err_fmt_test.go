@@ -6,8 +6,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/alcionai/clues"
 	"github.com/pkg/errors"
+
+	"github.com/alcionai/clues"
 )
 
 const ()
@@ -37,14 +38,10 @@ func (c checkFmt) check(t *testing.T, err error) {
 		result := fmt.Sprintf(c.tmpl, err)
 
 		if len(c.expect) > 0 && result != c.expect {
-			fmt.Printf("\n-----\n%s\n-----\n%s\n-----", c.expect, result)
 			t.Errorf("unexpected format for template %#v\nexpected \"%s\"\ngot \"%s\"", c.tmpl, c.expect, result)
 		}
 
 		if c.reExpect != nil && !c.reExpect.MatchString(result) {
-
-			fmt.Printf("\n-----\n%s\n-----\n", result)
-			fmt.Printf("\n-----\n\"%v\"\n-----\n%#v\n-----", c.reExpect, result)
 			t.Errorf("unexpected format for template %#v\nexpected \"%v\"\ngot %#v", c.tmpl, c.reExpect, result)
 		}
 	})
