@@ -114,37 +114,6 @@ func TestAdd(t *testing.T) {
 	}{
 		{"single", [][]string{{"k", "v"}}, msa{"k": "v"}, sa{"k", "v"}},
 		{"multiple", [][]string{{"a", "1"}, {"b", "2"}}, msa{"a": "1", "b": "2"}, sa{"a", "1", "b", "2"}},
-		{"none", [][]string{}, msa{}, sa{}},
-	}
-	for _, test := range table {
-		t.Run(test.name, func(t *testing.T) {
-			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-			check := msa{}
-			check.equals(t, clues.In(ctx))
-
-			for _, kv := range test.kvs {
-				ctx = clues.Add(ctx, kv[0], kv[1])
-				check[kv[0]] = kv[1]
-				check.equals(t, clues.In(ctx))
-			}
-
-			assert(
-				t, ctx, "",
-				test.expectM, msa{},
-				test.expectS, sa{})
-		})
-	}
-}
-
-func TestAddAll(t *testing.T) {
-	table := []struct {
-		name    string
-		kvs     [][]string
-		expectM msa
-		expectS sa
-	}{
-		{"single", [][]string{{"k", "v"}}, msa{"k": "v"}, sa{"k", "v"}},
-		{"multiple", [][]string{{"a", "1"}, {"b", "2"}}, msa{"a": "1", "b": "2"}, sa{"a", "1", "b", "2"}},
 		{"duplicates", [][]string{{"a", "1"}, {"a", "2"}}, msa{"a": "2"}, sa{"a", "2"}},
 		{"none", [][]string{}, msa{}, sa{}},
 	}
@@ -155,7 +124,7 @@ func TestAddAll(t *testing.T) {
 			check.equals(t, clues.In(ctx))
 
 			for _, kv := range test.kvs {
-				ctx = clues.AddAll(ctx, kv[0], kv[1])
+				ctx = clues.Add(ctx, kv[0], kv[1])
 				check[kv[0]] = kv[1]
 				check.equals(t, clues.In(ctx))
 			}
@@ -211,37 +180,6 @@ func TestAddTo(t *testing.T) {
 	}{
 		{"single", [][]string{{"k", "v"}}, msa{"k": "v"}, sa{"k", "v"}},
 		{"multiple", [][]string{{"a", "1"}, {"b", "2"}}, msa{"a": "1", "b": "2"}, sa{"a", "1", "b", "2"}},
-		{"none", [][]string{}, msa{}, sa{}},
-	}
-	for _, test := range table {
-		t.Run(test.name, func(t *testing.T) {
-			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-			check := msa{}
-			check.equals(t, clues.InNamespace(ctx, "ns"))
-
-			for _, kv := range test.kvs {
-				ctx = clues.AddTo(ctx, "ns", kv[0], kv[1])
-				check[kv[0]] = kv[1]
-				check.equals(t, clues.InNamespace(ctx, "ns"))
-			}
-
-			assert(
-				t, ctx, "ns",
-				msa{}, test.expectM,
-				sa{}, test.expectS)
-		})
-	}
-}
-
-func TestAddAllTo(t *testing.T) {
-	table := []struct {
-		name    string
-		kvs     [][]string
-		expectM msa
-		expectS sa
-	}{
-		{"single", [][]string{{"k", "v"}}, msa{"k": "v"}, sa{"k", "v"}},
-		{"multiple", [][]string{{"a", "1"}, {"b", "2"}}, msa{"a": "1", "b": "2"}, sa{"a", "1", "b", "2"}},
 		{"duplicates", [][]string{{"a", "1"}, {"a", "2"}}, msa{"a": "2"}, sa{"a", "2"}},
 		{"none", [][]string{}, msa{}, sa{}},
 	}
@@ -252,7 +190,7 @@ func TestAddAllTo(t *testing.T) {
 			check.equals(t, clues.InNamespace(ctx, "ns"))
 
 			for _, kv := range test.kvs {
-				ctx = clues.AddAllTo(ctx, "ns", kv[0], kv[1])
+				ctx = clues.AddTo(ctx, "ns", kv[0], kv[1])
 				check[kv[0]] = kv[1]
 				check.equals(t, clues.InNamespace(ctx, "ns"))
 			}

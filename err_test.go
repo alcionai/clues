@@ -78,44 +78,6 @@ var (
 )
 
 func TestWith(t *testing.T) {
-
-	table := []struct {
-		name    string
-		initial error
-		k, v    string
-		with    [][]string
-		expect  msa
-	}{
-		{"nil error", nil, "k", "v", [][]string{{"k2", "v2"}}, msa{}},
-		{"only base error vals", base, "k", "v", nil, msa{"k": "v"}},
-		{"empty base error vals", base, "", "", nil, msa{"": ""}},
-		{"standard", base, "k", "v", [][]string{{"k2", "v2"}}, msa{"k": "v", "k2": "v2"}},
-		{"duplicates", base, "k", "v", [][]string{{"k", "v2"}}, msa{"k": "v2"}},
-		{"multi", base, "a", "1", [][]string{{"b", "2"}, {"c", "3"}}, msa{"a": "1", "b": "2", "c": "3"}},
-		{"only clue error vals", cerr(), "k", "v", nil, msa{"k": "v"}},
-		{"empty clue error vals", cerr(), "", "", nil, msa{"": ""}},
-		{"standard cerr", cerr(), "k", "v", [][]string{{"k2", "v2"}}, msa{"k": "v", "k2": "v2"}},
-		{"duplicates cerr", cerr(), "k", "v", [][]string{{"k", "v2"}}, msa{"k": "v2"}},
-		{"multi cerr", cerr(), "a", "1", [][]string{{"b", "2"}, {"c", "3"}}, msa{"a": "1", "b": "2", "c": "3"}},
-		{"only wrapped error vals", werr(), "k", "v", nil, msa{"k": "v", "z": 0}},
-		{"empty wrapped error vals", werr(), "", "", nil, msa{"": "", "z": 0}},
-		{"standard wrapped", werr(), "k", "v", [][]string{{"k2", "v2"}}, msa{"k": "v", "k2": "v2", "z": 0}},
-		{"duplicates wrapped", werr(), "k", "v", [][]string{{"k", "v2"}}, msa{"k": "v2", "z": 0}},
-		{"multi wrapped", werr(), "a", "1", [][]string{{"b", "2"}, {"c", "3"}}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
-	}
-	for _, test := range table {
-		t.Run(test.name, func(t *testing.T) {
-			err := clues.With(test.initial, test.k, test.v)
-			for _, kv := range test.with {
-				err.With(kv[0], kv[1])
-			}
-			test.expect.equals(t, clues.InErr(err))
-			test.expect.equals(t, err.Values())
-		})
-	}
-}
-
-func TestWithAll(t *testing.T) {
 	table := []struct {
 		name    string
 		initial error
@@ -142,9 +104,9 @@ func TestWithAll(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			err := clues.WithAll(test.initial, test.k, test.v)
+			err := clues.With(test.initial, test.k, test.v)
 			for _, kv := range test.with {
-				err.WithAll(kv...)
+				err.With(kv...)
 			}
 			test.expect.equals(t, clues.InErr(err))
 			test.expect.equals(t, err.Values())

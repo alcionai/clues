@@ -38,12 +38,7 @@ func (nc namespacedClues) namespace(name string) values {
 	return ns
 }
 
-func (nc namespacedClues) add(name, key string, value any) {
-	ns := nc.namespace(name)
-	ns[key] = value
-}
-
-func (nc namespacedClues) addAll(name string, kvs ...any) {
+func (nc namespacedClues) add(name string, kvs ...any) {
 	for i := 0; i < len(kvs); i += 2 {
 		key := marshal(kvs[i])
 
@@ -95,17 +90,10 @@ func marshal(a any) string {
 	return string(bs)
 }
 
-// Add a key-value pair to the clues.
-func Add(ctx context.Context, key string, value any) context.Context {
+// Add adds all key-value pairs to the clues.
+func Add(ctx context.Context, kvs ...any) context.Context {
 	nc := from(ctx)
-	nc.add(defaultNamespace, key, value)
-	return set(ctx, nc)
-}
-
-// AddAll adds all key-value pairs to the clues.
-func AddAll(ctx context.Context, kvs ...any) context.Context {
-	nc := from(ctx)
-	nc.addAll(defaultNamespace, kvs...)
+	nc.add(defaultNamespace, kvs...)
 	return set(ctx, nc)
 }
 
@@ -118,17 +106,10 @@ func AddMap[K comparable, V any](ctx context.Context, m map[K]V) context.Context
 	return set(ctx, nc)
 }
 
-// Add a key-value pair to a namespaced set of clues.
-func AddTo(ctx context.Context, namespace, key string, value any) context.Context {
+// AddTo adds all key-value pairs to a namespaced set of clues.
+func AddTo(ctx context.Context, namespace string, kvs ...any) context.Context {
 	nc := from(ctx)
-	nc.add(namespace, key, value)
-	return set(ctx, nc)
-}
-
-// AddAllTo adds all key-value pairs to a namespaced set of clues.
-func AddAllTo(ctx context.Context, namespace string, kvs ...any) context.Context {
-	nc := from(ctx)
-	nc.addAll(namespace, kvs...)
+	nc.add(namespace, kvs...)
 	return set(ctx, nc)
 }
 
