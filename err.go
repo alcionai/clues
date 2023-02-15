@@ -107,39 +107,9 @@ func Label(err error, label string) *Err {
 // data
 // ------------------------------------------------------------
 
-// With adds the key,value pair to the Err's data map.
-func (err *Err) With(key string, value any) *Err {
-	if err == nil {
-		return nil
-	}
-
-	if len(err.data) == 0 {
-		err.data = values{}
-	}
-
-	err.data[key] = value
-	return err
-}
-
-// With adds the key,value pair to the Err's data map.
-// If err is not an *Err intance, returns the error wrapped
-// into an *Err struct.
-func With(err error, key string, value any) *Err {
-	if err == nil {
-		return nil
-	}
-
-	e, ok := err.(*Err)
-	if !ok {
-		e = toErr(err, "")
-	}
-
-	return e.With(key, value)
-}
-
-// WithAll adds every two values as a key,value pair to
+// With adds every pair of values as a key,value pair to
 // the Err's data map.
-func (err *Err) WithAll(kvs ...any) *Err {
+func (err *Err) With(kvs ...any) *Err {
 	if err == nil {
 		return nil
 	}
@@ -162,11 +132,11 @@ func (err *Err) WithAll(kvs ...any) *Err {
 	return err
 }
 
-// WithAll adds every two values as a key,value pair to
+// With adds every two values as a key,value pair to
 // the Err's data map.
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
-func WithAll(err error, kvs ...any) *Err {
+func With(err error, kvs ...any) *Err {
 	if err == nil {
 		return nil
 	}
@@ -176,7 +146,7 @@ func WithAll(err error, kvs ...any) *Err {
 		e = toErr(err, "")
 	}
 
-	return e.WithAll(kvs...)
+	return e.With(kvs...)
 }
 
 // WithMap copies the map to the Err's data map.
