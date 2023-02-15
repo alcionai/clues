@@ -143,6 +143,21 @@ func assertMAA(
 	eSns.equals(t, nvs.Slice())
 }
 
+func assertMAA(
+	t *testing.T,
+	ctx context.Context,
+	ns string,
+	eM, eMns maa,
+	eS, eSns sa,
+) {
+	vs := clues.In(ctx)
+	nvs := clues.InNamespace(ctx, ns)
+	eM.equals(t, toMAA(vs))
+	eMns.equals(t, toMAA(nvs))
+	eS.equals(t, vs.Slice())
+	eSns.equals(t, nvs.Slice())
+}
+
 type testCtx struct{}
 
 func TestAdd(t *testing.T) {
