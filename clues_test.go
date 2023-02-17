@@ -236,3 +236,25 @@ func TestAddMapTo(t *testing.T) {
 		})
 	}
 }
+
+func TestImmutableCtx(t *testing.T) {
+	ctx := context.WithValue(context.Background(), testCtx{}, "instance")
+	check := msa{}
+	pre := clues.In(ctx)
+	check.equals(t, pre)
+
+	ctx2 := clues.Add(ctx, "k", "v")
+	if _, ok := pre["k"]; ok {
+		t.Errorf("previous map should not have been mutated by addition")
+	}
+
+	pre = clues.In(ctx)
+	if _, ok := pre["k"]; ok {
+		t.Errorf("previous map within ctx should not have been mutated by addition")
+	}
+
+	post := clues.In(ctx2)
+	if post["k"] != "v" {
+		t.Errorf("new map should contain the added value")
+	}
+}

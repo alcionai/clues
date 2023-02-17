@@ -7,6 +7,8 @@ import (
 	"io"
 	"runtime"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
 // Err augments an error with labels (a categorization system) and
@@ -118,18 +120,10 @@ func (err *Err) With(kvs ...any) *Err {
 		err.data = values{}
 	}
 
-	for i := 0; i < len(kvs); i += 2 {
-		key := marshal(kvs[i])
-
-		var value any
-		if i+1 < len(kvs) {
-			value = kvs[i+1]
-		}
-
-		err.data[key] = value
+	return &Err{
+		e:    err,
+		data: err.data.add(normalize(kvs...)),
 	}
-
-	return err
 }
 
 // With adds every two values as a key,value pair to
@@ -159,11 +153,10 @@ func (err *Err) WithMap(m map[string]any) *Err {
 		err.data = values{}
 	}
 
-	for k, v := range m {
-		err.data[k] = v
+	return &Err{
+		e:    err,
+		data: err.data.add(m),
 	}
-
-	return err
 }
 
 // WithMap copies the map to the Err's data map.
@@ -204,30 +197,23 @@ func WithClues(err error, ctx context.Context) *Err {
 	return WithMap(err, In(ctx))
 }
 
-// Values returns all of the contextual data in the error.  Each
-// error in the stack is unwrapped and all maps are unioned.
-// In case of collision, lower level error data take least
-// priority.
+// Values returns a copy of all of the contextual data in
+// the error.  Each error in the stack is unwrapped and all
+// maps are unioned. In case of collision, lower level error
+// data take least priority.
 func (err *Err) Values() values {
 	if err == nil {
 		return values{}
 	}
 
-	vals := make(values)
+	vals := values{}
 
 	for _, se := range err.stack {
-		for k, v := range InErr(se) {
-			vals[k] = v
-		}
+		maps.Copy(vals, InErr(se))
 	}
 
-	for k, v := range InErr(err.e) {
-		vals[k] = v
-	}
-
-	for k, v := range err.data {
-		vals[k] = v
-	}
+	maps.Copy(vals, InErr(err.e))
+	maps.Copy(vals, err.data)
 
 	return vals
 }
