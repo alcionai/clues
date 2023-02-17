@@ -179,9 +179,9 @@ func TestAddTo(t *testing.T) {
 		expectS sa
 	}{
 		{"single", [][]string{{"k", "v"}}, msa{"k": "v"}, sa{"k", "v"}},
-		// {"multiple", [][]string{{"a", "1"}, {"b", "2"}}, msa{"a": "1", "b": "2"}, sa{"a", "1", "b", "2"}},
-		// {"duplicates", [][]string{{"a", "1"}, {"a", "2"}}, msa{"a": "2"}, sa{"a", "2"}},
-		// {"none", [][]string{}, msa{}, sa{}},
+		{"multiple", [][]string{{"a", "1"}, {"b", "2"}}, msa{"a": "1", "b": "2"}, sa{"a", "1", "b", "2"}},
+		{"duplicates", [][]string{{"a", "1"}, {"a", "2"}}, msa{"a": "2"}, sa{"a", "2"}},
+		{"none", [][]string{}, msa{}, sa{}},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
