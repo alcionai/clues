@@ -38,7 +38,7 @@ type Err struct {
 
 	// data is the record of contextual data produced,
 	// presumably, at the time the error is created or wrapped.
-	data syncValues
+	data values
 }
 
 func toErr(e error, msg string) *Err {
@@ -116,13 +116,14 @@ func (err *Err) With(kvs ...any) *Err {
 		return nil
 	}
 
-	if err.data.mu == nil {
-		err.data = newValues()
+	if len(err.data) == 0 {
+		err.data = values{}
 	}
 
-	err.data.add(normalize(kvs...))
-
-	return err
+	return &Err{
+		e:    err,
+		data: err.data.add(normalize(kvs...)),
+	}
 }
 
 // With adds every two values as a key,value pair to
@@ -148,13 +149,14 @@ func (err *Err) WithMap(m map[string]any) *Err {
 		return nil
 	}
 
-	if err.data.mu == nil {
-		err.data = newValues()
+	if len(err.data) == 0 {
+		err.data = values{}
 	}
 
-	err.data.add(m)
-
-	return err
+	return &Err{
+		e:    err,
+		data: err.data.add(m),
+	}
 }
 
 // WithMap copies the map to the Err's data map.
@@ -195,10 +197,10 @@ func WithClues(err error, ctx context.Context) *Err {
 	return WithMap(err, In(ctx))
 }
 
-// Values returns all of the contextual data in the error.  Each
-// error in the stack is unwrapped and all maps are unioned.
-// In case of collision, lower level error data take least
-// priority.
+// Values returns a copy of all of the contextual data in
+// the error.  Each error in the stack is unwrapped and all
+// maps are unioned. In case of collision, lower level error
+// data take least priority.
 func (err *Err) Values() values {
 	if err == nil {
 		return values{}
@@ -211,7 +213,7 @@ func (err *Err) Values() values {
 	}
 
 	maps.Copy(vals, InErr(err.e))
-	maps.Copy(vals, err.data.m)
+	maps.Copy(vals, err.data)
 
 	return vals
 }
