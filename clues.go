@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	"golang.org/x/exp/maps"
 )
@@ -15,35 +14,17 @@ import (
 
 const defaultNamespace = "clue_ns_default"
 
-type syncValues struct {
-	mu *sync.RWMutex
-	m  map[string]any
-}
-
-func newValues() syncValues {
-	return syncValues{
-		mu: &sync.RWMutex{},
-		m:  map[string]any{},
-	}
-}
-
-func (sv syncValues) add(m map[string]any) {
-	sv.mu.Lock()
-	defer sv.mu.Unlock()
-
-	maps.Copy(sv.m, m)
-}
-
-func (sv syncValues) data() values {
-	sv.mu.RLock()
-	defer sv.mu.RUnlock()
-
-	vs := make(values)
-	maps.Copy(vs, sv.m)
-	return vs
-}
-
 type values map[string]any
+
+func (vs values) add(m map[string]any) values {
+	v2 := maps.Clone(vs)
+	if v2 == nil {
+		v2 = values{}
+	}
+
+	maps.Copy(v2, m)
+	return v2
+}
 
 func (vs values) Slice() []any {
 	s := make([]any, 0, 2*len(vs))
@@ -57,35 +38,31 @@ func (vs values) Slice() []any {
 
 // outer map tracks namespaces
 // inner map tracks key/value pairs
-type namespacedClues struct {
-	mu *sync.RWMutex
-	m  map[string]syncValues
-}
+type namespacedClues map[string]values
 
 func newClueMap() namespacedClues {
-	return namespacedClues{
-		mu: &sync.RWMutex{},
-		m: map[string]syncValues{
-			defaultNamespace: newValues(),
-		},
-	}
+	return namespacedClues{defaultNamespace: values{}}
 }
 
-func (nc namespacedClues) namespace(name string) syncValues {
-	ns, ok := nc.m[name]
+func (nc namespacedClues) namespace(name string) values {
+	ns, ok := nc[name]
 	if !ok {
-		ns = newValues()
-		nc.m[name] = ns
+		nc[name] = values{}
 	}
 
 	return ns
 }
 
-func (nc namespacedClues) add(name string, toAdd map[string]any) {
-	nc.mu.Lock()
-	defer nc.mu.Unlock()
+func (nc namespacedClues) add(name string, toAdd map[string]any) namespacedClues {
+	nc2 := maps.Clone(nc)
+	if nc2 == nil {
+		nc2 = newClueMap()
+	}
 
-	nc.namespace(name).add(toAdd)
+	vs := nc2.namespace(name)
+	nc2[name] = vs.add(toAdd)
+
+	return nc2
 }
 
 // ---------------------------------------------------------------------------
@@ -155,33 +132,37 @@ func marshal(a any) string {
 // Add adds all key-value pairs to the clues.
 func Add(ctx context.Context, kvs ...any) context.Context {
 	nc := from(ctx)
-	nc.add(defaultNamespace, normalize(kvs...))
-	return set(ctx, nc)
+	return set(ctx, nc.add(defaultNamespace, normalize(kvs...)))
 }
 
 // AddMap adds a shallow clone of the map to a namespaced set of clues.
 func AddMap[K comparable, V any](ctx context.Context, m map[K]V) context.Context {
 	nc := from(ctx)
+
+	kvs := make([]any, 0, len(m)*2)
 	for k, v := range m {
-		nc.add(defaultNamespace, normalize(k, v))
+		kvs = append(kvs, k, v)
 	}
-	return set(ctx, nc)
+
+	return set(ctx, nc.add(defaultNamespace, normalize(kvs...)))
 }
 
 // AddTo adds all key-value pairs to a namespaced set of clues.
 func AddTo(ctx context.Context, namespace string, kvs ...any) context.Context {
 	nc := from(ctx)
-	nc.add(namespace, normalize(kvs...))
-	return set(ctx, nc)
+	return set(ctx, nc.add(namespace, normalize(kvs...)))
 }
 
 // AddMapTo adds a shallow clone of the map to a namespaced set of clues.
 func AddMapTo[K comparable, V any](ctx context.Context, namespace string, m map[K]V) context.Context {
 	nc := from(ctx)
+
+	kvs := make([]any, 0, len(m)*2)
 	for k, v := range m {
-		nc.add(namespace, normalize(k, v))
+		kvs = append(kvs, k, v)
 	}
-	return set(ctx, nc)
+
+	return set(ctx, nc.add(namespace, normalize(kvs...)))
 }
 
 // ---------------------------------------------------------------------------
@@ -191,11 +172,11 @@ func AddMapTo[K comparable, V any](ctx context.Context, namespace string, m map[
 // In returns the map of values in the default namespace.
 func In(ctx context.Context) values {
 	nc := from(ctx)
-	return nc.namespace(defaultNamespace).data()
+	return nc.namespace(defaultNamespace)
 }
 
 // InNamespace returns the map of values in the given namespace.
 func InNamespace(ctx context.Context, namespace string) values {
 	nc := from(ctx)
-	return nc.namespace(namespace).data()
+	return nc.namespace(namespace)
 }

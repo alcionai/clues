@@ -106,7 +106,7 @@ func TestWith(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			err := clues.With(test.initial, test.k, test.v)
 			for _, kv := range test.with {
-				err.With(kv...)
+				err = err.With(kv...)
 			}
 			test.expect.equals(t, clues.InErr(err))
 			test.expect.equals(t, err.Values())
@@ -142,7 +142,7 @@ func TestWithMap(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			err := clues.WithMap(test.initial, test.kv)
-			err.WithMap(test.with)
+			err = err.WithMap(test.with)
 			test.expect.equals(t, clues.InErr(err))
 			test.expect.equals(t, err.Values())
 		})
@@ -180,7 +180,7 @@ func TestWithClues(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			tctx := clues.AddMap(ctx, test.kv)
 			err := clues.WithClues(test.initial, tctx)
-			err.WithMap(test.with)
+			err = err.WithMap(test.with)
 			test.expect.equals(t, clues.InErr(err))
 			test.expect.equals(t, err.Values())
 		})
@@ -872,5 +872,27 @@ func TestAs(t *testing.T) {
 				t.Errorf("expected err [%v] to be FALSE for errors.As with [%s]", test.err, target)
 			}
 		})
+	}
+}
+
+func TestImmutableErrors(t *testing.T) {
+	err := clues.New("an error").With("k", "v")
+	check := msa{"k": "v"}
+	pre := clues.InErr(err)
+	check.equals(t, pre)
+
+	err2 := err.With("k2", "v2")
+	if _, ok := pre["k2"]; ok {
+		t.Errorf("previous map should not have been mutated by addition")
+	}
+
+	pre = clues.InErr(err)
+	if _, ok := pre["k2"]; ok {
+		t.Errorf("previous map within error should not have been mutated by addition")
+	}
+
+	post := clues.InErr(err2)
+	if post["k2"] != "v2" {
+		t.Errorf("new map should contain the added value")
 	}
 }
