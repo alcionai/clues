@@ -7,6 +7,8 @@ import (
 	"io"
 	"runtime"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
 // Err augments an error with labels (a categorization system) and
@@ -36,7 +38,7 @@ type Err struct {
 
 	// data is the record of contextual data produced,
 	// presumably, at the time the error is created or wrapped.
-	data values
+	data syncValues
 }
 
 func toErr(e error, msg string) *Err {
@@ -114,20 +116,11 @@ func (err *Err) With(kvs ...any) *Err {
 		return nil
 	}
 
-	if len(err.data) == 0 {
-		err.data = values{}
+	if err.data.mu == nil {
+		err.data = newValues()
 	}
 
-	for i := 0; i < len(kvs); i += 2 {
-		key := marshal(kvs[i])
-
-		var value any
-		if i+1 < len(kvs) {
-			value = kvs[i+1]
-		}
-
-		err.data[key] = value
-	}
+	err.data.add(normalize(kvs...))
 
 	return err
 }
@@ -155,13 +148,11 @@ func (err *Err) WithMap(m map[string]any) *Err {
 		return nil
 	}
 
-	if len(err.data) == 0 {
-		err.data = values{}
+	if err.data.mu == nil {
+		err.data = newValues()
 	}
 
-	for k, v := range m {
-		err.data[k] = v
-	}
+	err.data.add(m)
 
 	return err
 }
@@ -213,21 +204,14 @@ func (err *Err) Values() values {
 		return values{}
 	}
 
-	vals := make(values)
+	vals := values{}
 
 	for _, se := range err.stack {
-		for k, v := range InErr(se) {
-			vals[k] = v
-		}
+		maps.Copy(vals, InErr(se))
 	}
 
-	for k, v := range InErr(err.e) {
-		vals[k] = v
-	}
-
-	for k, v := range err.data {
-		vals[k] = v
-	}
+	maps.Copy(vals, InErr(err.e))
+	maps.Copy(vals, err.data.m)
 
 	return vals
 }
