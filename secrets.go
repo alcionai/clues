@@ -14,6 +14,8 @@ const (
 	Plaintext
 )
 
+const hashTruncateLen = 16
+
 var hashingAlgorithm = HMAC_SHA256
 
 type Concealer interface {
@@ -29,7 +31,7 @@ type secret struct {
 func (s secret) String() string  { return s.s }
 func (s secret) Conceal() string { return s.h }
 
-// Mask embeds the value in a clues. secret where the
+// Mask embeds the value in a secret struct where the
 // Conceal() call always returns a flat string: "***"
 func Mask(a any) secret {
 	str := marshal(a)
@@ -41,7 +43,7 @@ func Mask(a any) secret {
 	}
 }
 
-// Hide embeds the value in a clues. secret where the
+// Hide embeds the value in a secret struct where the
 // Conceal() call contains a truncated hash of value.
 // The hash function defaults to SHA256, but can be
 // changed through configuration.
@@ -56,7 +58,7 @@ func Hide(a any) secret {
 }
 
 // HideAll is a quality-of-life wrapper for transforming
-// multiple values to clues.secrete structs.
+// multiple values to secret structs.
 func HideAll(a ...any) []secret {
 	sl := make([]secret, 0, len(a))
 
@@ -95,12 +97,12 @@ func hashHmacSha256(s string) string {
 
 	sig.Write([]byte(s))
 
-	return hex.EncodeToString(sig.Sum(nil))[:16]
+	return hex.EncodeToString(sig.Sum(nil))[:hashTruncateLen]
 }
 
 func hashSha256(s string) string {
 	h := sha256.New()
 	h.Write([]byte(s))
 
-	return hex.EncodeToString(h.Sum(nil))[:16]
+	return hex.EncodeToString(h.Sum(nil))[:hashTruncateLen]
 }
