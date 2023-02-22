@@ -242,7 +242,7 @@ var _ error = &Err{}
 
 func (err *Err) Error() string {
 	if err == nil {
-		return ""
+		return "<nil>"
 	}
 
 	msg := []string{}
