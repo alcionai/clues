@@ -241,6 +241,10 @@ func InErr(err error) values {
 var _ error = &Err{}
 
 func (err *Err) Error() string {
+	if err == nil {
+		return "<nil>"
+	}
+
 	msg := []string{}
 
 	if len(err.msg) > 0 {
@@ -322,6 +326,10 @@ func formatPlusV(err *Err, s fmt.State, verb rune) {
 //
 //	%+v   Prints filename, function, and line number for each error in the stack.
 func (err *Err) Format(s fmt.State, verb rune) {
+	if err == nil {
+		return
+	}
+
 	if verb == 'v' && s.Flag('+') {
 		formatPlusV(err, s, verb)
 		return
@@ -365,6 +373,10 @@ func write(
 // Stack() maintain multiple error pointers without failing the otherwise
 // linear errors.Is check.
 func (err *Err) Is(target error) bool {
+	if err == nil {
+		return false
+	}
+
 	if errors.Is(err.e, target) {
 		return true
 	}
@@ -383,6 +395,10 @@ func (err *Err) Is(target error) bool {
 // Stack() maintain multiple error pointers without failing the otherwise
 // linear errors.As check.
 func (err *Err) As(target any) bool {
+	if err == nil {
+		return false
+	}
+
 	if errors.As(err.e, target) {
 		return true
 	}

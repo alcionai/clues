@@ -11,8 +11,6 @@ import (
 	"github.com/alcionai/clues"
 )
 
-const ()
-
 func plusRE(lines ...string) string {
 	var s string
 
