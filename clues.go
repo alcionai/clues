@@ -113,6 +113,10 @@ func marshal(a any) string {
 		return ""
 	}
 
+	if as, ok := a.(Concealer); ok {
+		return as.Conceal()
+	}
+
 	if as, ok := a.(string); ok {
 		return as
 	}
