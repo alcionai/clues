@@ -317,7 +317,7 @@ type custom struct {
 }
 
 func (c custom) Conceal() string {
-	return c.a + " - " + clues.Conceal(clues.SHA256, c.b)
+	return c.a + " - " + clues.ConcealWith(clues.SHA256, c.b)
 }
 
 func concealed(a any) string {
