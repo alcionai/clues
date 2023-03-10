@@ -84,6 +84,10 @@ func HasLabel(err error, label string) bool {
 }
 
 func (err *Err) Label(label string) *Err {
+	if err == nil {
+		return nil
+	}
+
 	if len(err.labels) == 0 {
 		err.labels = map[string]struct{}{}
 	}
@@ -103,6 +107,39 @@ func Label(err error, label string) *Err {
 	}
 
 	return e.Label(label)
+}
+
+func (err *Err) Labels() map[string]struct{} {
+	if err == nil {
+		return map[string]struct{}{}
+	}
+
+	labels := map[string]struct{}{}
+
+	for _, se := range err.stack {
+		maps.Copy(labels, Labels(se))
+	}
+
+	if err.e != nil {
+		maps.Copy(labels, Labels(err.e))
+	}
+
+	maps.Copy(labels, err.labels)
+
+	return labels
+}
+
+func Labels(err error) map[string]struct{} {
+	for err != nil {
+		e, ok := err.(*Err)
+		if ok {
+			return e.Labels()
+		}
+
+		err = Unwrap(err)
+	}
+
+	return map[string]struct{}{}
 }
 
 // ------------------------------------------------------------
@@ -488,4 +525,45 @@ func Stack(errs ...error) *Err {
 	}
 
 	return toStack(errs[0], errs[1:])
+}
+
+// ---------------------------------------------------------------------------
+// error core
+// ---------------------------------------------------------------------------
+
+// ErrCore is a minimized version of an Err{}.  Primarily intended for
+// serializing a flattened version of the error stack
+type ErrCore struct {
+	Msg    string              `json:"msg"`
+	Labels map[string]struct{} `json:"labels"`
+	Values map[string]any      `json:"values"`
+}
+
+// Core transforms the Err to an ErrCore, flattening all the errors in
+// the stack into a single struct.
+func (err *Err) Core() *ErrCore {
+	if err == nil {
+		return nil
+	}
+
+	return &ErrCore{
+		Msg:    err.Error(),
+		Labels: err.Labels(),
+		Values: err.Values(),
+	}
+}
+
+// ToCore transforms the Err to an ErrCore, flattening all the errors in
+// the stack into a single struct
+func ToCore(err error) *ErrCore {
+	if err == nil {
+		return nil
+	}
+
+	e, ok := err.(*Err)
+	if !ok {
+		e = toErr(err, "")
+	}
+
+	return e.Core()
 }
