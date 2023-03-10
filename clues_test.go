@@ -17,6 +17,15 @@ func (m msa) stringWith(other map[string]any) string {
 	)
 }
 
+func toMSA[T any](m map[string]T) msa {
+	to := make(msa, len(m))
+	for k, v := range m {
+		to[k] = v
+	}
+
+	return to
+}
+
 func (m msa) equals(t *testing.T, other map[string]any) {
 	if len(m) != len(other) {
 		t.Errorf(

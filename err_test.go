@@ -69,6 +69,44 @@ func TestLabel(t *testing.T) {
 	}
 }
 
+func TestLabels(t *testing.T) {
+	var (
+		ma    = msa{"a": struct{}{}}
+		mab   = msa{"a": struct{}{}, "b": struct{}{}}
+		a     = clues.New("a").Label("a")
+		acopy = clues.New("acopy").Label("a")
+		b     = clues.New("b").Label("b")
+		wrap  = clues.Wrap(
+			clues.Stack(
+				fmt.Errorf("%w", a),
+				fmt.Errorf("%w", b),
+				fmt.Errorf("%w", acopy),
+			), "wa")
+	)
+
+	table := []struct {
+		name    string
+		initial error
+		expect  msa
+	}{
+		{"nil", nil, msa{}},
+		{"standard error", errors.New("an error"), msa{}},
+		{"unlabeled error", clues.New("clues error"), msa{}},
+		{"pkg/errs wrap around labeled error", errors.Wrap(a, "wa"), ma},
+		{"clues wrapped", clues.Wrap(a, "wrap"), ma},
+		{"clues stacked", clues.Stack(a, b), mab},
+		{"clues stacked with copy", clues.Stack(a, b, acopy), mab},
+		{"error chain", clues.Stack(b, fmt.Errorf("%w", a), fmt.Errorf("%w", acopy)), mab},
+		{"error wrap chain", wrap, mab},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			result := clues.Labels(test.initial)
+			test.expect.equals(t, toMSA(result))
+		})
+	}
+}
+
 var (
 	base = errors.New("an error")
 	cerr = func() error { return clues.Stack(base) }
@@ -429,171 +467,274 @@ func TestErrValues_stacks(t *testing.T) {
 	}
 }
 
-func TestIs(t *testing.T) {
-	sentinel := errors.New("sentinel")
+func TestImmutableErrors(t *testing.T) {
+	err := clues.New("an error").With("k", "v")
+	check := msa{"k": "v"}
+	pre := clues.InErr(err)
+	check.equals(t, pre)
 
-	table := []struct {
-		name string
-		err  error
-	}{
-		{
-			name: "plain stack",
-			err:  clues.Stack(sentinel),
-		},
-		{
-			name: "plain wrap",
-			err:  clues.Wrap(sentinel, "wrap"),
-		},
-		{
-			name: "two stack; top",
-			err:  clues.Stack(sentinel, errors.New("other")),
-		},
-		{
-			name: "two stack; base",
-			err:  clues.Stack(errors.New("other"), sentinel),
-		},
-		{
-			name: "two wrap",
-			err:  clues.Wrap(clues.Wrap(sentinel, "inner"), "outer"),
-		},
-		{
-			name: "wrap stack",
-			err:  clues.Wrap(clues.Stack(sentinel), "wrap"),
-		},
-		{
-			name: "wrap two stack: top",
-			err:  clues.Wrap(clues.Stack(sentinel, errors.New("other")), "wrap"),
-		},
-		{
-			name: "wrap two stack: base",
-			err:  clues.Wrap(clues.Stack(errors.New("other"), sentinel), "wrap"),
-		},
-		{
-			name: "double double stack; left top",
-			err: clues.Stack(
-				clues.Stack(
-					sentinel,
-					clues.New("left-base"),
-				),
-				clues.Stack(
-					clues.New("right-top"),
-					clues.New("right-base"),
-				),
-			),
-		},
-		{
-			name: "double double stack; left base",
-			err: clues.Stack(
-				clues.Stack(
-					clues.New("left-top"),
-					sentinel,
-				),
-				clues.Stack(
-					clues.New("right-top"),
-					clues.New("right-base"),
-				),
-			),
-		},
-		{
-			name: "double double stack; right top",
-			err: clues.Stack(
-				clues.Stack(
-					clues.New("left-top"),
-					clues.New("left-base"),
-				),
-				clues.Stack(
-					sentinel,
-					clues.New("right-base"),
-				),
-			),
-		},
-		{
-			name: "double double animal wrap; right base",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						clues.New("left-base"),
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
-						sentinel,
-					),
-					"right-stack"),
-			),
-		},
-		{
-			name: "double double animal wrap; left top",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						sentinel,
-						clues.New("left-base"),
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
-						clues.New("right-base"),
-					),
-					"right-stack"),
-			),
-		},
-		{
-			name: "double double animal wrap; left base",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						sentinel,
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
-						clues.New("right-base"),
-					),
-					"right-stack"),
-			),
-		},
-		{
-			name: "double double animal wrap; right top",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						clues.New("left-base"),
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						sentinel,
-						clues.New("right-base"),
-					),
-					"right-stack"),
-			),
-		},
-		{
-			name: "double double animal wrap; right base",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						clues.New("left-base"),
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
-						sentinel,
-					),
-					"right-stack"),
-			),
-		},
+	err2 := err.With("k2", "v2")
+	if _, ok := pre["k2"]; ok {
+		t.Errorf("previous map should not have been mutated by addition")
 	}
-	for _, test := range table {
+
+	pre = clues.InErr(err)
+	if _, ok := pre["k2"]; ok {
+		t.Errorf("previous map within error should not have been mutated by addition")
+	}
+
+	post := clues.InErr(err2)
+	if post["k2"] != "v2" {
+		t.Errorf("new map should contain the added value")
+	}
+}
+
+type mockTarget struct {
+	err error
+}
+
+func (mt mockTarget) Error() string {
+	return mt.err.Error()
+}
+
+func (mt mockTarget) Cause() error {
+	return mt.err
+}
+
+func (mt mockTarget) Unwrap() error {
+	return mt.err
+}
+
+const (
+	lt   = "left-top"
+	lb   = "left-base"
+	rt   = "right-top"
+	rb   = "right-base"
+	stnl = "sentinel"
+	tgt  = "target"
+)
+
+var (
+	target    = mockTarget{errors.New(tgt)}
+	sentinel  = errors.New(stnl)
+	other     = errors.New("other")
+	leftTop   = clues.New(lt).With(lt, "v"+lt).Label(lt)
+	leftBase  = clues.New(lb).With(lb, "v"+lb).Label(lb)
+	rightTop  = clues.New(rt).With(rt, "v"+rt).Label(rt)
+	rightBase = clues.New(rb).With(rb, "v"+rb).Label(rb)
+)
+
+var testTable = []struct {
+	name         string
+	err          error
+	expectMsg    string
+	expectLabels msa
+	expectValues msa
+}{
+	{
+		name:         "plain stack",
+		err:          clues.Stack(target, sentinel),
+		expectMsg:    "target: sentinel",
+		expectLabels: msa{},
+		expectValues: msa{},
+	},
+	{
+		name:         "plain wrap",
+		err:          clues.Wrap(clues.Stack(target, sentinel), "wrap"),
+		expectLabels: msa{},
+		expectMsg:    "wrap: target: sentinel",
+		expectValues: msa{},
+	},
+	{
+		name:         "two stack; top",
+		err:          clues.Stack(clues.Stack(target, sentinel), other),
+		expectMsg:    "target: sentinel: other",
+		expectLabels: msa{},
+		expectValues: msa{},
+	},
+	{
+		name:         "two stack; base",
+		err:          clues.Stack(other, clues.Stack(target, sentinel)),
+		expectMsg:    "other: target: sentinel",
+		expectLabels: msa{},
+		expectValues: msa{},
+	},
+	{
+		name:         "two wrap",
+		err:          clues.Wrap(clues.Wrap(clues.Stack(target, sentinel), "inner"), "outer"),
+		expectMsg:    "outer: inner: target: sentinel",
+		expectLabels: msa{},
+		expectValues: msa{},
+	},
+	{
+		name:         "wrap stack",
+		err:          clues.Wrap(clues.Stack(target, sentinel), "wrap"),
+		expectMsg:    "wrap: target: sentinel",
+		expectLabels: msa{},
+		expectValues: msa{},
+	},
+	{
+		name:         "wrap two stack: top",
+		err:          clues.Wrap(clues.Stack(target, sentinel, other), "wrap"),
+		expectMsg:    "wrap: target: sentinel: other",
+		expectLabels: msa{},
+		expectValues: msa{},
+	},
+	{
+		name:         "wrap two stack: base",
+		err:          clues.Wrap(clues.Stack(other, target, sentinel), "wrap"),
+		expectMsg:    "wrap: other: target: sentinel",
+		expectLabels: msa{},
+		expectValues: msa{},
+	},
+	{
+		name: "double double stack; left top",
+		err: clues.Stack(
+			clues.Stack(target, sentinel, leftBase),
+			clues.Stack(rightTop, rightBase),
+		),
+		expectMsg: "target: sentinel: left-base: right-top: right-base",
+		expectLabels: msa{
+			lb: struct{}{},
+			rt: struct{}{},
+			rb: struct{}{},
+		},
+		expectValues: msa{
+			lb: "v" + lb,
+			rt: "v" + rt,
+			rb: "v" + rb,
+		},
+	},
+	{
+		name: "double double stack; left base",
+		err: clues.Stack(
+			clues.Stack(leftTop, target, sentinel),
+			clues.Stack(rightTop, rightBase),
+		),
+		expectMsg: "left-top: target: sentinel: right-top: right-base",
+		expectLabels: msa{
+			lt: struct{}{},
+			rt: struct{}{},
+			rb: struct{}{},
+		},
+		expectValues: msa{
+			lt: "v" + lt,
+			rt: "v" + rt,
+			rb: "v" + rb,
+		},
+	},
+	{
+		name: "double double stack; right top",
+		err: clues.Stack(
+			clues.Stack(leftTop, leftBase),
+			clues.Stack(target, sentinel, rightBase),
+		),
+		expectMsg: "left-top: left-base: target: sentinel: right-base",
+		expectLabels: msa{
+			lt: struct{}{},
+			lb: struct{}{},
+			rb: struct{}{},
+		},
+		expectValues: msa{
+			lt: "v" + lt,
+			lb: "v" + lb,
+			rb: "v" + rb,
+		},
+	},
+	{
+		name: "double double animal wrap; right base",
+		err: clues.Stack(
+			clues.Wrap(clues.Stack(leftTop, leftBase), "left-stack"),
+			clues.Wrap(clues.Stack(rightTop, target, sentinel), "right-stack"),
+		),
+		expectMsg: "left-stack: left-top: left-base: right-stack: right-top: target: sentinel",
+		expectLabels: msa{
+			lt: struct{}{},
+			lb: struct{}{},
+			rt: struct{}{},
+		},
+		expectValues: msa{
+			lt: "v" + lt,
+			lb: "v" + lb,
+			rt: "v" + rt,
+		},
+	},
+	{
+		name: "double double animal wrap; left top",
+		err: clues.Stack(
+			clues.Wrap(clues.Stack(target, sentinel, leftBase), "left-stack"),
+			clues.Wrap(clues.Stack(rightTop, rightBase), "right-stack"),
+		),
+		expectMsg: "left-stack: target: sentinel: left-base: right-stack: right-top: right-base",
+		expectLabels: msa{
+			lb: struct{}{},
+			rt: struct{}{},
+			rb: struct{}{},
+		},
+		expectValues: msa{
+			lb: "v" + lb,
+			rt: "v" + rt,
+			rb: "v" + rb,
+		},
+	},
+	{
+		name: "double double animal wrap; left base",
+		err: clues.Stack(
+			clues.Wrap(clues.Stack(leftTop, target, sentinel), "left-stack"),
+			clues.Wrap(clues.Stack(rightTop, rightBase), "right-stack"),
+		),
+		expectMsg: "left-stack: left-top: target: sentinel: right-stack: right-top: right-base",
+		expectLabels: msa{
+			lt: struct{}{},
+			rt: struct{}{},
+			rb: struct{}{},
+		},
+		expectValues: msa{
+			lt: "v" + lt,
+			rt: "v" + rt,
+			rb: "v" + rb,
+		},
+	},
+	{
+		name: "double double animal wrap; right top",
+		err: clues.Stack(
+			clues.Wrap(clues.Stack(leftTop, leftBase), "left-stack"),
+			clues.Wrap(clues.Stack(target, sentinel, rightBase), "right-stack"),
+		),
+		expectMsg: "left-stack: left-top: left-base: right-stack: target: sentinel: right-base",
+		expectLabels: msa{
+			lt: struct{}{},
+			lb: struct{}{},
+			rb: struct{}{},
+		},
+		expectValues: msa{
+			lt: "v" + lt,
+			lb: "v" + lb,
+			rb: "v" + rb,
+		},
+	},
+	{
+		name: "double double animal wrap; right base",
+		err: clues.Stack(
+			clues.Wrap(clues.Stack(leftTop, leftBase), "left-stack"),
+			clues.Wrap(clues.Stack(rightTop, target, sentinel), "right-stack"),
+		),
+		expectMsg: "left-stack: left-top: left-base: right-stack: right-top: target: sentinel",
+		expectLabels: msa{
+			lt: struct{}{},
+			lb: struct{}{},
+			rt: struct{}{},
+		},
+		expectValues: msa{
+			lt: "v" + lt,
+			lb: "v" + lb,
+			rt: "v" + rt,
+		},
+	},
+}
+
+func TestIs(t *testing.T) {
+	for _, test := range testTable {
 		t.Run(test.name, func(t *testing.T) {
 			if !errors.Is(test.err, sentinel) {
 				t.Errorf("expected err [%v] to be true for errors.Is with [%s]", test.err, sentinel)
@@ -604,7 +745,7 @@ func TestIs(t *testing.T) {
 	notSentinel := clues.New("sentinel")
 
 	// NOT Is checks
-	table = []struct {
+	table := []struct {
 		name string
 		err  error
 	}{
@@ -643,187 +784,8 @@ func TestIs(t *testing.T) {
 	}
 }
 
-type mockTarget struct {
-	err error
-}
-
-func (mt mockTarget) Error() string {
-	return mt.err.Error()
-}
-
-func (mt mockTarget) Cause() error {
-	return mt.err
-}
-
-func (mt mockTarget) Unwrap() error {
-	return mt.err
-}
-
 func TestAs(t *testing.T) {
-	target := mockTarget{errors.New("target")}
-
-	table := []struct {
-		name string
-		err  error
-	}{
-		{
-			name: "plain stack",
-			err:  clues.Stack(target),
-		},
-		{
-			name: "plain wrap",
-			err:  clues.Wrap(target, "wrap"),
-		},
-		{
-			name: "two stack; top",
-			err:  clues.Stack(target, errors.New("other")),
-		},
-		{
-			name: "two stack; base",
-			err:  clues.Stack(errors.New("other"), target),
-		},
-		{
-			name: "two wrap",
-			err:  clues.Wrap(clues.Wrap(target, "inner"), "outer"),
-		},
-		{
-			name: "wrap stack",
-			err:  clues.Wrap(clues.Stack(target), "wrap"),
-		},
-		{
-			name: "wrap two stack: top",
-			err:  clues.Wrap(clues.Stack(target, errors.New("other")), "wrap"),
-		},
-		{
-			name: "wrap two stack: base",
-			err:  clues.Wrap(clues.Stack(errors.New("other"), target), "wrap"),
-		},
-		{
-			name: "double double stack; left top",
-			err: clues.Stack(
-				clues.Stack(
-					target,
-					clues.New("left-base"),
-				),
-				clues.Stack(
-					clues.New("right-top"),
-					clues.New("right-base"),
-				),
-			),
-		},
-		{
-			name: "double double stack; left base",
-			err: clues.Stack(
-				clues.Stack(
-					clues.New("left-top"),
-					target,
-				),
-				clues.Stack(
-					clues.New("right-top"),
-					clues.New("right-base"),
-				),
-			),
-		},
-		{
-			name: "double double stack; right top",
-			err: clues.Stack(
-				clues.Stack(
-					clues.New("left-top"),
-					clues.New("left-base"),
-				),
-				clues.Stack(
-					target,
-					clues.New("right-base"),
-				),
-			),
-		},
-		{
-			name: "double double animal wrap; right base",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						clues.New("left-base"),
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
-						target,
-					),
-					"right-stack"),
-			),
-		},
-		{
-			name: "double double animal wrap; left top",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						target,
-						clues.New("left-base"),
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
-						clues.New("right-base"),
-					),
-					"right-stack"),
-			),
-		},
-		{
-			name: "double double animal wrap; left base",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						target,
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
-						clues.New("right-base"),
-					),
-					"right-stack"),
-			),
-		},
-		{
-			name: "double double animal wrap; right top",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						clues.New("left-base"),
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						target,
-						clues.New("right-base"),
-					),
-					"right-stack"),
-			),
-		},
-		{
-			name: "double double animal wrap; right base",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						clues.New("left-base"),
-					),
-					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
-						target,
-					),
-					"right-stack"),
-			),
-		},
-	}
-	for _, test := range table {
+	for _, test := range testTable {
 		t.Run(test.name, func(t *testing.T) {
 			mt := mockTarget{}
 			if !errors.As(test.err, &mt) {
@@ -835,7 +797,7 @@ func TestAs(t *testing.T) {
 	notTarget := errors.New("target")
 
 	// NOT As checks
-	table = []struct {
+	table := []struct {
 		name string
 		err  error
 	}{
@@ -875,24 +837,15 @@ func TestAs(t *testing.T) {
 	}
 }
 
-func TestImmutableErrors(t *testing.T) {
-	err := clues.New("an error").With("k", "v")
-	check := msa{"k": "v"}
-	pre := clues.InErr(err)
-	check.equals(t, pre)
-
-	err2 := err.With("k2", "v2")
-	if _, ok := pre["k2"]; ok {
-		t.Errorf("previous map should not have been mutated by addition")
-	}
-
-	pre = clues.InErr(err)
-	if _, ok := pre["k2"]; ok {
-		t.Errorf("previous map within error should not have been mutated by addition")
-	}
-
-	post := clues.InErr(err2)
-	if post["k2"] != "v2" {
-		t.Errorf("new map should contain the added value")
+func TestToCore(t *testing.T) {
+	for _, test := range testTable {
+		t.Run(test.name, func(t *testing.T) {
+			c := clues.ToCore(test.err)
+			if test.expectMsg != c.Msg {
+				t.Errorf("expected Msg [%v], got [%v]", test.expectMsg, c.Msg)
+			}
+			test.expectLabels.equals(t, toMSA(c.Labels))
+			test.expectValues.equals(t, toMSA(c.Values))
+		})
 	}
 }
