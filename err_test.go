@@ -92,7 +92,7 @@ func TestLabels(t *testing.T) {
 		{"nil", nil, msa{}},
 		{"standard error", errors.New("an error"), msa{}},
 		{"unlabeled error", clues.New("clues error"), msa{}},
-		{"fmt wrap around labeled error", errors.Wrap(a, "wa"), ma},
+		{"pkg/errs wrap around labeled error", errors.Wrap(a, "wa"), ma},
 		{"clues wrapped", clues.Wrap(a, "wrap"), ma},
 		{"clues stacked", clues.Stack(a, b), mab},
 		{"clues stacked with copy", clues.Stack(a, b, acopy), mab},
