@@ -128,7 +128,7 @@ func assert(
 	eSns.equals(t, nvs.Slice())
 }
 
-func assertMAA(
+func assertMSA(
 	t *testing.T,
 	ctx context.Context,
 	ns string,
@@ -139,21 +139,6 @@ func assertMAA(
 	nvs := clues.InNamespace(ctx, ns)
 	mustEquals(t, eM, toMSA(vs))
 	mustEquals(t, eMns, toMSA(nvs))
-	eS.equals(t, vs.Slice())
-	eSns.equals(t, nvs.Slice())
-}
-
-func assertMAA(
-	t *testing.T,
-	ctx context.Context,
-	ns string,
-	eM, eMns maa,
-	eS, eSns sa,
-) {
-	vs := clues.In(ctx)
-	nvs := clues.InNamespace(ctx, ns)
-	eM.equals(t, toMAA(vs))
-	eMns.equals(t, toMAA(nvs))
 	eS.equals(t, vs.Slice())
 	eSns.equals(t, nvs.Slice())
 }
@@ -390,7 +375,7 @@ func TestAdd_concealed(t *testing.T) {
 				mustEquals(t, check, toMSA(clues.In(ctx)))
 			}
 
-			assertMAA(
+			assertMSA(
 				t, ctx, "",
 				test.expectM, msa{},
 				test.expectS, sa{})
