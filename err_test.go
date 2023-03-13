@@ -102,7 +102,7 @@ func TestLabels(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			result := clues.Labels(test.initial)
-			test.expect.equals(t, toMSA(result))
+			mustEquals(t, test.expect, toMSA(result))
 		})
 	}
 }
@@ -146,8 +146,8 @@ func TestWith(t *testing.T) {
 			for _, kv := range test.with {
 				err = err.With(kv...)
 			}
-			test.expect.equals(t, clues.InErr(err))
-			test.expect.equals(t, err.Values())
+			mustEquals(t, test.expect, clues.InErr(err))
+			mustEquals(t, test.expect, err.Values())
 		})
 	}
 }
@@ -181,8 +181,8 @@ func TestWithMap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			err := clues.WithMap(test.initial, test.kv)
 			err = err.WithMap(test.with)
-			test.expect.equals(t, clues.InErr(err))
-			test.expect.equals(t, err.Values())
+			mustEquals(t, test.expect, clues.InErr(err))
+			mustEquals(t, test.expect, err.Values())
 		})
 	}
 }
@@ -219,8 +219,8 @@ func TestWithClues(t *testing.T) {
 			tctx := clues.AddMap(ctx, test.kv)
 			err := clues.WithClues(test.initial, tctx)
 			err = err.WithMap(test.with)
-			test.expect.equals(t, clues.InErr(err))
-			test.expect.equals(t, err.Values())
+			mustEquals(t, test.expect, clues.InErr(err))
+			mustEquals(t, test.expect, err.Values())
 		})
 	}
 }
@@ -462,7 +462,7 @@ func TestErrValues_stacks(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			vs := clues.InErr(test.err)
-			test.expect.equals(t, vs)
+			mustEquals(t, test.expect, vs)
 		})
 	}
 }
@@ -471,7 +471,7 @@ func TestImmutableErrors(t *testing.T) {
 	err := clues.New("an error").With("k", "v")
 	check := msa{"k": "v"}
 	pre := clues.InErr(err)
-	check.equals(t, pre)
+	mustEquals(t, check, pre)
 
 	err2 := err.With("k2", "v2")
 	if _, ok := pre["k2"]; ok {
@@ -844,8 +844,8 @@ func TestToCore(t *testing.T) {
 			if test.expectMsg != c.Msg {
 				t.Errorf("expected Msg [%v], got [%v]", test.expectMsg, c.Msg)
 			}
-			test.expectLabels.equals(t, toMSA(c.Labels))
-			test.expectValues.equals(t, toMSA(c.Values))
+			mustEquals(t, test.expectLabels, toMSA(c.Labels))
+			mustEquals(t, test.expectValues, toMSA(c.Values))
 		})
 	}
 }

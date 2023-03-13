@@ -99,7 +99,7 @@ func normalize(kvs ...any) map[string]any {
 
 		var value any
 		if i+1 < len(kvs) {
-			value = kvs[i+1]
+			value = marshal(kvs[i+1])
 		}
 
 		norm[key] = value
