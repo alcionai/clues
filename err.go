@@ -159,7 +159,7 @@ func (err *Err) With(kvs ...any) *Err {
 
 	return &Err{
 		e:    err,
-		data: err.data.add(normalize(kvs...)),
+		data: values(normalize(kvs...)),
 	}
 }
 
@@ -192,7 +192,7 @@ func (err *Err) WithMap(m map[string]any) *Err {
 
 	return &Err{
 		e:    err,
-		data: err.data.add(m),
+		data: values(m),
 	}
 }
 
