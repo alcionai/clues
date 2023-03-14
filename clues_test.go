@@ -128,7 +128,7 @@ func assert(
 	eSns.equals(t, nvs.Slice())
 }
 
-func assertMAA(
+func assertMSA(
 	t *testing.T,
 	ctx context.Context,
 	ns string,
@@ -317,7 +317,7 @@ type custom struct {
 }
 
 func (c custom) Conceal() string {
-	return c.a + " - " + clues.Conceal(clues.SHA256, c.b)
+	return c.a + " - " + clues.ConcealWith(clues.SHA256, c.b)
 }
 
 func concealed(a any) string {
@@ -375,7 +375,7 @@ func TestAdd_concealed(t *testing.T) {
 				mustEquals(t, check, toMSA(clues.In(ctx)))
 			}
 
-			assertMAA(
+			assertMSA(
 				t, ctx, "",
 				test.expectM, msa{},
 				test.expectS, sa{})

@@ -2,6 +2,11 @@ package clues
 
 import "testing"
 
+// set the hash alg key for consistency
+func init() {
+	SetHasher(HashCfg{HMAC_SHA256, []byte("gobbledeygook-believe-it-or-not-this-is-randomly-generated")})
+}
+
 type mockStringer struct {
 	s string
 }
@@ -29,12 +34,12 @@ func TestConceal(t *testing.T) {
 		{
 			name:   "hmac_sha256",
 			alg:    HMAC_SHA256,
-			expect: "f9ee6adbbdbb65bf",
+			expect: "cddff495fc4a46ef",
 		},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			result := Conceal(test.alg, input)
+			result := ConcealWith(test.alg, input)
 			if result != test.expect {
 				t.Errorf(`expected hash result "%s", got "%s"`, test.expect, result)
 			}
@@ -92,25 +97,25 @@ func TestHide(t *testing.T) {
 		{
 			name:       "string",
 			input:      "fnords",
-			expectHash: "1c8deb0df69dd549",
+			expectHash: "7745164c2e6b3c97",
 			expectStr:  "fnords",
 		},
 		{
 			name:       "int",
 			input:      1,
-			expectHash: "1f81f27cdeeb75f0",
+			expectHash: "1e29272d274ab30f",
 			expectStr:  "1",
 		},
 		{
 			name:       "stringer",
 			input:      mockStringer{"fnords"},
-			expectHash: "528771b0ce994710",
+			expectHash: "553c83b5702ada92",
 			expectStr:  "{s:fnords}",
 		},
 		{
 			name:       "map",
 			input:      map[string]string{"fnords": "smarf"},
-			expectHash: "b1678c6da072f896",
+			expectHash: "1502957923bb4cc8",
 			expectStr:  `{"fnords":"smarf"}`,
 		},
 		{
@@ -143,19 +148,19 @@ func TestHideAll(t *testing.T) {
 		{
 			name:       "string, int",
 			input:      []any{"fnords", 1},
-			expectHash: []string{"1c8deb0df69dd549", "1f81f27cdeeb75f0"},
+			expectHash: []string{"7745164c2e6b3c97", "1e29272d274ab30f"},
 			expectStr:  []string{"fnords", "1"},
 		},
 		{
 			name:       "stringer",
 			input:      []any{mockStringer{"fnords"}, mockStringer{"smarf"}},
-			expectHash: []string{"528771b0ce994710", "8edc7a58f4c9a252"},
+			expectHash: []string{"553c83b5702ada92", "71e19af12aa87603"},
 			expectStr:  []string{"{s:fnords}", "{s:smarf}"},
 		},
 		{
 			name:       "map",
 			input:      []any{map[string]string{"fnords": "smarf"}},
-			expectHash: []string{"b1678c6da072f896"},
+			expectHash: []string{"1502957923bb4cc8"},
 			expectStr:  []string{`{"fnords":"smarf"}`},
 		},
 		{
