@@ -128,7 +128,7 @@ func assert(
 	eSns.equals(t, nvs.Slice())
 }
 
-func assertMAA(
+func assertMSA(
 	t *testing.T,
 	ctx context.Context,
 	ns string,
@@ -317,7 +317,7 @@ type custom struct {
 }
 
 func (c custom) Conceal() string {
-	return c.a + " - " + clues.Conceal(clues.SHA256, c.b)
+	return c.a + " - " + clues.ConcealWith(clues.SHA256, c.b)
 }
 
 func concealed(a any) string {
@@ -339,14 +339,14 @@ func TestAdd_concealed(t *testing.T) {
 		{
 			name:       "all hidden",
 			concealers: [][]any{{clues.Hide("k"), clues.Hide("v")}, {clues.Hide("not_k"), clues.Hide("not_v")}},
-			expectM:    msa{"ec084d54826cf369": "072553c49de59ecf", "1d3298b660d45ba6": "6c33ba4c0581b0cc"},
-			expectS:    sa{"ec084d54826cf369", "072553c49de59ecf", "1d3298b660d45ba6", "6c33ba4c0581b0cc"},
+			expectM:    msa{"cc69e8e6a3b991d5": "f669b3b5927161b2", "ba3acd7f61e405ca": "509bf4fb69f55ca3"},
+			expectS:    sa{"cc69e8e6a3b991d5", "f669b3b5927161b2", "ba3acd7f61e405ca", "509bf4fb69f55ca3"},
 		},
 		{
 			name:       "partially hidden",
 			concealers: [][]any{{clues.Hide("a"), safe{1}}, {clues.Hide(2), safe{"b"}}},
-			expectM:    msa{"7804cbb0587c4711": "1", "6679863f298e5446": `"b"`},
-			expectS:    sa{"7804cbb0587c4711", "1", "6679863f298e5446", `"b"`},
+			expectM:    msa{"7d2ded59f6a549d7": "1", "cbdd96fab83ece85": `"b"`},
+			expectS:    sa{"7d2ded59f6a549d7", "1", "cbdd96fab83ece85", `"b"`},
 		},
 		{
 			name: "custom concealer",
@@ -375,7 +375,7 @@ func TestAdd_concealed(t *testing.T) {
 				mustEquals(t, check, toMSA(clues.In(ctx)))
 			}
 
-			assertMAA(
+			assertMSA(
 				t, ctx, "",
 				test.expectM, msa{},
 				test.expectS, sa{})

@@ -2,9 +2,14 @@ package clues
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"time"
 )
+
+const hashTruncateLen = 16
 
 type hashAlg int
 
@@ -12,11 +17,52 @@ const (
 	SHA256 hashAlg = iota
 	HMAC_SHA256
 	Plaintext
+	Flatmask
 )
 
-const hashTruncateLen = 16
+var (
+	initial = makeDefaultHash()
+	config  = DefaultHash()
+)
 
-var hashingAlgorithm = HMAC_SHA256
+type HashCfg struct {
+	HashAlg hashAlg
+	HMACKey []byte
+}
+
+// SetHasher sets the hashing configuration used in
+// all clues concealer structs, and clues.Conceal()
+// and clues.Hash() calls.
+func SetHasher(sc HashCfg) {
+	config = sc
+}
+
+// NoHash provides a secrets configuration with
+// no hashing or masking of values.
+func NoHash() HashCfg {
+	return HashCfg{Plaintext, nil}
+}
+
+// DefaultHash creates a secrets configuration using the
+// HMAC_SHA256 hash with a random key.  This value is already
+// set upon initialization of the package.
+func DefaultHash() HashCfg {
+	return HashCfg{initial.HashAlg, initial.HMACKey}
+}
+
+func makeDefaultHash() HashCfg {
+	b := make([]byte, 16)
+
+	if _, err := rand.Read(b); err != nil {
+		b = []byte(fmt.Sprintf("%d", time.Now().UnixNano()))[:16]
+	}
+
+	return HashCfg{HMAC_SHA256, b}
+}
+
+// ---------------------------------------------------------------------------
+// types and interfaces
+// ---------------------------------------------------------------------------
 
 type Concealer interface {
 	Conceal() string
@@ -31,17 +77,9 @@ type secret struct {
 func (s secret) String() string  { return s.s }
 func (s secret) Conceal() string { return s.h }
 
-// Mask embeds the value in a secret struct where the
-// Conceal() call always returns a flat string: "***"
-func Mask(a any) secret {
-	str := marshal(a)
-
-	return secret{
-		s: str,
-		v: a,
-		h: "***",
-	}
-}
+// ---------------------------------------------------------------------------
+// concealer constructors
+// ---------------------------------------------------------------------------
 
 // Hide embeds the value in a secret struct where the
 // Conceal() call contains a truncated hash of value.
@@ -53,7 +91,7 @@ func Hide(a any) secret {
 	return secret{
 		s: str,
 		v: a,
-		h: Conceal(hashingAlgorithm, str),
+		h: Conceal(str),
 	}
 }
 
@@ -69,9 +107,25 @@ func HideAll(a ...any) []secret {
 	return sl
 }
 
+// Mask embeds the value in a secret struct where the
+// Conceal() call always returns a flat string: "***"
+func Mask(a any) secret {
+	return secret{
+		s: marshal(a),
+		v: a,
+		h: "***",
+	}
+}
+
+// Conceal runs the currently configured hashing algorithm
+// on the parameterized value.
+func Conceal(a any) string {
+	return ConcealWith(config.HashAlg, marshal(a))
+}
+
 // Conceal runs one of clues' hashing algorithms on
 // the provided string.
-func Conceal(alg hashAlg, s string) string {
+func ConcealWith(alg hashAlg, s string) string {
 	if len(s) == 0 {
 		return ""
 	}
@@ -83,18 +137,20 @@ func Conceal(alg hashAlg, s string) string {
 	case Plaintext:
 		return s
 
+	case Flatmask:
+		return "***"
+
 	default:
 		return hashSha256(s)
 	}
 }
 
-func hashHmacSha256(s string) string {
-	var (
-		// need to set up key establishment.
-		key = []byte("TODO-rjjATxL6KRlCaDGyRpIc3T4PUYAUXIz8")
-		sig = hmac.New(sha256.New, key)
-	)
+// ---------------------------------------------------------------------------
+// hashing algs
+// ---------------------------------------------------------------------------
 
+func hashHmacSha256(s string) string {
+	sig := hmac.New(sha256.New, config.HMACKey)
 	sig.Write([]byte(s))
 
 	return hex.EncodeToString(sig.Sum(nil))[:hashTruncateLen]
