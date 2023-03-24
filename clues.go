@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"golang.org/x/exp/maps"
 )
@@ -110,6 +111,12 @@ func normalize(kvs ...any) map[string]any {
 
 func marshal(a any) string {
 	if a == nil {
+		return ""
+	}
+
+	// protect against nil pointer values with value-receiver funcs
+	rvo := reflect.ValueOf(a)
+	if rvo.Kind() == reflect.Ptr && rvo.IsNil() {
 		return ""
 	}
 

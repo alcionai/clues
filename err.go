@@ -220,6 +220,10 @@ func WithMap(err error, m map[string]any) *Err {
 // clues.Stack(err).WithClues(ctx) adds the same data as
 // clues.Stack(err).WithMap(clues.Values(ctx)).
 func (err *Err) WithClues(ctx context.Context) *Err {
+	if err == nil {
+		return nil
+	}
+
 	return err.WithMap(In(ctx))
 }
 
@@ -231,6 +235,10 @@ func (err *Err) WithClues(ctx context.Context) *Err {
 // clues.WithClues(err, ctx) adds the same data as
 // clues.WithMap(err, clues.Values(ctx)).
 func WithClues(err error, ctx context.Context) *Err {
+	if err == nil {
+		return nil
+	}
+
 	return WithMap(err, In(ctx))
 }
 
@@ -315,6 +323,10 @@ func format(err error, s fmt.State, verb rune) {
 // For all formatting besides %+v, the error printout should closely
 // mimic that of err.Error().
 func formatReg(err *Err, s fmt.State, verb rune) {
+	if err == nil {
+		return
+	}
+
 	write(s, verb, err.msg)
 
 	if len(err.msg) > 0 && err.e != nil {
@@ -335,6 +347,10 @@ func formatReg(err *Err, s fmt.State, verb rune) {
 // in %+v formatting, we output errors FIFO (ie, read from the
 // bottom of the stack first).
 func formatPlusV(err *Err, s fmt.State, verb rune) {
+	if err == nil {
+		return
+	}
+
 	for i := len(err.stack) - 1; i >= 0; i-- {
 		e := err.stack[i]
 		format(e, s, verb)
@@ -517,14 +533,21 @@ func Wrap(err error, msg string) *Err {
 //
 // Ex: Stack(sentinel, errors.New("base")).Error() => "sentinel: base"
 func Stack(errs ...error) *Err {
-	switch len(errs) {
+	filtered := []error{}
+	for _, err := range errs {
+		if err != nil {
+			filtered = append(filtered, err)
+		}
+	}
+
+	switch len(filtered) {
 	case 0:
 		return nil
 	case 1:
-		return toErr(errs[0], "")
+		return toErr(filtered[0], "")
 	}
 
-	return toStack(errs[0], errs[1:])
+	return toStack(filtered[0], filtered[1:])
 }
 
 // ---------------------------------------------------------------------------

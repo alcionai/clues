@@ -849,3 +849,21 @@ func TestToCore(t *testing.T) {
 		})
 	}
 }
+
+func TestStackNils(t *testing.T) {
+	result := clues.Stack(nil)
+	if result != nil {
+		t.Errorf("expected nil, got [%v]", result)
+	}
+
+	e := clues.New("err")
+	result = clues.Stack(e, nil)
+	if result.Error() != e.Error() {
+		t.Errorf("expected [%v], got [%v]", e, result)
+	}
+
+	result = clues.Stack(nil, e)
+	if result.Error() != e.Error() {
+		t.Errorf("expected [%v], got [%v]", e, result)
+	}
+}
