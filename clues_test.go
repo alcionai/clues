@@ -382,3 +382,19 @@ func TestAdd_concealed(t *testing.T) {
 		})
 	}
 }
+
+type pointable struct{}
+
+func (p pointable) String() string {
+	return "pointable"
+}
+
+func TestPointerDereferenceMarshal(t *testing.T) {
+	var (
+		p   *pointable
+		ctx = context.Background()
+	)
+
+	// should not panic
+	clues.Add(ctx, "pointable", p)
+}
