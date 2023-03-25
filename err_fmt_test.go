@@ -856,3 +856,77 @@ func TestFmt(t *testing.T) {
 		})
 	}
 }
+
+func TestErrCore_String(t *testing.T) {
+	table := []struct {
+		name        string
+		core        *clues.ErrCore
+		expectS     string
+		expectVPlus string
+	}{
+		{
+			name: "all values",
+			core: clues.
+				New("message").
+				With("key", "value").
+				Label("label").
+				Core(),
+			expectS:     `{"message", [label], {key:value}}`,
+			expectVPlus: `{msg:"message", labels:[label], values:{key:value}}`,
+		},
+		{
+			name: "message only",
+			core: clues.
+				New("message").
+				Core(),
+			expectS:     `{"message"}`,
+			expectVPlus: `{msg:"message", labels:[], values:{}}`,
+		},
+		{
+			name: "labels only",
+			core: clues.
+				New("").
+				Label("label").
+				Core(),
+			expectS:     `{[label]}`,
+			expectVPlus: `{msg:"", labels:[label], values:{}}`,
+		},
+		{
+			name: "values only",
+			core: clues.
+				New("").
+				With("key", "value").
+				Core(),
+			expectS:     `{{key:value}}`,
+			expectVPlus: `{msg:"", labels:[], values:{key:value}}`,
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			result := test.core.String()
+			if result != test.expectS {
+				t.Errorf("expected string\n%s\ngot %s", test.expectS, result)
+			}
+
+			result = fmt.Sprintf("%s", test.core)
+			if result != test.expectS {
+				t.Errorf("expected %%s\n%s\ngot %s", test.expectS, result)
+			}
+
+			result = fmt.Sprintf("%v", test.core)
+			if result != test.expectS {
+				t.Errorf("expected %%s\n%s\ngot %s", test.expectS, result)
+			}
+
+			result = fmt.Sprintf("%+v", test.core)
+			if result != test.expectVPlus {
+				t.Errorf("expected %%s\n%s\ngot %s", test.expectVPlus, result)
+			}
+
+			result = fmt.Sprintf("%#v", test.core)
+			if result != test.expectVPlus {
+				t.Errorf("expected %%s\n%s\ngot %s", test.expectVPlus, result)
+			}
+		})
+	}
+}

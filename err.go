@@ -590,3 +590,71 @@ func ToCore(err error) *ErrCore {
 
 	return e.Core()
 }
+
+func (ec *ErrCore) String() string {
+	if ec == nil {
+		return "<nil>"
+	}
+
+	return ec.stringer(false)
+}
+
+func (ec *ErrCore) stringer(fancy bool) string {
+	sep := ", "
+	ls := strings.Join(maps.Keys(ec.Labels), sep)
+
+	vsl := []string{}
+	for k, v := range ec.Values {
+		vsl = append(vsl, k+":"+marshal(v))
+	}
+
+	vs := strings.Join(vsl, sep)
+
+	if fancy {
+		return `{msg:"` + ec.Msg + `", labels:[` + ls + `], values:{` + vs + `}}`
+	}
+
+	s := []string{}
+
+	if len(ec.Msg) > 0 {
+		s = append(s, `"`+ec.Msg+`"`)
+	}
+
+	if len(ls) > 0 {
+		s = append(s, "["+ls+"]")
+	}
+
+	if len(vs) > 0 {
+		s = append(s, "{"+vs+"}")
+	}
+
+	return "{" + strings.Join(s, ", ") + "}"
+}
+
+// Format provides cleaner printing of .
+//
+//	%s    same as err.Error()
+//	%v    equivalent to %s
+//
+// Format accepts flags that alter the printing of some verbs, as follows:
+//
+//	%+v   Prints filename, function, and line number for each error in the stack.
+func (ec *ErrCore) Format(s fmt.State, verb rune) {
+	if ec == nil {
+		return
+	}
+
+	if verb == 'v' {
+		if s.Flag('+') {
+			write(s, verb, ec.stringer(true))
+			return
+		}
+
+		if s.Flag('#') {
+			write(s, verb, ec.stringer(true))
+			return
+		}
+	}
+
+	write(s, verb, ec.stringer(false))
+}
