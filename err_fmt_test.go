@@ -865,6 +865,12 @@ func TestErrCore_String(t *testing.T) {
 		expectVPlus string
 	}{
 		{
+			name:        "nil",
+			core:        nil,
+			expectS:     `<nil>`,
+			expectVPlus: `<nil>`,
+		},
+		{
 			name: "all values",
 			core: clues.
 				New("message").

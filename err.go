@@ -631,16 +631,17 @@ func (ec *ErrCore) stringer(fancy bool) string {
 	return "{" + strings.Join(s, ", ") + "}"
 }
 
-// Format provides cleaner printing of .
+// Format provides cleaner printing of an ErrCore struct.
 //
-//	%s    same as err.Error()
-//	%v    equivalent to %s
+//	%s    only populated values are printed, without printing the property name.
+//	%v    same as %s.
 //
 // Format accepts flags that alter the printing of some verbs, as follows:
 //
-//	%+v   Prints filename, function, and line number for each error in the stack.
+//	%+v    prints the full struct, including empty values and property names.
 func (ec *ErrCore) Format(s fmt.State, verb rune) {
 	if ec == nil {
+		write(s, verb, "<nil>")
 		return
 	}
 
