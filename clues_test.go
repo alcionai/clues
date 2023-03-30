@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/alcionai/clues"
@@ -299,9 +300,16 @@ func TestImmutableCtx(t *testing.T) {
 	}
 }
 
+var (
+	_ clues.PlainConcealer = &safe{}
+)
+
 type safe struct {
 	v any
 }
+
+func (s safe) PlainString() string            { return fmt.Sprintf("%v", s.v) }
+func (s safe) Format(fs fmt.State, verb rune) { io.WriteString(fs, fmt.Sprintf("%"+string(verb), s.v)) }
 
 func (s safe) Conceal() string {
 	bs, err := json.Marshal(s.v)
@@ -312,9 +320,14 @@ func (s safe) Conceal() string {
 	return string(bs)
 }
 
+var _ clues.PlainConcealer = &custom{}
+
 type custom struct {
 	a, b string
 }
+
+func (c custom) PlainString() string            { return c.a + " - " + c.b }
+func (c custom) Format(fs fmt.State, verb rune) { io.WriteString(fs, c.Conceal()) }
 
 func (c custom) Conceal() string {
 	return c.a + " - " + clues.ConcealWith(clues.SHA256, c.b)
