@@ -80,7 +80,7 @@ type Concealer interface {
 	Conceal() string
 	// Concealers also need to comply with Format
 	// It's a bit overbearing, but complying with Concealer
-	// doesn't guarantee any caller that thee variable won't
+	// doesn't provide guarantees that the variable won't
 	// pass into fmt.Printf("%v") and skip the whole hash.
 	// This is for your protection, too.
 	Format(fs fmt.State, verb rune)
