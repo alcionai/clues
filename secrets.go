@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -64,9 +65,32 @@ func makeDefaultHash() HashCfg {
 // types and interfaces
 // ---------------------------------------------------------------------------
 
+type PlainConcealer interface {
+	PlainStringer
+	Concealer
+}
+
+// PlainStringer is the opposite of conceal.
+// Useful for if you want to retrieve the raw value of a secret.
+type PlainStringer interface {
+	PlainString() string
+}
+
 type Concealer interface {
 	Conceal() string
+	// Concealers also need to comply with Format
+	// It's a bit overbearing, but complying with Concealer
+	// doesn't provide guarantees that the variable won't
+	// pass into fmt.Printf("%v") and skip the whole hash.
+	// This is for your protection, too.
+	Format(fs fmt.State, verb rune)
 }
+
+// compliance guarantees
+var (
+	_ Concealer     = &secret{}
+	_ PlainStringer = &secret{}
+)
 
 type secret struct {
 	s string
@@ -74,8 +98,12 @@ type secret struct {
 	h string
 }
 
-func (s secret) String() string  { return s.s }
-func (s secret) Conceal() string { return s.h }
+// use the hashed string in any fmt verb.
+func (s secret) Format(fs fmt.State, verb rune) { io.WriteString(fs, s.h) }
+func (s secret) String() string                 { return s.h }
+func (s secret) Conceal() string                { return s.h }
+func (s secret) PlainString() string            { return s.s }
+func (s secret) V() any                         { return s.v }
 
 // ---------------------------------------------------------------------------
 // concealer constructors
