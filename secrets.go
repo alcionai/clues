@@ -22,7 +22,8 @@ const (
 )
 
 var (
-	initial = makeDefaultHash()
+	// initial = makeDefaultHash()
+	initial = NoHash()
 	config  = DefaultHash()
 )
 
@@ -148,12 +149,17 @@ func Mask(a any) secret {
 // Conceal runs the currently configured hashing algorithm
 // on the parameterized value.
 func Conceal(a any) string {
-	return ConcealWith(config.HashAlg, marshal(a))
+	return ConcealWith(config.HashAlg, a)
 }
 
 // Conceal runs one of clues' hashing algorithms on
-// the provided string.
-func ConcealWith(alg hashAlg, s string) string {
+// the provided value.
+func ConcealWith(alg hashAlg, a any) string {
+	if a == nil {
+		return ""
+	}
+
+	s := marshal(a)
 	if len(s) == 0 {
 		return ""
 	}
