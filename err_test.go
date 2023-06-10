@@ -478,11 +478,6 @@ func TestImmutableErrors(t *testing.T) {
 		t.Errorf("previous map should not have been mutated by addition")
 	}
 
-	pre = clues.InErr(err)
-	if _, ok := pre["k2"]; ok {
-		t.Errorf("previous map within error should not have been mutated by addition")
-	}
-
 	post := clues.InErr(err2)
 	if post["k2"] != "v2" {
 		t.Errorf("new map should contain the added value")

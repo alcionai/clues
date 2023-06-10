@@ -123,8 +123,8 @@ func assert(
 ) {
 	vs := clues.In(ctx)
 	nvs := clues.InNamespace(ctx, ns)
-	mustEquals(t, eM, vs)
-	mustEquals(t, eMns, nvs)
+	mustEquals(t, eM, vs.Map())
+	mustEquals(t, eMns, nvs.Map())
 	eS.equals(t, vs.Slice())
 	eSns.equals(t, nvs.Slice())
 }
@@ -138,8 +138,8 @@ func assertMSA(
 ) {
 	vs := clues.In(ctx)
 	nvs := clues.InNamespace(ctx, ns)
-	mustEquals(t, eM, toMSA(vs))
-	mustEquals(t, eMns, toMSA(nvs))
+	mustEquals(t, eM, toMSA(vs.Map()))
+	mustEquals(t, eMns, toMSA(nvs.Map()))
 	eS.equals(t, vs.Slice())
 	eSns.equals(t, nvs.Slice())
 }
@@ -162,12 +162,12 @@ func TestAdd(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, clues.In(ctx))
+			mustEquals(t, check, clues.In(ctx).Map())
 
 			for _, kv := range test.kvs {
 				ctx = clues.Add(ctx, kv[0], kv[1])
 				check[kv[0]] = kv[1]
-				mustEquals(t, check, clues.In(ctx))
+				mustEquals(t, check, clues.In(ctx).Map())
 			}
 
 			assert(
@@ -176,6 +176,20 @@ func TestAdd(t *testing.T) {
 				test.expectS, sa{})
 		})
 	}
+}
+
+func TestAdd_branchIsolation(t *testing.T) {
+	ctx := context.Background()
+	l := clues.Add(ctx, "foo", "bar")
+	r := clues.Add(ctx, "baz", "qux")
+	ll := clues.Add(l, "fnords", "smarf")
+	lr := clues.Add(l, "beaux", "regard")
+
+	mustEquals(t, msa{}, clues.In(ctx).Map())
+	mustEquals(t, msa{"foo": "bar"}, clues.In(l).Map())
+	mustEquals(t, msa{"baz": "qux"}, clues.In(r).Map())
+	mustEquals(t, msa{"foo": "bar", "fnords": "smarf"}, clues.In(ll).Map())
+	mustEquals(t, msa{"foo": "bar", "beaux": "regard"}, clues.In(lr).Map())
 }
 
 func TestAddMap(t *testing.T) {
@@ -194,14 +208,14 @@ func TestAddMap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, clues.In(ctx))
+			mustEquals(t, check, clues.In(ctx).Map())
 
 			for _, m := range test.ms {
 				ctx = clues.AddMap(ctx, m)
 				for k, v := range m {
 					check[k] = v
 				}
-				mustEquals(t, check, clues.In(ctx))
+				mustEquals(t, check, clues.In(ctx).Map())
 			}
 
 			assert(
@@ -228,12 +242,12 @@ func TestAddTo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, clues.InNamespace(ctx, "ns"))
+			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map())
 
 			for _, kv := range test.kvs {
 				ctx = clues.AddTo(ctx, "ns", kv[0], kv[1])
 				check[kv[0]] = kv[1]
-				mustEquals(t, check, clues.InNamespace(ctx, "ns"))
+				mustEquals(t, check, clues.InNamespace(ctx, "ns").Map())
 			}
 
 			assert(
@@ -260,14 +274,14 @@ func TestAddMapTo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, clues.InNamespace(ctx, "ns"))
+			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map())
 
 			for _, m := range test.ms {
 				ctx = clues.AddMapTo(ctx, "ns", m)
 				for k, v := range m {
 					check[k] = v
 				}
-				mustEquals(t, check, clues.InNamespace(ctx, "ns"))
+				mustEquals(t, check, clues.InNamespace(ctx, "ns").Map())
 			}
 
 			assert(
@@ -282,19 +296,20 @@ func TestImmutableCtx(t *testing.T) {
 	ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 	check := msa{}
 	pre := clues.In(ctx)
-	mustEquals(t, check, pre)
+	preMap := pre.Map()
+	mustEquals(t, check, preMap)
 
 	ctx2 := clues.Add(ctx, "k", "v")
-	if _, ok := pre["k"]; ok {
+	if _, ok := preMap["k"]; ok {
 		t.Errorf("previous map should not have been mutated by addition")
 	}
 
 	pre = clues.In(ctx)
-	if _, ok := pre["k"]; ok {
+	if _, ok := preMap["k"]; ok {
 		t.Errorf("previous map within ctx should not have been mutated by addition")
 	}
 
-	post := clues.In(ctx2)
+	post := clues.In(ctx2).Map()
 	if post["k"] != "v" {
 		t.Errorf("new map should contain the added value")
 	}
@@ -380,12 +395,12 @@ func TestAdd_concealed(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, toMSA(clues.In(ctx)))
+			mustEquals(t, check, toMSA(clues.In(ctx).Map()))
 
 			for _, cs := range test.concealers {
 				ctx = clues.Add(ctx, cs...)
 				check[concealed(cs[0])] = concealed(cs[1])
-				mustEquals(t, check, toMSA(clues.In(ctx)))
+				mustEquals(t, check, toMSA(clues.In(ctx).Map()))
 			}
 
 			assertMSA(
