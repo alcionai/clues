@@ -38,16 +38,17 @@ type Err struct {
 
 	// data is the record of contextual data produced,
 	// presumably, at the time the error is created or wrapped.
-	data values
+	data *dataNode
 }
 
-func toErr(e error, msg string) *Err {
+func toErr(e error, msg string, m map[string]any) *Err {
 	_, file, line, _ := runtime.Caller(2)
 
 	return &Err{
 		e:        e,
 		location: fmt.Sprintf("%s:%d", file, line),
 		msg:      msg,
+		data:     &dataNode{vs: m},
 	}
 }
 
@@ -103,7 +104,7 @@ func Label(err error, label string) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = toErr(err, "")
+		e = toErr(err, "", nil)
 	}
 
 	return e.Label(label)
@@ -153,14 +154,11 @@ func (err *Err) With(kvs ...any) *Err {
 		return nil
 	}
 
-	if len(err.data) == 0 {
-		err.data = values{}
+	if len(kvs) > 0 {
+		err.data = err.data.add(normalize(kvs...))
 	}
 
-	return &Err{
-		e:    err,
-		data: values(normalize(kvs...)),
-	}
+	return err
 }
 
 // With adds every two values as a key,value pair to
@@ -174,7 +172,7 @@ func With(err error, kvs ...any) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = toErr(err, "")
+		return toErr(err, "", normalize(kvs...))
 	}
 
 	return e.With(kvs...)
@@ -186,14 +184,11 @@ func (err *Err) WithMap(m map[string]any) *Err {
 		return nil
 	}
 
-	if len(err.data) == 0 {
-		err.data = values{}
+	if len(m) > 0 {
+		err.data = err.data.add(m)
 	}
 
-	return &Err{
-		e:    err,
-		data: values(m),
-	}
+	return err
 }
 
 // WithMap copies the map to the Err's data map.
@@ -206,7 +201,7 @@ func WithMap(err error, m map[string]any) *Err {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = toErr(err, "")
+		return toErr(err, "", m)
 	}
 
 	return e.WithMap(m)
@@ -224,7 +219,7 @@ func (err *Err) WithClues(ctx context.Context) *Err {
 		return nil
 	}
 
-	return err.WithMap(In(ctx))
+	return err.WithMap(In(ctx).Map())
 }
 
 // WithClues is syntactical-sugar that assumes you're using
@@ -239,26 +234,26 @@ func WithClues(err error, ctx context.Context) *Err {
 		return nil
 	}
 
-	return WithMap(err, In(ctx))
+	return WithMap(err, In(ctx).Map())
 }
 
 // Values returns a copy of all of the contextual data in
 // the error.  Each error in the stack is unwrapped and all
 // maps are unioned. In case of collision, lower level error
 // data take least priority.
-func (err *Err) Values() values {
+func (err *Err) Values() map[string]any {
 	if err == nil {
-		return values{}
+		return map[string]any{}
 	}
 
-	vals := values{}
+	vals := map[string]any{}
 
 	for _, se := range err.stack {
 		maps.Copy(vals, InErr(se))
 	}
 
 	maps.Copy(vals, InErr(err.e))
-	maps.Copy(vals, err.data)
+	maps.Copy(vals, err.data.Map())
 
 	return vals
 }
@@ -267,9 +262,9 @@ func (err *Err) Values() values {
 // Each error in the stack is unwrapped and all maps are
 // unioned. In case of collision, lower level error data
 // take least priority.
-func InErr(err error) values {
+func InErr(err error) map[string]any {
 	if err == nil {
-		return values{}
+		return map[string]any{}
 	}
 
 	if e, ok := err.(*Err); ok {
@@ -514,7 +509,7 @@ func Unwrap(err error) error {
 // ------------------------------------------------------------
 
 func New(msg string) *Err {
-	return toErr(nil, msg)
+	return toErr(nil, msg, nil)
 }
 
 // Wrap returns a  clues.Err with a new message wrapping the old error.
@@ -523,7 +518,7 @@ func Wrap(err error, msg string) *Err {
 		return nil
 	}
 
-	return toErr(err, msg)
+	return toErr(err, msg, nil)
 }
 
 // Stack returns the error as a clues.Err.  If additional errors are
@@ -544,7 +539,7 @@ func Stack(errs ...error) *Err {
 	case 0:
 		return nil
 	case 1:
-		return toErr(filtered[0], "")
+		return toErr(filtered[0], "", nil)
 	}
 
 	return toStack(filtered[0], filtered[1:])
@@ -585,7 +580,7 @@ func ToCore(err error) *ErrCore {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = toErr(err, "")
+		e = toErr(err, "", nil)
 	}
 
 	return e.Core()

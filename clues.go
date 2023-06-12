@@ -13,79 +13,94 @@ import (
 // structure data storage and namespaces
 // ---------------------------------------------------------------------------
 
-const defaultNamespace = "clue_ns_default"
-
-type values map[string]any
-
-func (vs values) add(m map[string]any) values {
-	v2 := maps.Clone(vs)
-	if v2 == nil {
-		v2 = values{}
-	}
-
-	maps.Copy(v2, m)
-	return v2
+// dataNodes contain the data tracked by both clues in contexts and in errors.
+//
+// These nodes create an inverted tree, such that nodes can walk their ancestry
+// path from leaf (the current node) to root (the highest ancestor), but not
+// from root to child.  This allows clues to establish sets of common ancestor
+// data with unique branches for individual descendants, making the addition of
+// new data inherently theadsafe.
+//
+// For collisions during aggregation, distance from the root denotes priority,
+// with the root having the lowest priority.  IE: if a child overwrites a key
+// declared by an ancestor, the child's entry takes priority.
+type dataNode struct {
+	parent *dataNode
+	vs     map[string]any
 }
 
-func (vs values) Slice() []any {
-	s := make([]any, 0, 2*len(vs))
+func (dn *dataNode) add(m map[string]any) *dataNode {
+	return &dataNode{
+		parent: dn,
+		vs:     maps.Clone(m),
+	}
+}
 
-	for k, v := range vs {
+// lineage runs the fn on every valueNode in the ancestry tree,
+// starting at the root and ending at the dataNode.
+func (dn *dataNode) lineage(fn func(vs map[string]any)) {
+	if dn == nil {
+		return
+	}
+
+	if dn.parent != nil {
+		dn.parent.lineage(fn)
+	}
+
+	fn(dn.vs)
+}
+
+func (dn *dataNode) Slice() []any {
+	m := dn.Map()
+	s := make([]any, 0, 2*len(m))
+
+	for k, v := range m {
 		s = append(s, k, v)
 	}
 
 	return s
 }
 
-// outer map tracks namespaces
-// inner map tracks key/value pairs
-type namespacedClues map[string]values
+func (dn *dataNode) Map() map[string]any {
+	m := map[string]any{}
 
-func newClueMap() namespacedClues {
-	return namespacedClues{defaultNamespace: values{}}
-}
+	dn.lineage(func(vs map[string]any) {
+		for k, v := range vs {
+			m[k] = v
+		}
+	})
 
-func (nc namespacedClues) namespace(name string) values {
-	ns, ok := nc[name]
-	if !ok {
-		nc[name] = values{}
-	}
-
-	return ns
-}
-
-func (nc namespacedClues) add(name string, toAdd map[string]any) namespacedClues {
-	nc2 := maps.Clone(nc)
-	if nc2 == nil {
-		nc2 = newClueMap()
-	}
-
-	vs := nc2.namespace(name)
-	nc2[name] = vs.add(toAdd)
-
-	return nc2
+	return m
 }
 
 // ---------------------------------------------------------------------------
 // ctx handling
 // ---------------------------------------------------------------------------
 
-type cluesCtxKey struct{}
+type cluesCtxKey string
 
-var key = cluesCtxKey{}
+const defaultNamespace cluesCtxKey = "default_clues_namespace_key"
 
-func from(ctx context.Context) namespacedClues {
-	nc := ctx.Value(key)
-
-	if nc == nil {
-		return newClueMap()
-	}
-
-	return nc.(namespacedClues)
+func ctxKey(namespace string) cluesCtxKey {
+	return cluesCtxKey(namespace)
 }
 
-func set(ctx context.Context, nc namespacedClues) context.Context {
-	return context.WithValue(ctx, key, nc)
+func from(ctx context.Context, namespace cluesCtxKey) *dataNode {
+	dn := ctx.Value(namespace)
+
+	if dn == nil {
+		return &dataNode{}
+	}
+
+	return dn.(*dataNode)
+}
+
+func set(ctx context.Context, dn *dataNode) context.Context {
+	return context.WithValue(ctx, defaultNamespace, dn)
+}
+
+func setTo(ctx context.Context, namespace string, dn *dataNode) context.Context {
+	return context.WithValue(ctx, ctxKey(namespace), dn)
 }
 
 // ---------------------------------------------------------------------------
@@ -142,38 +157,38 @@ func marshal(a any) string {
 
 // Add adds all key-value pairs to the clues.
 func Add(ctx context.Context, kvs ...any) context.Context {
-	nc := from(ctx)
-	return set(ctx, nc.add(defaultNamespace, normalize(kvs...)))
+	nc := from(ctx, defaultNamespace)
+	return set(ctx, nc.add(normalize(kvs...)))
 }
 
 // AddMap adds a shallow clone of the map to a namespaced set of clues.
 func AddMap[K comparable, V any](ctx context.Context, m map[K]V) context.Context {
-	nc := from(ctx)
+	nc := from(ctx, defaultNamespace)
 
 	kvs := make([]any, 0, len(m)*2)
 	for k, v := range m {
 		kvs = append(kvs, k, v)
 	}
 
-	return set(ctx, nc.add(defaultNamespace, normalize(kvs...)))
+	return set(ctx, nc.add(normalize(kvs...)))
 }
 
 // AddTo adds all key-value pairs to a namespaced set of clues.
 func AddTo(ctx context.Context, namespace string, kvs ...any) context.Context {
-	nc := from(ctx)
-	return set(ctx, nc.add(namespace, normalize(kvs...)))
+	nc := from(ctx, ctxKey(namespace))
+	return setTo(ctx, namespace, nc.add(normalize(kvs...)))
 }
 
 // AddMapTo adds a shallow clone of the map to a namespaced set of clues.
 func AddMapTo[K comparable, V any](ctx context.Context, namespace string, m map[K]V) context.Context {
-	nc := from(ctx)
+	nc := from(ctx, ctxKey(namespace))
 
 	kvs := make([]any, 0, len(m)*2)
 	for k, v := range m {
 		kvs = append(kvs, k, v)
 	}
 
-	return set(ctx, nc.add(namespace, normalize(kvs...)))
+	return setTo(ctx, namespace, nc.add(normalize(kvs...)))
 }
 
 // ---------------------------------------------------------------------------
@@ -181,13 +196,11 @@ func AddMapTo[K comparable, V any](ctx context.Context, namespace string, m map[
 // ---------------------------------------------------------------------------
 
 // In returns the map of values in the default namespace.
-func In(ctx context.Context) values {
-	nc := from(ctx)
-	return nc.namespace(defaultNamespace)
+func In(ctx context.Context) *dataNode {
+	return from(ctx, defaultNamespace)
 }
 
 // InNamespace returns the map of values in the given namespace.
-func InNamespace(ctx context.Context, namespace string) values {
-	nc := from(ctx)
-	return nc.namespace(namespace)
+func InNamespace(ctx context.Context, namespace string) *dataNode {
+	return from(ctx, ctxKey(namespace))
 }
