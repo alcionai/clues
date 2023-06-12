@@ -38,7 +38,7 @@ type Err struct {
 
 	// data is the record of contextual data produced,
 	// presumably, at the time the error is created or wrapped.
-	data *valueNode
+	data *dataNode
 }
 
 func toErr(e error, msg string, m map[string]any) *Err {
@@ -48,7 +48,7 @@ func toErr(e error, msg string, m map[string]any) *Err {
 		e:        e,
 		location: fmt.Sprintf("%s:%d", file, line),
 		msg:      msg,
-		data:     &valueNode{vs: m},
+		data:     &dataNode{vs: m},
 	}
 }
 

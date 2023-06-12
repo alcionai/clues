@@ -13,38 +13,49 @@ import (
 // structure data storage and namespaces
 // ---------------------------------------------------------------------------
 
-type valueNode struct {
-	parent *valueNode
+// dataNodes contain the data tracked by both clues in contexts and in errors.
+//
+// These nodes create an inverted tree, such that nodes can walk their ancestry
+// path from leaf (the current node) to root (the highest ancestor), but not
+// from root to child.  This allows clues to establish sets of common ancestor
+// data with unique branches for individual descendants, making the addition of
+// new data inherently theadsafe.
+//
+// For collisions during aggregation, distance from the root denotes priority,
+// with the root having the lowest priority.  IE: if a child overwrites a key
+// declared by an ancestor, the child's entry takes priority.
+type dataNode struct {
+	parent *dataNode
 	vs     map[string]any
 }
 
-func newNode(m map[string]any) *valueNode {
-	return &valueNode{vs: m}
+func newNode(m map[string]any) *dataNode {
+	return &dataNode{vs: m}
 }
 
-func (vn *valueNode) add(m map[string]any) *valueNode {
-	return &valueNode{
-		parent: vn,
+func (dn *dataNode) add(m map[string]any) *dataNode {
+	return &dataNode{
+		parent: dn,
 		vs:     maps.Clone(m),
 	}
 }
 
 // lineage runs the fn on every valueNode in the ancestry tree,
-// starting at the root and ending at vn.
-func (vn *valueNode) lineage(fn func(vs map[string]any)) {
-	if vn == nil {
+// starting at the root and ending at the dataNode.
+func (dn *dataNode) lineage(fn func(vs map[string]any)) {
+	if dn == nil {
 		return
 	}
 
-	if vn.parent != nil {
-		vn.parent.lineage(fn)
+	if dn.parent != nil {
+		dn.parent.lineage(fn)
 	}
 
-	fn(vn.vs)
+	fn(dn.vs)
 }
 
-func (vn *valueNode) Slice() []any {
-	m := vn.Map()
+func (dn *dataNode) Slice() []any {
+	m := dn.Map()
 	s := make([]any, 0, 2*len(m))
 
 	for k, v := range m {
@@ -54,10 +65,10 @@ func (vn *valueNode) Slice() []any {
 	return s
 }
 
-func (vn *valueNode) Map() map[string]any {
+func (dn *dataNode) Map() map[string]any {
 	m := map[string]any{}
 
-	vn.lineage(func(vs map[string]any) {
+	dn.lineage(func(vs map[string]any) {
 		for k, v := range vs {
 			m[k] = v
 		}
@@ -78,22 +89,22 @@ func ctxKey(namespace string) cluesCtxKey {
 	return cluesCtxKey(namespace)
 }
 
-func from(ctx context.Context, namespace cluesCtxKey) *valueNode {
-	vn := ctx.Value(namespace)
+func from(ctx context.Context, namespace cluesCtxKey) *dataNode {
+	dn := ctx.Value(namespace)
 
-	if vn == nil {
-		return &valueNode{}
+	if dn == nil {
+		return &dataNode{}
 	}
 
-	return vn.(*valueNode)
+	return dn.(*dataNode)
 }
 
-func set(ctx context.Context, vn *valueNode) context.Context {
-	return context.WithValue(ctx, defaultNamespace, vn)
+func set(ctx context.Context, dn *dataNode) context.Context {
+	return context.WithValue(ctx, defaultNamespace, dn)
 }
 
-func setTo(ctx context.Context, namespace string, vn *valueNode) context.Context {
-	return context.WithValue(ctx, ctxKey(namespace), vn)
+func setTo(ctx context.Context, namespace string, dn *dataNode) context.Context {
+	return context.WithValue(ctx, ctxKey(namespace), dn)
 }
 
 // ---------------------------------------------------------------------------
@@ -189,11 +200,11 @@ func AddMapTo[K comparable, V any](ctx context.Context, namespace string, m map[
 // ---------------------------------------------------------------------------
 
 // In returns the map of values in the default namespace.
-func In(ctx context.Context) *valueNode {
+func In(ctx context.Context) *dataNode {
 	return from(ctx, defaultNamespace)
 }
 
 // InNamespace returns the map of values in the given namespace.
-func InNamespace(ctx context.Context, namespace string) *valueNode {
+func InNamespace(ctx context.Context, namespace string) *dataNode {
 	return from(ctx, ctxKey(namespace))
 }

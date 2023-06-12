@@ -14,7 +14,7 @@ func foo(ctx context.Context, someID string) error {
 }
 ```
 
-Keep error messages readable, and augment your telemetry, by packing errors with structured data.
+Keep error messages readable and augment your telemetry by packing errors with structured data.
 ```go
 func bar(ctx context.Context, someID string) error {
     err := doThing(ctx, someID)
@@ -34,6 +34,20 @@ func main() {
             Error("calling foo").
             WithError(err).
             WithAll(clues.InErr(err))
+    }
+}
+```
+
+## Thread-safe handling
+```go
+func iterateOver(ctx context.Context, ids []string) {
+    ctx = clues.Add(ctx, "status", good)
+    for _, id := range ids {
+        ictx := clues.Add(ctx, "currentID", id)
+        err := doSomething(ictx, id)
+        if err != nil {
+            ictx = clues.Add(ictx, "status", bad)
+        }
     }
 }
 ```
