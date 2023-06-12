@@ -304,24 +304,30 @@ func BenchmarkWithClues_randKRandV(b *testing.B) {
 
 func BenchmarkInErr_const(b *testing.B) {
 	err := clues.New("err")
+	var m map[string]any
 	for i := 0; i < b.N; i++ {
 		err = err.With("foo", "bar")
-		clues.InErr(err)
+		m = clues.InErr(err)
 	}
+	_ = m
 }
 
 func BenchmarkInErr_static(b *testing.B) {
 	err := clues.New("err")
+	var m map[string]any
 	for i := 0; i < b.N; i++ {
 		err = err.With(i, -i)
-		clues.InErr(err)
+		m = clues.InErr(err)
 	}
+	_ = m
 }
 
 func BenchmarkInErr_rand(b *testing.B) {
 	err := clues.New("err")
+	var m map[string]any
 	for i := 0; i < b.N; i++ {
 		err = err.With(benchVals[i%benchSize], benchVals[i%benchSize])
-		clues.InErr(err)
+		m = clues.InErr(err)
 	}
+	_ = m
 }

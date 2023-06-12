@@ -178,20 +178,6 @@ func TestAdd(t *testing.T) {
 	}
 }
 
-func TestAdd_branchIsolation(t *testing.T) {
-	ctx := context.Background()
-	l := clues.Add(ctx, "foo", "bar")
-	r := clues.Add(ctx, "baz", "qux")
-	ll := clues.Add(l, "fnords", "smarf")
-	lr := clues.Add(l, "beaux", "regard")
-
-	mustEquals(t, msa{}, clues.In(ctx).Map())
-	mustEquals(t, msa{"foo": "bar"}, clues.In(l).Map())
-	mustEquals(t, msa{"baz": "qux"}, clues.In(r).Map())
-	mustEquals(t, msa{"foo": "bar", "fnords": "smarf"}, clues.In(ll).Map())
-	mustEquals(t, msa{"foo": "bar", "beaux": "regard"}, clues.In(lr).Map())
-}
-
 func TestAddMap(t *testing.T) {
 	table := []struct {
 		name    string
@@ -293,18 +279,21 @@ func TestAddMapTo(t *testing.T) {
 }
 
 func TestImmutableCtx(t *testing.T) {
-	ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-	check := msa{}
-	pre := clues.In(ctx)
-	preMap := pre.Map()
+	var (
+		ctx     = context.Background()
+		testCtx = context.WithValue(ctx, testCtx{}, "instance")
+		check   = msa{}
+		pre     = clues.In(testCtx)
+		preMap  = pre.Map()
+	)
 	mustEquals(t, check, preMap)
 
-	ctx2 := clues.Add(ctx, "k", "v")
+	ctx2 := clues.Add(testCtx, "k", "v")
 	if _, ok := preMap["k"]; ok {
 		t.Errorf("previous map should not have been mutated by addition")
 	}
 
-	pre = clues.In(ctx)
+	pre = clues.In(testCtx)
 	if _, ok := preMap["k"]; ok {
 		t.Errorf("previous map within ctx should not have been mutated by addition")
 	}
@@ -313,6 +302,19 @@ func TestImmutableCtx(t *testing.T) {
 	if post["k"] != "v" {
 		t.Errorf("new map should contain the added value")
 	}
+
+	var (
+		l  = clues.Add(ctx, "foo", "bar")
+		r  = clues.Add(ctx, "baz", "qux")
+		ll = clues.Add(l, "fnords", "smarf")
+		lr = clues.Add(l, "beaux", "regard")
+	)
+
+	mustEquals(t, msa{}, clues.In(ctx).Map())
+	mustEquals(t, msa{"foo": "bar"}, clues.In(l).Map())
+	mustEquals(t, msa{"baz": "qux"}, clues.In(r).Map())
+	mustEquals(t, msa{"foo": "bar", "fnords": "smarf"}, clues.In(ll).Map())
+	mustEquals(t, msa{"foo": "bar", "beaux": "regard"}, clues.In(lr).Map())
 }
 
 var (

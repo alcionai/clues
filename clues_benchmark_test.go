@@ -29,7 +29,6 @@ func BenchmarkAdd_singleConstKConstV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, "foo", "bar")
-		clues.In(ctx)
 	}
 }
 
@@ -37,7 +36,6 @@ func BenchmarkAdd_singleStaticKStaticV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, benchSize-i, i)
-		clues.In(ctx)
 	}
 }
 
@@ -45,7 +43,6 @@ func BenchmarkAdd_singleConstKStaticV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, "foo", i)
-		clues.In(ctx)
 	}
 }
 
@@ -53,7 +50,6 @@ func BenchmarkAdd_singleStaticKConstV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, i, "bar")
-		clues.In(ctx)
 	}
 }
 
@@ -61,7 +57,6 @@ func BenchmarkAdd_singleConstKRandV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, "foo", benchVals[i%benchSize])
-		clues.In(ctx)
 	}
 }
 
@@ -69,7 +64,6 @@ func BenchmarkAdd_singleRandKConstV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, benchVals[i%benchSize], "bar")
-		clues.In(ctx)
 	}
 }
 
@@ -77,7 +71,6 @@ func BenchmarkAdd_singleRandKRandV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, benchVals[i%benchSize], benchVals[i%benchSize])
-		clues.In(ctx)
 	}
 }
 
@@ -85,7 +78,6 @@ func BenchmarkAdd_multConstKConstV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, "foo", "bar", "baz", "qux")
-		clues.In(ctx)
 	}
 }
 
@@ -93,7 +85,6 @@ func BenchmarkAdd_multStaticKStaticV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, benchSize-i, i, i-benchSize, i)
-		clues.In(ctx)
 	}
 }
 
@@ -101,7 +92,6 @@ func BenchmarkAdd_multConstKStaticV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, "foo", i, "baz", -i)
-		clues.In(ctx)
 	}
 }
 
@@ -109,7 +99,6 @@ func BenchmarkAdd_multStaticKConstV(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, i, "bar", -i, "qux")
-		clues.In(ctx)
 	}
 }
 
@@ -120,7 +109,6 @@ func BenchmarkAdd_multConstKRandV(b *testing.B) {
 			ctx,
 			"foo", benchVals[i%benchSize],
 			"baz", -benchVals[i%benchSize])
-		clues.In(ctx)
 	}
 }
 
@@ -131,7 +119,6 @@ func BenchmarkAdd_multRandKConstV(b *testing.B) {
 			ctx,
 			benchVals[i%benchSize], "bar",
 			-benchVals[i%benchSize], "qux")
-		clues.In(ctx)
 	}
 }
 
@@ -142,7 +129,6 @@ func BenchmarkAdd_multRandKRandV(b *testing.B) {
 			ctx,
 			benchVals[i%benchSize], benchVals[i%benchSize],
 			-benchVals[i%benchSize], -benchVals[i%benchSize])
-		clues.In(ctx)
 	}
 }
 
@@ -151,7 +137,6 @@ func BenchmarkAddMap_constKConstV(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		m := map[string]string{"foo": "bar", "baz": "qux"}
 		ctx = clues.AddMap(ctx, m)
-		clues.In(ctx)
 	}
 }
 
@@ -160,7 +145,6 @@ func BenchmarkAddMap_staticKStaticV(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		m := map[int]int{benchSize - i: i, i - benchSize: i}
 		ctx = clues.AddMap(ctx, m)
-		clues.In(ctx)
 	}
 }
 
@@ -169,7 +153,6 @@ func BenchmarkAddMap_constKStaticV(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		m := map[string]int{"foo": i, "baz": -i}
 		ctx = clues.AddMap(ctx, m)
-		clues.In(ctx)
 	}
 }
 
@@ -178,7 +161,6 @@ func BenchmarkAddMap_staticKConstV(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		m := map[int]string{i: "bar", -i: "qux"}
 		ctx = clues.AddMap(ctx, m)
-		clues.In(ctx)
 	}
 }
 
@@ -190,7 +172,6 @@ func BenchmarkAddMap_constKRandV(b *testing.B) {
 			"baz": -benchVals[i%benchSize],
 		}
 		ctx = clues.AddMap(ctx, m)
-		clues.In(ctx)
 	}
 }
 
@@ -202,7 +183,6 @@ func BenchmarkAddMap_randKConstV(b *testing.B) {
 			-benchVals[i%benchSize]: "qux",
 		}
 		ctx = clues.AddMap(ctx, m)
-		clues.In(ctx)
 	}
 }
 
@@ -214,30 +194,35 @@ func BenchmarkAddMap_randKRandV(b *testing.B) {
 			-benchVals[i%benchSize]: -benchVals[i%benchSize],
 		}
 		ctx = clues.AddMap(ctx, m)
-		clues.In(ctx)
 	}
 }
 
 func BenchmarkIn_const(b *testing.B) {
 	ctx := context.Background()
+	dn := clues.In(ctx)
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, "foo", "bar")
-		clues.In(ctx)
+		dn = clues.In(ctx)
 	}
+	_ = dn
 }
 
 func BenchmarkIn_static(b *testing.B) {
 	ctx := context.Background()
+	dn := clues.In(ctx)
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, benchSize-i, i)
-		clues.In(ctx)
+		dn = clues.In(ctx)
 	}
+	_ = dn
 }
 
 func BenchmarkIn_rand(b *testing.B) {
 	ctx := context.Background()
+	dn := clues.In(ctx)
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, benchVals[i%benchSize], benchVals[i%benchSize])
-		clues.In(ctx)
+		dn = clues.In(ctx)
 	}
+	_ = dn
 }

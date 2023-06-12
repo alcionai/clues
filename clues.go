@@ -29,10 +29,6 @@ type dataNode struct {
 	vs     map[string]any
 }
 
-func newNode(m map[string]any) *dataNode {
-	return &dataNode{vs: m}
-}
-
 func (dn *dataNode) add(m map[string]any) *dataNode {
 	return &dataNode{
 		parent: dn,
