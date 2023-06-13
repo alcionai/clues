@@ -241,7 +241,15 @@ func WithClues(err error, ctx context.Context) *Err {
 // the error.  Each error in the stack is unwrapped and all
 // maps are unioned. In case of collision, lower level error
 // data take least priority.
-func (err *Err) Values() map[string]any {
+func (err *Err) Values() *dataNode {
+	if err == nil {
+		return &dataNode{vs: map[string]any{}}
+	}
+
+	return &dataNode{vs: err.values()}
+}
+
+func (err *Err) values() map[string]any {
 	if err == nil {
 		return map[string]any{}
 	}
@@ -249,10 +257,10 @@ func (err *Err) Values() map[string]any {
 	vals := map[string]any{}
 
 	for _, se := range err.stack {
-		maps.Copy(vals, InErr(se))
+		maps.Copy(vals, inErr(se))
 	}
 
-	maps.Copy(vals, InErr(err.e))
+	maps.Copy(vals, inErr(err.e))
 	maps.Copy(vals, err.data.Map())
 
 	return vals
@@ -262,16 +270,24 @@ func (err *Err) Values() map[string]any {
 // Each error in the stack is unwrapped and all maps are
 // unioned. In case of collision, lower level error data
 // take least priority.
-func InErr(err error) map[string]any {
+func InErr(err error) *dataNode {
+	if err == nil {
+		return &dataNode{vs: map[string]any{}}
+	}
+
+	return &dataNode{vs: inErr(err)}
+}
+
+func inErr(err error) map[string]any {
 	if err == nil {
 		return map[string]any{}
 	}
 
 	if e, ok := err.(*Err); ok {
-		return e.Values()
+		return e.values()
 	}
 
-	return InErr(Unwrap(err))
+	return inErr(Unwrap(err))
 }
 
 // ------------------------------------------------------------
@@ -567,7 +583,7 @@ func (err *Err) Core() *ErrCore {
 	return &ErrCore{
 		Msg:    err.Error(),
 		Labels: err.Labels(),
-		Values: err.Values(),
+		Values: err.values(),
 	}
 }
 

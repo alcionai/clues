@@ -307,7 +307,7 @@ func BenchmarkInErr_const(b *testing.B) {
 	var m map[string]any
 	for i := 0; i < b.N; i++ {
 		err = err.With("foo", "bar")
-		m = clues.InErr(err)
+		m = clues.InErr(err).Map()
 	}
 	_ = m
 }
@@ -317,7 +317,7 @@ func BenchmarkInErr_static(b *testing.B) {
 	var m map[string]any
 	for i := 0; i < b.N; i++ {
 		err = err.With(i, -i)
-		m = clues.InErr(err)
+		m = clues.InErr(err).Map()
 	}
 	_ = m
 }
@@ -327,7 +327,7 @@ func BenchmarkInErr_rand(b *testing.B) {
 	var m map[string]any
 	for i := 0; i < b.N; i++ {
 		err = err.With(benchVals[i%benchSize], benchVals[i%benchSize])
-		m = clues.InErr(err)
+		m = clues.InErr(err).Map()
 	}
 	_ = m
 }

@@ -197,32 +197,80 @@ func BenchmarkAddMap_randKRandV(b *testing.B) {
 	}
 }
 
-func BenchmarkIn_const(b *testing.B) {
+func BenchmarkIn_constMap(b *testing.B) {
 	ctx := context.Background()
 	dn := clues.In(ctx)
+	m := map[string]any{}
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, "foo", "bar")
 		dn = clues.In(ctx)
+		m = dn.Map()
 	}
 	_ = dn
+	_ = m
 }
 
-func BenchmarkIn_static(b *testing.B) {
+func BenchmarkIn_staticMap(b *testing.B) {
 	ctx := context.Background()
 	dn := clues.In(ctx)
+	m := map[string]any{}
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, benchSize-i, i)
 		dn = clues.In(ctx)
+		m = dn.Map()
 	}
 	_ = dn
+	_ = m
 }
 
-func BenchmarkIn_rand(b *testing.B) {
+func BenchmarkIn_randMap(b *testing.B) {
 	ctx := context.Background()
 	dn := clues.In(ctx)
+	m := map[string]any{}
 	for i := 0; i < b.N; i++ {
 		ctx = clues.Add(ctx, benchVals[i%benchSize], benchVals[i%benchSize])
 		dn = clues.In(ctx)
+		m = dn.Map()
 	}
 	_ = dn
+	_ = m
+}
+
+func BenchmarkIn_constSlice(b *testing.B) {
+	ctx := context.Background()
+	dn := clues.In(ctx)
+	s := []any{}
+	for i := 0; i < b.N; i++ {
+		ctx = clues.Add(ctx, "foo", "bar")
+		dn = clues.In(ctx)
+		s = dn.Slice()
+	}
+	_ = dn
+	_ = s
+}
+
+func BenchmarkIn_staticSlice(b *testing.B) {
+	ctx := context.Background()
+	dn := clues.In(ctx)
+	s := []any{}
+	for i := 0; i < b.N; i++ {
+		ctx = clues.Add(ctx, benchSize-i, i)
+		dn = clues.In(ctx)
+		s = dn.Slice()
+	}
+	_ = dn
+	_ = s
+}
+
+func BenchmarkIn_randSlice(b *testing.B) {
+	ctx := context.Background()
+	dn := clues.In(ctx)
+	s := []any{}
+	for i := 0; i < b.N; i++ {
+		ctx = clues.Add(ctx, benchVals[i%benchSize], benchVals[i%benchSize])
+		dn = clues.In(ctx)
+		s = dn.Slice()
+	}
+	_ = dn
+	_ = s
 }
