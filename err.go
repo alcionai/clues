@@ -53,7 +53,13 @@ func toErr(e error, msg string, m map[string]any) *Err {
 }
 
 func toStack(e error, stack []error) *Err {
-	return &Err{e: e, stack: stack}
+	_, file, line, _ := runtime.Caller(2)
+
+	return &Err{
+		e:        e,
+		location: fmt.Sprintf("%s:%d", file, line),
+		stack:    stack,
+	}
 }
 
 // ------------------------------------------------------------

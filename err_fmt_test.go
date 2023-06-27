@@ -4,6 +4,7 @@ import (
 	stderr "errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -11,10 +12,15 @@ import (
 	"github.com/alcionai/clues"
 )
 
+// if this panics, you added an uneven number of
+// entries.  Lines should have an even number len.
+// You might need to pair the line you added with
+// an empty string.
 func plusRE(lines ...string) string {
 	var s string
+	ll := len(lines)
 
-	for i := 0; i < len(lines); i += 2 {
+	for i := 0; i < ll; i += 2 {
 		s += lines[i]
 
 		if len(lines[i+1]) > 0 {
@@ -31,16 +37,34 @@ type checkFmt struct {
 	reExpect *regexp.Regexp
 }
 
+func prettyStack(s string) string {
+	s = strings.ReplaceAll(s, "\n", string('\n'))
+	s = strings.ReplaceAll(s, "\t", "    ")
+	return s
+}
+
 func (c checkFmt) check(t *testing.T, err error) {
 	t.Run(c.tmpl, func(t *testing.T) {
 		result := fmt.Sprintf(c.tmpl, err)
 
 		if len(c.expect) > 0 && result != c.expect {
-			t.Errorf("unexpected format for template %#v\nexpected \"%s\"\ngot \"%s\"", c.tmpl, c.expect, result)
+			t.Errorf(
+				"unexpected fmt result for template %#v"+
+					"\n\nexpected (raw)\n\"%s\""+
+					"\n\ngot (raw)\n\"%#v\""+
+					"\n\ngot (fmt)\n\"%s\"",
+				c.tmpl, c.expect, result, result,
+			)
 		}
 
 		if c.reExpect != nil && !c.reExpect.MatchString(result) {
-			t.Errorf("unexpected format for template %#v\nexpected \"%v\"\ngot %#v", c.tmpl, c.reExpect, result)
+			t.Errorf(
+				"unexpected fmt result for template %#v"+
+					"\n\nexpected (raw)\n\"%s\""+
+					"\n\ngot (raw)\n\"%#v\""+
+					"\n\ngot (fmt)\n\"%s\"",
+				c.tmpl, c.reExpect, result, result,
+			)
 		}
 	})
 }
@@ -65,8 +89,9 @@ var (
 	fmtErrf = fmt.Errorf("an error")
 	cluErr  = clues.New("an error")
 
-	cluesWrap  = func(err error) error { return clues.Wrap(err, "clues wrap") }
-	cluesStack = func(err error) error { return clues.Stack(globalSentinel, err) }
+	cluesWrap       = func(err error) error { return clues.Wrap(err, "clues wrap") }
+	cluesPlainStack = func(err error) error { return clues.Stack(err) }
+	cluesStack      = func(err error) error { return clues.Stack(globalSentinel, err) }
 )
 
 func TestFmt(t *testing.T) {
@@ -308,6 +333,68 @@ func TestFmt(t *testing.T) {
 			},
 		},
 		// ---------------------------------------------------------------------------
+		// plain stacked sentinel
+		// ---------------------------------------------------------------------------
+		{
+			name:  "clues.PlainStack stderr.New",
+			onion: makeOnion(errStd, cluesPlainStack, self),
+			expect: expect{
+				v:    "an error",
+				hash: "an error",
+				s:    "an error",
+				q:    `"an error"`,
+				plus: plusRE(
+					`an error\n`, `github.com/alcionai/clues/err_fmt_test.go:\d+`,
+				),
+			},
+		},
+		{
+			name:  "clues.PlainStack errors.New",
+			onion: makeOnion(errErrs, cluesPlainStack, self),
+			expect: expect{
+				v:    "an error",
+				hash: "an error",
+				s:    "an error",
+				q:    `"an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					`github.com/alcionai/clues_test.init\n`, `err_fmt_test.go:\d+\n`,
+					`runtime.doInit\n`, `proc.go:\d+\n`,
+					`runtime.doInit\n`, `proc.go:\d+\n`,
+					`runtime.main\n`, `proc.go:\d+\n`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+`,
+				),
+			},
+		},
+		{
+			name:  "clues.PlainStack fmt.Errorf",
+			onion: makeOnion(fmtErrf, cluesPlainStack, self),
+			expect: expect{
+				v:    "an error",
+				hash: "an error",
+				s:    "an error",
+				q:    `"an error"`,
+				plus: plusRE(
+					`an error\n`, `github.com/alcionai/clues/err_fmt_test.go:\d+`,
+				),
+			},
+		},
+		{
+			name:  "clues.PlainStack clues.New",
+			onion: makeOnion(cluErr, cluesPlainStack, self),
+			expect: expect{
+				v:    "an error",
+				hash: "an error",
+				s:    "an error",
+				q:    `"an error"`,
+				plus: plusRE(
+					`an error\n`, `err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+`,
+				),
+			},
+		},
+		// ---------------------------------------------------------------------------
 		// stacked sentinel
 		// ---------------------------------------------------------------------------
 		{
@@ -325,7 +412,8 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
-					`runtime.goexit\n`, `runtime/.*:\d+$`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -349,7 +437,8 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
-					`runtime.goexit\n`, `runtime/.*:\d+$`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -368,7 +457,8 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
-					`runtime.goexit\n`, `runtime/.*:\d+$`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -387,7 +477,8 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
-					`runtime.goexit\n`, `runtime/.*:\d+$`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -410,6 +501,7 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`clues wrap\n`, `err_fmt_test.go:\d+$`,
 				),
 			},
@@ -435,6 +527,7 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`clues wrap\n`, `err_fmt_test.go:\d+$`,
 				),
 			},
@@ -455,6 +548,7 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`clues wrap\n`, `err_fmt_test.go:\d+$`,
 				),
 			},
@@ -475,6 +569,7 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`clues wrap\n`, `err_fmt_test.go:\d+$`,
 				),
 			},
@@ -498,7 +593,8 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
-					`runtime.goexit\n`, `runtime/.*:\d+$`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -523,7 +619,8 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
-					`runtime.goexit\n`, `runtime/.*:\d+$`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -543,7 +640,8 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
-					`runtime.goexit\n`, `runtime/.*:\d+$`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -563,7 +661,8 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
-					`runtime.goexit\n`, `runtime/.*:\d+$`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -595,8 +694,10 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`mid\n`, ``,
-					`top$`, ``,
+					`top\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -628,6 +729,7 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`mid\n`, ``,
 					`github.com/alcionai/clues_test.TestFmt\n`, `err_fmt_test.go:\d+\n`,
 					`testing.tRunner\n`, `testing.go:\d+\n`,
@@ -635,7 +737,9 @@ func TestFmt(t *testing.T) {
 					`top\n`, ``,
 					`github.com/alcionai/clues_test.TestFmt\n`, `err_fmt_test.go:\d+\n`,
 					`testing.tRunner\n`, `testing.go:\d+\n`,
-					`runtime.goexit\n`, `runtime/.*:\d+$`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -664,8 +768,10 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`mid\n`, ``,
-					`top$`, ``,
+					`top\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -694,8 +800,11 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`mid\n`, `err_fmt_test.go:\d+\n`,
-					`top\n`, `err_fmt_test.go:\d+$`,
+					`top\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -727,10 +836,12 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`rhs\n`, `err_fmt_test.go:\d+\n`,
 					`mid\n`, ``,
-					`top\n`, ``,
-					`lhs\n`, `err_fmt_test.go:\d+$`,
+					`top\n`, `err_fmt_test.go:\d+\n`,
+					`lhs\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -762,6 +873,7 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`rhs\n`, `err_fmt_test.go:\d+\n`,
 					`mid\n`, ``,
 					`github.com/alcionai/clues_test.TestFmt\n`, `err_fmt_test.go:\d+\n`,
@@ -771,7 +883,9 @@ func TestFmt(t *testing.T) {
 					`github.com/alcionai/clues_test.TestFmt\n`, `err_fmt_test.go:\d+\n`,
 					`testing.tRunner\n`, `testing.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
-					`lhs\n`, `err_fmt_test.go:\d+$`,
+					"", `err_fmt_test.go:\d+\n`,
+					`lhs\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -800,10 +914,12 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`rhs\n`, `err_fmt_test.go:\d+\n`,
 					`mid\n`, ``,
-					`top\n`, ``,
-					`lhs\n`, `err_fmt_test.go:\d+$`,
+					`top\n`, `err_fmt_test.go:\d+\n`,
+					`lhs\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -832,10 +948,13 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
 					`rhs\n`, `err_fmt_test.go:\d+\n`,
 					`mid\n`, `err_fmt_test.go:\d+\n`,
 					`top\n`, `err_fmt_test.go:\d+\n`,
-					`lhs\n`, `err_fmt_test.go:\d+$`,
+					"", `err_fmt_test.go:\d+\n`,
+					`lhs\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -852,6 +971,321 @@ func TestFmt(t *testing.T) {
 
 			for _, f := range formats {
 				f.check(t, test.onion)
+			}
+		})
+	}
+}
+
+// wrapped
+
+func bottomWrap(err error) error {
+	return clues.Wrap(err, "bottom wrap")
+}
+
+func midWrap(err error) error {
+	return clues.Wrap(bottomWrap(err), "mid wrap")
+}
+
+func topWrap(err error) error {
+	return clues.Wrap(midWrap(err), "top wrap")
+}
+
+// plain-stacked
+
+func bottomPlainStack(err error) error {
+	return clues.Stack(err)
+}
+
+func midPlainStack(err error) error {
+	return clues.Stack(bottomPlainStack(err))
+}
+
+func topPlainStack(err error) error {
+	return clues.Stack(midPlainStack(err))
+}
+
+// stacked
+
+func bottomStack(err error) error {
+	return clues.Stack(clues.New("bottom"), err)
+}
+
+func midStack(err error) error {
+	return clues.Stack(clues.New("mid"), bottomStack(err))
+}
+
+func topStack(err error) error {
+	return clues.Stack(clues.New("top"), midStack(err))
+}
+
+func TestFmt_nestedFuncs(t *testing.T) {
+	type expect struct {
+		v    string
+		plus string
+		hash string
+		s    string
+		q    string
+	}
+
+	table := []struct {
+		name   string
+		fn     func(error) error
+		source error
+		expect expect
+	}{
+		// ---------------------------------------------------------------------------
+		// wrapped error
+		// ---------------------------------------------------------------------------
+		{
+			name:   "clues.Wrap stderr.New",
+			fn:     topWrap,
+			source: errStd,
+			expect: expect{
+				v:    "top wrap: mid wrap: bottom wrap: an error",
+				hash: "top wrap: mid wrap: bottom wrap: an error",
+				s:    "top wrap: mid wrap: bottom wrap: an error",
+				q:    `"top wrap": "mid wrap": "bottom wrap": "an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					`bottom wrap\n`, `err_fmt_test.go:\d+\n`,
+					`mid wrap\n`, `err_fmt_test.go:\d+\n`,
+					`top wrap\n`, `err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		{
+			name:   "clues.Wrap errors.New",
+			fn:     topWrap,
+			source: errErrs,
+			expect: expect{
+				v:    "top wrap: mid wrap: bottom wrap: an error",
+				hash: "top wrap: mid wrap: bottom wrap: an error",
+				s:    "top wrap: mid wrap: bottom wrap: an error",
+				q:    `"top wrap": "mid wrap": "bottom wrap": "an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					`github.com/alcionai/clues_test.init\n`, `err_fmt_test.go:\d+\n`,
+					`runtime.doInit\n`, `proc.go:\d+\n`,
+					`runtime.doInit\n`, `proc.go:\d+\n`,
+					`runtime.main\n`, `proc.go:\d+\n`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					`bottom wrap\n`, `err_fmt_test.go:\d+\n`,
+					`mid wrap\n`, `err_fmt_test.go:\d+\n`,
+					`top wrap\n`, `err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		{
+			name:   "clues.Wrap fmt.Errorf",
+			fn:     topWrap,
+			source: fmtErrf,
+			expect: expect{
+				v:    "top wrap: mid wrap: bottom wrap: an error",
+				hash: "top wrap: mid wrap: bottom wrap: an error",
+				s:    "top wrap: mid wrap: bottom wrap: an error",
+				q:    `"top wrap": "mid wrap": "bottom wrap": "an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					`bottom wrap\n`, `err_fmt_test.go:\d+\n`,
+					`mid wrap\n`, `err_fmt_test.go:\d+\n`,
+					`top wrap\n`, `err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		{
+			name:   "clues.Wrap clues.New",
+			fn:     topWrap,
+			source: cluErr,
+			expect: expect{
+				v:    "top wrap: mid wrap: bottom wrap: an error",
+				hash: "top wrap: mid wrap: bottom wrap: an error",
+				s:    "top wrap: mid wrap: bottom wrap: an error",
+				q:    `"top wrap": "mid wrap": "bottom wrap": "an error"`,
+				plus: plusRE(
+					"an error\n", `err_fmt_test.go:\d+\n`,
+					`bottom wrap\n`, `err_fmt_test.go:\d+\n`,
+					`mid wrap\n`, `err_fmt_test.go:\d+\n`,
+					`top wrap\n`, `err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		// ---------------------------------------------------------------------------
+		// plain stacked
+		// ---------------------------------------------------------------------------
+		{
+			name:   "clues.PlainStack stderr.New",
+			fn:     topPlainStack,
+			source: errStd,
+			expect: expect{
+				v:    "an error",
+				hash: "an error",
+				s:    "an error",
+				q:    `"an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		{
+			name:   "clues.PlainStack errors.New",
+			fn:     topPlainStack,
+			source: errErrs,
+			expect: expect{
+				v:    "an error",
+				hash: "an error",
+				s:    "an error",
+				q:    `"an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					`github.com/alcionai/clues_test.init\n`, `err_fmt_test.go:\d+\n`,
+					`runtime.doInit\n`, `proc.go:\d+\n`,
+					`runtime.doInit\n`, `proc.go:\d+\n`,
+					`runtime.main\n`, `proc.go:\d+\n`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		{
+			name:   "clues.PlainStack fmt.Errorf",
+			fn:     topPlainStack,
+			source: fmtErrf,
+			expect: expect{
+				v:    "an error",
+				hash: "an error",
+				s:    "an error",
+				q:    `"an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		{
+			name:   "clues.PlainStack clues.New",
+			fn:     topPlainStack,
+			source: cluErr,
+			expect: expect{
+				v:    "an error",
+				hash: "an error",
+				s:    "an error",
+				q:    `"an error"`,
+				plus: plusRE(
+					`an error\n`, `err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+\n`,
+					"", `github.com/alcionai/clues/err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		// ---------------------------------------------------------------------------
+		// stacked tree
+		// ---------------------------------------------------------------------------
+		{
+			name:   "clues.Stack stderr.New",
+			fn:     topStack,
+			source: errStd,
+			expect: expect{
+				v:    "top: mid: bottom: an error",
+				hash: "top: mid: bottom: an error",
+				s:    "top: mid: bottom: an error",
+				q:    `"top": "mid": "bottom": "an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					`bottom\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					`mid\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					`top\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		{
+			name:   "clues.Stack errors.New",
+			fn:     topStack,
+			source: errErrs,
+			expect: expect{
+				v:    "top: mid: bottom: an error",
+				hash: "top: mid: bottom: an error",
+				s:    "top: mid: bottom: an error",
+				q:    `"top": "mid": "bottom": "an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					`github.com/alcionai/clues_test.init\n`, `err_fmt_test.go:\d+\n`,
+					`runtime.doInit\n`, `proc.go:\d+\n`,
+					`runtime.doInit\n`, `proc.go:\d+\n`,
+					`runtime.main\n`, `proc.go:\d+\n`,
+					`runtime.goexit\n`, `runtime/.*:\d+\n`,
+					`bottom\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					`mid\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					`top\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		{
+			name:   "clues.Stack fmt.Errorf",
+			fn:     topStack,
+			source: fmtErrf,
+			expect: expect{
+				v:    "top: mid: bottom: an error",
+				hash: "top: mid: bottom: an error",
+				s:    "top: mid: bottom: an error",
+				q:    `"top": "mid": "bottom": "an error"`,
+				plus: plusRE(
+					`an error\n`, "",
+					`bottom\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					`mid\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					`top\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+		{
+			name:   "clues.Stack clues.New",
+			fn:     topStack,
+			source: cluErr,
+			expect: expect{
+				v:    "top: mid: bottom: an error",
+				hash: "top: mid: bottom: an error",
+				s:    "top: mid: bottom: an error",
+				q:    `"top": "mid": "bottom": "an error"`,
+				plus: plusRE(
+					`an error\n`, `err_fmt_test.go:\d+\n`,
+					`bottom\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					`mid\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+\n`,
+					`top\n`, `err_fmt_test.go:\d+\n`,
+					"", `err_fmt_test.go:\d+$`,
+				),
+			},
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			formats := []checkFmt{
+				{"%v", test.expect.v, nil},
+				{"%+v", "", regexp.MustCompile(test.expect.plus)},
+				{"%#v", test.expect.hash, nil},
+				{"%s", test.expect.s, nil},
+				{"%q", test.expect.q, nil},
+			}
+
+			for _, f := range formats {
+				f.check(t, test.fn(test.source))
 			}
 		})
 	}
