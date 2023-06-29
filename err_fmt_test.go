@@ -1292,6 +1292,117 @@ func TestFmt_nestedFuncs(t *testing.T) {
 	}
 }
 
+func TestWithTrace(t *testing.T) {
+	table := []struct {
+		name   string
+		tracer func(err error) error
+		expect string
+	}{
+		{
+			name: "error -1",
+			tracer: func(err error) error {
+				return withTraceWrapper(err, -1)
+			},
+			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
+		},
+		{
+			name: "error 0",
+			tracer: func(err error) error {
+				return withTraceWrapper(err, 0)
+			},
+			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
+		},
+		{
+			name: "error 1",
+			tracer: func(err error) error {
+				return withTraceWrapper(err, 1)
+			},
+			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
+		},
+		{
+			name: "error 2",
+			tracer: func(err error) error {
+				return withTraceWrapper(err, 2)
+			},
+			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
+		},
+		{
+			name: "error 3",
+			tracer: func(err error) error {
+				return withTraceWrapper(err, 3)
+			},
+			expect: plusRE(`an error\n`, `testing/testing.go:\d+$`),
+		},
+		{
+			name: "error 4",
+			tracer: func(err error) error {
+				return withTraceWrapper(err, 4)
+			},
+			expect: plusRE(`an error\n`, `runtime/.*:\d+$`),
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			checkFmt{"%+v", "", regexp.MustCompile(test.expect)}.
+				check(t, test.tracer(cluErr))
+		})
+	}
+	table2 := []struct {
+		name   string
+		tracer func(err *clues.Err) error
+		expect string
+	}{
+		{
+			name: "clues.Err -1",
+			tracer: func(err *clues.Err) error {
+				return cluesWithTraceWrapper(err, -1)
+			},
+			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
+		},
+		{
+			name: "clues.Err 0",
+			tracer: func(err *clues.Err) error {
+				return cluesWithTraceWrapper(err, 0)
+			},
+			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
+		},
+		{
+			name: "clues.Err 1",
+			tracer: func(err *clues.Err) error {
+				return cluesWithTraceWrapper(err, 1)
+			},
+			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
+		},
+		{
+			name: "clues.Err 2",
+			tracer: func(err *clues.Err) error {
+				return cluesWithTraceWrapper(err, 2)
+			},
+			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
+		},
+		{
+			name: "clues.Err 3",
+			tracer: func(err *clues.Err) error {
+				return cluesWithTraceWrapper(err, 3)
+			},
+			expect: plusRE(`an error\n`, `testing/testing.go:\d+$`),
+		},
+		{
+			name: "clues.Err 4",
+			tracer: func(err *clues.Err) error {
+				return cluesWithTraceWrapper(err, 4)
+			},
+			expect: plusRE(`an error\n`, `runtime/.*:\d+$`),
+		},
+	}
+	for _, test := range table2 {
+		t.Run(test.name, func(t *testing.T) {
+			checkFmt{"%+v", "", regexp.MustCompile(test.expect)}.
+				check(t, test.tracer(cluErr))
+		})
+	}
+}
+
 func TestErrCore_String(t *testing.T) {
 	table := []struct {
 		name        string
