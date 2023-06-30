@@ -344,7 +344,7 @@ func TestFmt(t *testing.T) {
 				s:    "an error",
 				q:    `"an error"`,
 				plus: plusRE(
-					`an error\n`, `/err_fmt_test.go:\d+`,
+					`an error\n`, `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -363,7 +363,7 @@ func TestFmt(t *testing.T) {
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,
 					`runtime.goexit\n`, `runtime/.*:\d+\n`,
-					"", `/err_fmt_test.go:\d+`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -376,7 +376,7 @@ func TestFmt(t *testing.T) {
 				s:    "an error",
 				q:    `"an error"`,
 				plus: plusRE(
-					`an error\n`, `/err_fmt_test.go:\d+`,
+					`an error\n`, `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
@@ -390,7 +390,7 @@ func TestFmt(t *testing.T) {
 				q:    `"an error"`,
 				plus: plusRE(
 					`an error\n`, `err_fmt_test.go:\d+\n`,
-					"", `/err_fmt_test.go:\d+`,
+					"", `err_fmt_test.go:\d+$`,
 				),
 			},
 		},
