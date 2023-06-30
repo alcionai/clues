@@ -186,6 +186,8 @@ func With(err error, kvs ...any) *Err {
 }
 
 // WithTrace sets the error trace to a certain depth.
+// A depth of 0 traces to the func where WithTrace is
+// called.  1 sets the trace to its parent, etc.
 // Error traces are already generated for the location
 // where clues.Wrap or clues.Stack was called.  This
 // call is for cases where Wrap or Stack calls are handled
@@ -206,6 +208,8 @@ func (err *Err) WithTrace(depth int) *Err {
 }
 
 // WithTrace sets the error trace to a certain depth.
+// A depth of 0 traces to the func where WithTrace is
+// called.  1 sets the trace to its parent, etc.
 // Error traces are already generated for the location
 // where clues.Wrap or clues.Stack was called.  This
 // call is for cases where Wrap or Stack calls are handled
