@@ -42,24 +42,25 @@ type Err struct {
 }
 
 func toErr(e error, msg string, m map[string]any) *Err {
-	_, file, line, _ := runtime.Caller(2)
-
 	return &Err{
 		e:        e,
-		location: fmt.Sprintf("%s:%d", file, line),
+		location: getTrace(3),
 		msg:      msg,
 		data:     &dataNode{vs: m},
 	}
 }
 
 func toStack(e error, stack []error) *Err {
-	_, file, line, _ := runtime.Caller(2)
-
 	return &Err{
 		e:        e,
-		location: fmt.Sprintf("%s:%d", file, line),
+		location: getTrace(3),
 		stack:    stack,
 	}
+}
+
+func getTrace(depth int) string {
+	_, file, line, _ := runtime.Caller(depth)
+	return fmt.Sprintf("%s:%d", file, line)
 }
 
 // ------------------------------------------------------------
@@ -184,6 +185,57 @@ func With(err error, kvs ...any) *Err {
 	return e.With(kvs...)
 }
 
+// WithTrace sets the error trace to a certain depth.
+// A depth of 0 traces to the func where WithTrace is
+// called.  1 sets the trace to its parent, etc.
+// Error traces are already generated for the location
+// where clues.Wrap or clues.Stack was called.  This
+// call is for cases where Wrap or Stack calls are handled
+// in a helper func and are not reporting the actual
+// error origin.
+func (err *Err) WithTrace(depth int) *Err {
+	if err == nil {
+		return nil
+	}
+
+	if depth < 0 {
+		depth = 0
+	}
+
+	err.location = getTrace(depth + 2)
+
+	return err
+}
+
+// WithTrace sets the error trace to a certain depth.
+// A depth of 0 traces to the func where WithTrace is
+// called.  1 sets the trace to its parent, etc.
+// Error traces are already generated for the location
+// where clues.Wrap or clues.Stack was called.  This
+// call is for cases where Wrap or Stack calls are handled
+// in a helper func and are not reporting the actual
+// error origin.
+// If err is not an *Err intance, returns the error wrapped
+// into an *Err struct.
+func WithTrace(err error, depth int) *Err {
+	if err == nil {
+		return nil
+	}
+
+	e, ok := err.(*Err)
+	if !ok {
+		return toErr(err, "", map[string]any{})
+	}
+
+	// needed both here and in withTrace() to
+	// correct for the extra call depth.
+	if depth < 0 {
+		depth = 0
+	}
+
+	return e.WithTrace(depth + 1)
+}
+
 // WithMap copies the map to the Err's data map.
 func (err *Err) WithMap(m map[string]any) *Err {
 	if err == nil {
@@ -241,6 +293,18 @@ func WithClues(err error, ctx context.Context) *Err {
 	}
 
 	return WithMap(err, In(ctx).Map())
+}
+
+// OrNil is a workaround for golang's infamous "an interface
+// holding a nil value is not nil" gotcha.  You can use it at
+// the end of error formatting chains to ensure a correct nil
+// return value.
+func (err *Err) OrNil() error {
+	if err == nil {
+		return nil
+	}
+
+	return err
 }
 
 // Values returns a copy of all of the contextual data in

@@ -862,3 +862,51 @@ func TestStackNils(t *testing.T) {
 		t.Errorf("expected [%v], got [%v]", e, result)
 	}
 }
+
+func TestOrNil(t *testing.T) {
+	table := []struct {
+		name      string
+		err       *clues.Err
+		expectNil bool
+	}{
+		{
+			name:      "nil",
+			err:       nil,
+			expectNil: true,
+		},
+		{
+			name:      "nil stack",
+			err:       clues.Stack(nil).With("foo", "bar"),
+			expectNil: true,
+		},
+		{
+			name:      "nil wrap",
+			err:       clues.Wrap(nil, "msg").With("foo", "bar"),
+			expectNil: true,
+		},
+		{
+			name:      "nil",
+			err:       cluErr,
+			expectNil: false,
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			if test.expectNil != (test.err.OrNil() == nil) {
+				t.Errorf("nil state doesn't match expectations: got %v", test.err.OrNil())
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+func withTraceWrapper(err error, depth int) error {
+	return clues.WithTrace(err, depth)
+}
+
+func cluesWithTraceWrapper(err *clues.Err, depth int) error {
+	return err.WithTrace(depth)
+}
