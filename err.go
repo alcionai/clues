@@ -686,7 +686,7 @@ func (ec *ErrCore) stringer(fancy bool) string {
 
 	vsl := []string{}
 	for k, v := range ec.Values {
-		vsl = append(vsl, k+":"+marshal(v))
+		vsl = append(vsl, k+":"+marshal(v, true))
 	}
 
 	vs := strings.Join(vsl, sep)

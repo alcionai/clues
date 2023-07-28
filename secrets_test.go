@@ -181,6 +181,76 @@ func TestHide(t *testing.T) {
 	}
 }
 
+func TestHide_hideAConcealer(t *testing.T) {
+	table := []struct {
+		name        string
+		input       any
+		expectHash  string
+		expectPlain string
+	}{
+		{
+			name:        "string",
+			input:       Hide("fnords"),
+			expectHash:  "7745164c2e6b3c97",
+			expectPlain: "fnords",
+		},
+		{
+			name:        "int",
+			input:       Hide(1),
+			expectHash:  "1e29272d274ab30f",
+			expectPlain: "1",
+		},
+		{
+			name:        "stringer",
+			input:       Hide(mockStringer{"fnords"}),
+			expectHash:  "553c83b5702ada92",
+			expectPlain: "{s:fnords}",
+		},
+		{
+			name:        "map",
+			input:       Hide(map[string]string{"fnords": "smarf"}),
+			expectHash:  "1502957923bb4cc8",
+			expectPlain: `{"fnords":"smarf"}`,
+		},
+		{
+			name:        "nil",
+			input:       Hide(nil),
+			expectHash:  "",
+			expectPlain: ``,
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			h := Hide(test.input)
+			if h.Conceal() != test.expectHash {
+				t.Errorf(`expected Conceal() result "%s", got "%s"`, test.expectHash, h.Conceal())
+			}
+			if h.String() != test.expectHash {
+				t.Errorf(`expected String() result "%s", got "%s"`, test.expectHash, h.String())
+			}
+			if h.PlainString() != test.expectPlain {
+				t.Errorf(`expected PlainString() result "%s", got "%s"`, test.expectPlain, h.PlainString())
+			}
+			result := fmt.Sprintf("%s", h)
+			if result != test.expectHash {
+				t.Errorf(`expected %%s fmt result "%s", got "%s`, test.expectHash, result)
+			}
+			result = fmt.Sprintf("%v", h)
+			if result != test.expectHash {
+				t.Errorf(`expected %%v fmt result "%s", got "%s`, test.expectHash, result)
+			}
+			result = fmt.Sprintf("%+v", h)
+			if result != test.expectHash {
+				t.Errorf(`expected %%+v fmt result "%s", got "%s`, test.expectHash, result)
+			}
+			result = fmt.Sprintf("%#v", h)
+			if result != test.expectHash {
+				t.Errorf(`expected %%#v fmt result "%s", got "%s`, test.expectHash, result)
+			}
+		})
+	}
+}
+
 func TestHideAll(t *testing.T) {
 	table := []struct {
 		name        string

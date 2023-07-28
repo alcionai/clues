@@ -317,9 +317,7 @@ func TestImmutableCtx(t *testing.T) {
 	mustEquals(t, msa{"foo": "bar", "beaux": "regard"}, clues.In(lr).Map())
 }
 
-var (
-	_ clues.PlainConcealer = &safe{}
-)
+var _ clues.Concealer = &safe{}
 
 type safe struct {
 	v any
@@ -337,7 +335,7 @@ func (s safe) Conceal() string {
 	return string(bs)
 }
 
-var _ clues.PlainConcealer = &custom{}
+var _ clues.Concealer = &custom{}
 
 type custom struct {
 	a, b string

@@ -65,17 +65,6 @@ func makeDefaultHash() HashCfg {
 // types and interfaces
 // ---------------------------------------------------------------------------
 
-type PlainConcealer interface {
-	PlainStringer
-	Concealer
-}
-
-// PlainStringer is the opposite of conceal.
-// Useful for if you want to retrieve the raw value of a secret.
-type PlainStringer interface {
-	PlainString() string
-}
-
 type Concealer interface {
 	Conceal() string
 	// Concealers also need to comply with Format
@@ -84,26 +73,26 @@ type Concealer interface {
 	// pass into fmt.Printf("%v") and skip the whole hash.
 	// This is for your protection, too.
 	Format(fs fmt.State, verb rune)
+	// PlainStringer is the opposite of conceal.
+	// Useful for if you want to retrieve the raw value of a secret.
+	PlainString() string
 }
 
 // compliance guarantees
-var (
-	_ Concealer     = &secret{}
-	_ PlainStringer = &secret{}
-)
+var _ Concealer = &secret{}
 
 type secret struct {
-	s string
-	v any
-	h string
+	plainText string
+	value     any
+	hashText  string
 }
 
 // use the hashed string in any fmt verb.
-func (s secret) Format(fs fmt.State, verb rune) { io.WriteString(fs, s.h) }
-func (s secret) String() string                 { return s.h }
-func (s secret) Conceal() string                { return s.h }
-func (s secret) PlainString() string            { return s.s }
-func (s secret) V() any                         { return s.v }
+func (s secret) Format(fs fmt.State, verb rune) { io.WriteString(fs, s.hashText) }
+func (s secret) String() string                 { return s.hashText }
+func (s secret) Conceal() string                { return s.hashText }
+func (s secret) PlainString() string            { return s.plainText }
+func (s secret) V() any                         { return s.value }
 
 // ---------------------------------------------------------------------------
 // concealer constructors
@@ -114,12 +103,18 @@ func (s secret) V() any                         { return s.v }
 // The hash function defaults to SHA256, but can be
 // changed through configuration.
 func Hide(a any) secret {
-	str := marshal(a)
+	if ac, ok := a.(Concealer); ok {
+		return secret{
+			hashText:  ac.Conceal(),
+			plainText: ac.PlainString(),
+			value:     a,
+		}
+	}
 
 	return secret{
-		s: str,
-		v: a,
-		h: Conceal(str),
+		hashText:  Conceal(a),
+		plainText: marshal(a, false),
+		value:     a,
 	}
 }
 
@@ -139,16 +134,18 @@ func HideAll(a ...any) []secret {
 // Conceal() call always returns a flat string: "***"
 func Mask(a any) secret {
 	return secret{
-		s: marshal(a),
-		v: a,
-		h: "***",
+		hashText:  "***",
+		plainText: marshal(a, false),
+		value:     a,
 	}
 }
 
 // Conceal runs the currently configured hashing algorithm
 // on the parameterized value.
 func Conceal(a any) string {
-	return ConcealWith(config.HashAlg, marshal(a))
+	// marshal with false or else we hit a double hash (at best)
+	// or an infinite loop (at worst).
+	return ConcealWith(config.HashAlg, marshal(a, false))
 }
 
 // Conceal runs one of clues' hashing algorithms on
