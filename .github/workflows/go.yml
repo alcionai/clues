@@ -35,7 +35,6 @@ jobs:
         -tags testing \
         -json         \
         -v            \
-        -failfast     \
         -p 1          \
         -timeout 20m  \
         ./... \

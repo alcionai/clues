@@ -146,7 +146,7 @@ func TestFmt(t *testing.T) {
 				q:    `"errors wrap: an error"`,
 				plus: plusRE(
 					`an error\n`, "",
-					`github.com/alcionai/clues_test.init\n`, `clues_benchmark_test.go:\d+\n`,
+					`github.com/alcionai/clues_test.init\n`, `clues/.+go:\d+\n`,
 					`runtime.doInit1\n`, `proc.go:\d+\n`,
 					`runtime.doInit\n`, `proc.go:\d+\n`,
 					`runtime.main\n`, `proc.go:\d+\n`,

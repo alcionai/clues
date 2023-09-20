@@ -33,7 +33,8 @@ type dataNode struct {
 }
 
 func makeNodeID() string {
-	return uuid.NewString()[:8]
+	uns := uuid.NewString()
+	return uns[:4] + uns[len(uns)-4:]
 }
 
 func (dn *dataNode) add(m map[string]any) *dataNode {
