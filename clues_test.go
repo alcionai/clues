@@ -8,10 +8,22 @@ import (
 	"testing"
 
 	"github.com/alcionai/clues"
+	"golang.org/x/exp/slices"
 )
 
-func mustEquals[K comparable, V any](t *testing.T, expect, got map[K]V) {
+func mustEquals[K comparable, V any](
+	t *testing.T,
+	expect, got map[K]V,
+	hasCluesTrace bool,
+) {
 	e, g := toMSS(expect), toMSS(got)
+
+	if hasCluesTrace && len(g) > 0 {
+		if _, ok := g["clues_trace"]; !ok {
+			t.Error("expected map to contain key [clues_trace]")
+		}
+		delete(g, "clues_trace")
+	}
 
 	if len(e) != len(g) {
 		t.Errorf(
@@ -80,6 +92,11 @@ func (s sa) stringWith(other []any) string {
 }
 
 func (s sa) equals(t *testing.T, other []any) {
+	idx := slices.Index(other, "clues_trace")
+	if idx >= 0 {
+		other = append(other[:idx], other[idx+2:]...)
+	}
+
 	if len(s) != len(other) {
 		t.Errorf(
 			"expected slice of len [%d], received len [%d]\n%s",
@@ -123,8 +140,8 @@ func assert(
 ) {
 	vs := clues.In(ctx)
 	nvs := clues.InNamespace(ctx, ns)
-	mustEquals(t, eM, vs.Map())
-	mustEquals(t, eMns, nvs.Map())
+	mustEquals(t, eM, vs.Map(), true)
+	mustEquals(t, eMns, nvs.Map(), true)
 	eS.equals(t, vs.Slice())
 	eSns.equals(t, nvs.Slice())
 }
@@ -138,8 +155,8 @@ func assertMSA(
 ) {
 	vs := clues.In(ctx)
 	nvs := clues.InNamespace(ctx, ns)
-	mustEquals(t, eM, toMSA(vs.Map()))
-	mustEquals(t, eMns, toMSA(nvs.Map()))
+	mustEquals(t, eM, toMSA(vs.Map()), true)
+	mustEquals(t, eMns, toMSA(nvs.Map()), true)
 	eS.equals(t, vs.Slice())
 	eSns.equals(t, nvs.Slice())
 }
@@ -162,12 +179,12 @@ func TestAdd(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, clues.In(ctx).Map())
+			mustEquals(t, check, clues.In(ctx).Map(), true)
 
 			for _, kv := range test.kvs {
 				ctx = clues.Add(ctx, kv[0], kv[1])
 				check[kv[0]] = kv[1]
-				mustEquals(t, check, clues.In(ctx).Map())
+				mustEquals(t, check, clues.In(ctx).Map(), true)
 			}
 
 			assert(
@@ -194,15 +211,41 @@ func TestAddMap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, clues.In(ctx).Map())
+			mustEquals(t, check, clues.In(ctx).Map(), true)
 
 			for _, m := range test.ms {
 				ctx = clues.AddMap(ctx, m)
 				for k, v := range m {
 					check[k] = v
 				}
-				mustEquals(t, check, clues.In(ctx).Map())
+				mustEquals(t, check, clues.In(ctx).Map(), true)
 			}
+
+			assert(
+				t, ctx, "",
+				test.expectM, msa{},
+				test.expectS, sa{})
+		})
+	}
+}
+
+func TestAddTrace(t *testing.T) {
+	table := []struct {
+		name    string
+		expectM msa
+		expectS sa
+	}{
+		{"single", msa{}, sa{}},
+		{"multiple", msa{}, sa{}},
+		{"duplicates", msa{}, sa{}},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
+			check := msa{}
+			mustEquals(t, check, clues.In(ctx).Map(), true)
+
+			ctx = clues.AddTrace(ctx)
 
 			assert(
 				t, ctx, "",
@@ -228,12 +271,12 @@ func TestAddTo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map())
+			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map(), true)
 
 			for _, kv := range test.kvs {
 				ctx = clues.AddTo(ctx, "ns", kv[0], kv[1])
 				check[kv[0]] = kv[1]
-				mustEquals(t, check, clues.InNamespace(ctx, "ns").Map())
+				mustEquals(t, check, clues.InNamespace(ctx, "ns").Map(), true)
 			}
 
 			assert(
@@ -260,20 +303,46 @@ func TestAddMapTo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map())
+			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map(), true)
 
 			for _, m := range test.ms {
 				ctx = clues.AddMapTo(ctx, "ns", m)
 				for k, v := range m {
 					check[k] = v
 				}
-				mustEquals(t, check, clues.InNamespace(ctx, "ns").Map())
+				mustEquals(t, check, clues.InNamespace(ctx, "ns").Map(), true)
 			}
 
 			assert(
 				t, ctx, "ns",
 				msa{}, test.expectM,
 				sa{}, test.expectS)
+		})
+	}
+}
+
+func TestAddTraceTo(t *testing.T) {
+	table := []struct {
+		name    string
+		expectM msa
+		expectS sa
+	}{
+		{"single", msa{}, sa{}},
+		{"multiple", msa{}, sa{}},
+		{"duplicates", msa{}, sa{}},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
+			check := msa{}
+			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map(), true)
+
+			ctx = clues.AddTraceTo(ctx, "ns")
+
+			assert(
+				t, ctx, "ns",
+				test.expectM, msa{},
+				test.expectS, sa{})
 		})
 	}
 }
@@ -286,7 +355,7 @@ func TestImmutableCtx(t *testing.T) {
 		pre     = clues.In(testCtx)
 		preMap  = pre.Map()
 	)
-	mustEquals(t, check, preMap)
+	mustEquals(t, check, preMap, true)
 
 	ctx2 := clues.Add(testCtx, "k", "v")
 	if _, ok := preMap["k"]; ok {
@@ -310,11 +379,11 @@ func TestImmutableCtx(t *testing.T) {
 		lr = clues.Add(l, "beaux", "regard")
 	)
 
-	mustEquals(t, msa{}, clues.In(ctx).Map())
-	mustEquals(t, msa{"foo": "bar"}, clues.In(l).Map())
-	mustEquals(t, msa{"baz": "qux"}, clues.In(r).Map())
-	mustEquals(t, msa{"foo": "bar", "fnords": "smarf"}, clues.In(ll).Map())
-	mustEquals(t, msa{"foo": "bar", "beaux": "regard"}, clues.In(lr).Map())
+	mustEquals(t, msa{}, clues.In(ctx).Map(), true)
+	mustEquals(t, msa{"foo": "bar"}, clues.In(l).Map(), true)
+	mustEquals(t, msa{"baz": "qux"}, clues.In(r).Map(), true)
+	mustEquals(t, msa{"foo": "bar", "fnords": "smarf"}, clues.In(ll).Map(), true)
+	mustEquals(t, msa{"foo": "bar", "beaux": "regard"}, clues.In(lr).Map(), true)
 }
 
 var _ clues.Concealer = &safe{}
@@ -395,12 +464,12 @@ func TestAdd_concealed(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
-			mustEquals(t, check, toMSA(clues.In(ctx).Map()))
+			mustEquals(t, check, toMSA(clues.In(ctx).Map()), true)
 
 			for _, cs := range test.concealers {
 				ctx = clues.Add(ctx, cs...)
 				check[concealed(cs[0])] = concealed(cs[1])
-				mustEquals(t, check, toMSA(clues.In(ctx).Map()))
+				mustEquals(t, check, toMSA(clues.In(ctx).Map()), true)
 			}
 
 			assertMSA(

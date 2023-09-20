@@ -46,7 +46,7 @@ func toErr(e error, msg string, m map[string]any) *Err {
 		e:        e,
 		location: getTrace(3),
 		msg:      msg,
-		data:     &dataNode{vs: m},
+		data:     &dataNode{id: makeNodeID(), vs: m},
 	}
 }
 

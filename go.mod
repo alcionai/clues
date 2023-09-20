@@ -3,6 +3,7 @@ module github.com/alcionai/clues
 go 1.20
 
 require (
+	github.com/google/uuid v1.3.1
 	github.com/pkg/errors v0.9.1
-	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
+	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 )
