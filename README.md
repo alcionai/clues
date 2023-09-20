@@ -4,7 +4,7 @@
 
 A golang library for tracking runtime variables via ctx, passing them upstream within errors, and retrieving context- and error-bound variables for logging.
 
-## Aggregate in Context
+## Aggregate runtime state in ctx
 
 Track runtime variables by adding them to the context.
 ```go
@@ -17,9 +17,10 @@ func foo(ctx context.Context, someID string) error {
 Keep error messages readable and augment your telemetry by packing errors with structured data.
 ```go
 func bar(ctx context.Context, someID string) error {
-    err := doThing(ctx, someID)
+    ctx = clues.Add(ctx, "importantID", someID)
+    err := errors.New("a bad happened")
     if err != nil {
-        return clues.WithMap(err, clues.In(ctx))
+        return clues.Stack(err).WithClues(ctx)
     }
     return nil
 }
@@ -38,13 +39,17 @@ func main() {
 }
 ```
 
-## Thread-safe handling
+## Track individual process flows
+
+Each clues addition traces its additions with a tree of IDs, chaining those traces into the "clues_trace" value.  This lets you quickly and easily filter logs to a specific process tree.
 ```go
-func iterateOver(ctx context.Context, ids []string) {
+func iterateOver(ctx context.Context, users []string) {
+    // automatically adds "clues_trace":"id_a"
     ctx = clues.Add(ctx, "status", good)
-    for _, id := range ids {
-        ictx := clues.Add(ctx, "currentID", id)
-        err := doSomething(ictx, id)
+    for i, user := range users {
+        // automatically appends another id to "clues_trace": "id_a,id_n"
+        ictx := clues.Add(ctx, "currentUser", user, "iter", i)
+        err := doSomething(ictx, user)
         if err != nil {
             ictx = clues.Add(ictx, "status", bad)
         }
@@ -54,6 +59,8 @@ func iterateOver(ctx context.Context, ids []string) {
 
 ## Interoperable with pkg/errors
 
+Clues errors can be wrapped by pkg/errors without slicing out
+any stored data.
 ```go
 func getIt(someID string) error {
     return clues.New("oh no!").With("importantID", someID)
@@ -77,7 +84,7 @@ func main() {
 
 ## Stackable errors
 
-Error stacking lets you embed error sentinels without reducing the current error to an err.Error() string.
+Error stacking lets you embed error sentinels without slicing out the current error's data or relying on err.Error() strings.
 ```go
 var ErrorCommonFailure = "a common failure condition"
 

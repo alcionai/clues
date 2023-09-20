@@ -102,7 +102,7 @@ func TestLabels(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			result := clues.Labels(test.initial)
-			mustEquals(t, test.expect, toMSA(result))
+			mustEquals(t, test.expect, toMSA(result), false)
 		})
 	}
 }
@@ -146,8 +146,8 @@ func TestWith(t *testing.T) {
 			for _, kv := range test.with {
 				err = err.With(kv...)
 			}
-			mustEquals(t, test.expect, clues.InErr(err).Map())
-			mustEquals(t, test.expect, err.Values().Map())
+			mustEquals(t, test.expect, clues.InErr(err).Map(), true)
+			mustEquals(t, test.expect, err.Values().Map(), true)
 		})
 	}
 }
@@ -181,8 +181,8 @@ func TestWithMap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			err := clues.WithMap(test.initial, test.kv)
 			err = err.WithMap(test.with)
-			mustEquals(t, test.expect, clues.InErr(err).Map())
-			mustEquals(t, test.expect, err.Values().Map())
+			mustEquals(t, test.expect, clues.InErr(err).Map(), true)
+			mustEquals(t, test.expect, err.Values().Map(), true)
 		})
 	}
 }
@@ -219,8 +219,8 @@ func TestWithClues(t *testing.T) {
 			tctx := clues.AddMap(ctx, test.kv)
 			err := clues.WithClues(test.initial, tctx)
 			err = err.WithMap(test.with)
-			mustEquals(t, test.expect, clues.InErr(err).Map())
-			mustEquals(t, test.expect, err.Values().Map())
+			mustEquals(t, test.expect, clues.InErr(err).Map(), true)
+			mustEquals(t, test.expect, err.Values().Map(), true)
 		})
 	}
 }
@@ -462,7 +462,7 @@ func TestErrValues_stacks(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			vs := clues.InErr(test.err)
-			mustEquals(t, test.expect, vs.Map())
+			mustEquals(t, test.expect, vs.Map(), true)
 		})
 	}
 }
@@ -471,7 +471,7 @@ func TestImmutableErrors(t *testing.T) {
 	err := clues.New("an error").With("k", "v")
 	check := msa{"k": "v"}
 	pre := clues.InErr(err)
-	mustEquals(t, check, pre.Map())
+	mustEquals(t, check, pre.Map(), true)
 
 	err2 := err.With("k2", "v2")
 	if _, ok := pre.Map()["k2"]; ok {
@@ -839,8 +839,8 @@ func TestToCore(t *testing.T) {
 			if test.expectMsg != c.Msg {
 				t.Errorf("expected Msg [%v], got [%v]", test.expectMsg, c.Msg)
 			}
-			mustEquals(t, test.expectLabels, toMSA(c.Labels))
-			mustEquals(t, test.expectValues, toMSA(c.Values))
+			mustEquals(t, test.expectLabels, toMSA(c.Labels), false)
+			mustEquals(t, test.expectValues, toMSA(c.Values), true)
 		})
 	}
 }

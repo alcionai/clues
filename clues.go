@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
+	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
 )
 
@@ -26,19 +28,30 @@ import (
 // declared by an ancestor, the child's entry takes priority.
 type dataNode struct {
 	parent *dataNode
+	id     string
 	vs     map[string]any
 }
 
+func makeNodeID() string {
+	uns := uuid.NewString()
+	return uns[:4] + uns[len(uns)-4:]
+}
+
 func (dn *dataNode) add(m map[string]any) *dataNode {
+	if m == nil {
+		m = map[string]any{}
+	}
+
 	return &dataNode{
 		parent: dn,
+		id:     makeNodeID(),
 		vs:     maps.Clone(m),
 	}
 }
 
 // lineage runs the fn on every valueNode in the ancestry tree,
 // starting at the root and ending at the dataNode.
-func (dn *dataNode) lineage(fn func(vs map[string]any)) {
+func (dn *dataNode) lineage(fn func(id string, vs map[string]any)) {
 	if dn == nil {
 		return
 	}
@@ -47,7 +60,7 @@ func (dn *dataNode) lineage(fn func(vs map[string]any)) {
 		dn.parent.lineage(fn)
 	}
 
-	fn(dn.vs)
+	fn(dn.id, dn.vs)
 }
 
 func (dn *dataNode) Slice() []any {
@@ -62,13 +75,24 @@ func (dn *dataNode) Slice() []any {
 }
 
 func (dn *dataNode) Map() map[string]any {
-	m := map[string]any{}
+	var (
+		m    = map[string]any{}
+		idsl = []string{}
+	)
 
-	dn.lineage(func(vs map[string]any) {
+	dn.lineage(func(id string, vs map[string]any) {
+		if len(id) > 0 {
+			idsl = append(idsl, id)
+		}
+
 		for k, v := range vs {
 			m[k] = v
 		}
 	})
+
+	if len(idsl) > 0 {
+		m["clues_trace"] = strings.Join(idsl, ",")
+	}
 
 	return m
 }
@@ -189,6 +213,27 @@ func AddMapTo[K comparable, V any](ctx context.Context, namespace string, m map[
 	}
 
 	return setTo(ctx, namespace, nc.add(normalize(kvs...)))
+}
+
+// AddTrace stacks a clues node onto this context.  Adding a node ensures
+// that this point in code is identified by an ID, which can later be
+// used to correlate and isolate logs to certain trace branches.
+// AddTrace is only needed for layers that don't otherwise call Add() or
+// similar functions, since those funcs already attach a new node.
+func AddTrace(ctx context.Context) context.Context {
+	nc := from(ctx, defaultNamespace)
+	return set(ctx, nc.add(nil))
+}
+
+// AddTraceTo stacks a clues node onto this context within the specified
+// namespace.  Adding a node ensures that a point in code is identified
+// by an ID, which can later be used to correlate and isolate logs to
+// certain trace branches.  AddTraceTo is only needed for layers that don't
+// otherwise call AddTo() or similar functions, since those funcs already
+// attach a new node.
+func AddTraceTo(ctx context.Context, namespace string) context.Context {
+	nc := from(ctx, ctxKey(namespace))
+	return set(ctx, nc.add(nil))
 }
 
 // ---------------------------------------------------------------------------
