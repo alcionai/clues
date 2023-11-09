@@ -2,7 +2,6 @@ package clues
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -171,12 +170,7 @@ func marshal(a any, conceal bool) string {
 		return as.String()
 	}
 
-	bs, err := json.Marshal(a)
-	if err != nil {
-		return "marshalling clue: " + err.Error()
-	}
-
-	return string(bs)
+	return fmt.Sprintf("%+v", a)
 }
 
 // Add adds all key-value pairs to the clues.
