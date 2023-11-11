@@ -41,6 +41,19 @@ type Err struct {
 	data *dataNode
 }
 
+func asErr(err error, msg string, m map[string]any) *Err {
+	if err == nil {
+		return nil
+	}
+
+	e, ok := err.(*Err)
+	if !ok {
+		e = toErr(err, msg, m)
+	}
+
+	return e
+}
+
 func toErr(e error, msg string, m map[string]any) *Err {
 	return &Err{
 		e:        e,
@@ -61,6 +74,37 @@ func toStack(e error, stack []error) *Err {
 func getTrace(depth int) string {
 	_, file, line, _ := runtime.Caller(depth)
 	return fmt.Sprintf("%s:%d", file, line)
+}
+
+func getLabelCounter(e error) Adder {
+	if e == nil {
+		return nil
+	}
+
+	ce, ok := e.(*Err)
+	if !ok {
+		return nil
+	}
+
+	for i := len(ce.stack) - 1; i >= 0; i-- {
+		lc := getLabelCounter(ce.stack[i])
+		if lc != nil {
+			return lc
+		}
+	}
+
+	if ce.e != nil {
+		lc := getLabelCounter(ce.e)
+		if lc != nil {
+			return lc
+		}
+	}
+
+	if ce.data != nil && ce.data.labelCounter != nil {
+		return ce.data.labelCounter
+	}
+
+	return nil
 }
 
 // ------------------------------------------------------------
@@ -91,7 +135,7 @@ func HasLabel(err error, label string) bool {
 	return HasLabel(Unwrap(err), label)
 }
 
-func (err *Err) Label(label string) *Err {
+func (err *Err) Label(labels ...string) *Err {
 	if err == nil {
 		return nil
 	}
@@ -100,21 +144,21 @@ func (err *Err) Label(label string) *Err {
 		err.labels = map[string]struct{}{}
 	}
 
-	err.labels[label] = struct{}{}
+	lc := getLabelCounter(err)
+	for _, label := range labels {
+		// don't duplicate counts
+		if _, exists := err.labels[label]; !exists && lc != nil {
+			lc.Add(label, 1)
+		}
+
+		err.labels[label] = struct{}{}
+	}
+
 	return err
 }
 
 func Label(err error, label string) *Err {
-	if err == nil {
-		return nil
-	}
-
-	e, ok := err.(*Err)
-	if !ok {
-		e = toErr(err, "", nil)
-	}
-
-	return e.Label(label)
+	return asErr(err, "", nil).Label(label)
 }
 
 func (err *Err) Labels() map[string]struct{} {
@@ -173,16 +217,7 @@ func (err *Err) With(kvs ...any) *Err {
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
 func With(err error, kvs ...any) *Err {
-	if err == nil {
-		return nil
-	}
-
-	e, ok := err.(*Err)
-	if !ok {
-		return toErr(err, "", normalize(kvs...))
-	}
-
-	return e.With(kvs...)
+	return asErr(err, "", nil).With(kvs...)
 }
 
 // WithTrace sets the error trace to a certain depth.
@@ -253,16 +288,7 @@ func (err *Err) WithMap(m map[string]any) *Err {
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
 func WithMap(err error, m map[string]any) *Err {
-	if err == nil {
-		return nil
-	}
-
-	e, ok := err.(*Err)
-	if !ok {
-		return toErr(err, "", m)
-	}
-
-	return e.WithMap(m)
+	return asErr(err, "", m).WithMap(m)
 }
 
 // WithClues is syntactical-sugar that assumes you're using
@@ -272,12 +298,20 @@ func WithMap(err error, m map[string]any) *Err {
 //
 // clues.Stack(err).WithClues(ctx) adds the same data as
 // clues.Stack(err).WithMap(clues.Values(ctx)).
+//
+// If the context contains a clues LabelCounter, that counter is
+// passed to the error.  WithClues must always be called first in
+// order to count labels.
 func (err *Err) WithClues(ctx context.Context) *Err {
 	if err == nil {
 		return nil
 	}
 
-	return err.WithMap(In(ctx).Map())
+	dn := In(ctx)
+	e := err.WithMap(dn.Map())
+	e.data.labelCounter = dn.labelCounter
+
+	return e
 }
 
 // WithClues is syntactical-sugar that assumes you're using
@@ -287,6 +321,10 @@ func (err *Err) WithClues(ctx context.Context) *Err {
 //
 // clues.WithClues(err, ctx) adds the same data as
 // clues.WithMap(err, clues.Values(ctx)).
+//
+// If the context contains a clues LabelCounter, that counter is
+// passed to the error.  WithClues must always be called first in
+// order to count labels.
 func WithClues(err error, ctx context.Context) *Err {
 	if err == nil {
 		return nil
