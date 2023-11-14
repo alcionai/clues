@@ -962,7 +962,7 @@ func TestLabelCounter_iterative(t *testing.T) {
 			var (
 				lc  = labelCounter{}
 				ctx = clues.AddLabelCounter(context.Background(), lc)
-				err = clues.NewWith(ctx, "an err")
+				err = clues.NewWC(ctx, "an err")
 			)
 
 			for _, l := range test.labels {
@@ -980,7 +980,7 @@ func TestLabelCounter_variadic(t *testing.T) {
 			var (
 				lc  = labelCounter{}
 				ctx = clues.AddLabelCounter(context.Background(), lc)
-				err = clues.NewWith(ctx, "an err")
+				err = clues.NewWC(ctx, "an err")
 			)
 
 			err.Label(test.labels...)
@@ -996,7 +996,7 @@ func TestLabelCounter_iterative_stacked(t *testing.T) {
 			var (
 				lc  = labelCounter{}
 				ctx = clues.AddLabelCounter(context.Background(), lc)
-				err = clues.NewWith(ctx, "an err")
+				err = clues.NewWC(ctx, "an err")
 			)
 
 			for _, l := range test.labels {
@@ -1021,7 +1021,7 @@ func TestLabelCounter_variadic_stacked(t *testing.T) {
 			var (
 				lc  = labelCounter{}
 				ctx = clues.AddLabelCounter(context.Background(), lc)
-				err = clues.NewWith(ctx, "an err")
+				err = clues.NewWC(ctx, "an err")
 			)
 
 			err.Label(test.labels...)
@@ -1040,7 +1040,7 @@ func TestLabelCounter_iterative_wrapped(t *testing.T) {
 			var (
 				lc  = labelCounter{}
 				ctx = clues.AddLabelCounter(context.Background(), lc)
-				err = clues.NewWith(ctx, "an err")
+				err = clues.NewWC(ctx, "an err")
 			)
 
 			for _, l := range test.labels {
@@ -1065,7 +1065,7 @@ func TestLabelCounter_variadic_wrapped(t *testing.T) {
 			var (
 				lc  = labelCounter{}
 				ctx = clues.AddLabelCounter(context.Background(), lc)
-				err = clues.NewWith(ctx, "an err")
+				err = clues.NewWC(ctx, "an err")
 			)
 
 			err.Label(test.labels...)
