@@ -598,13 +598,28 @@ func New(msg string) *Err {
 	return toErr(nil, msg, nil)
 }
 
-// Wrap returns a  clues.Err with a new message wrapping the old error.
+// NewWC is equivalent to clues.New("msg").WithClues(ctx)
+func NewWC(ctx context.Context, msg string) *Err {
+	return toErr(nil, msg, nil).WithClues(ctx)
+}
+
+// Wrap returns a clues.Err with a new message wrapping the old error.
 func Wrap(err error, msg string) *Err {
 	if err == nil {
 		return nil
 	}
 
 	return toErr(err, msg, nil)
+}
+
+// WrapWC is equivalent to clues.Wrap(err, "msg").WithClues(ctx)
+// Wrap returns a clues.Err with a new message wrapping the old error.
+func WrapWC(ctx context.Context, err error, msg string) *Err {
+	if err == nil {
+		return nil
+	}
+
+	return Wrap(err, msg).WithClues(ctx)
 }
 
 // Stack returns the error as a clues.Err.  If additional errors are
@@ -629,6 +644,16 @@ func Stack(errs ...error) *Err {
 	}
 
 	return toStack(filtered[0], filtered[1:])
+}
+
+// StackWC is equivalent to clues.Stack(errs...).WithClues(ctx)
+func StackWC(ctx context.Context, errs ...error) *Err {
+	stack := Stack(errs...)
+	if stack == nil {
+		return nil
+	}
+
+	return stack.WithClues(ctx)
 }
 
 // ---------------------------------------------------------------------------
