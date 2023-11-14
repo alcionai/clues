@@ -48,6 +48,18 @@ func (dn *dataNode) add(m map[string]any) *dataNode {
 	}
 }
 
+func (dn *dataNode) trace(name string) *dataNode {
+	if name == "" {
+		name = makeNodeID()
+	}
+
+	return &dataNode{
+		parent: dn,
+		id:     name,
+		vs:     map[string]any{},
+	}
+}
+
 // lineage runs the fn on every valueNode in the ancestry tree,
 // starting at the root and ending at the dataNode.
 func (dn *dataNode) lineage(fn func(id string, vs map[string]any)) {
@@ -216,7 +228,7 @@ func AddMapTo[K comparable, V any](ctx context.Context, namespace string, m map[
 // similar functions, since those funcs already attach a new node.
 func AddTrace(ctx context.Context) context.Context {
 	nc := from(ctx, defaultNamespace)
-	return set(ctx, nc.add(nil))
+	return set(ctx, nc.trace(""))
 }
 
 // AddTraceTo stacks a clues node onto this context within the specified
@@ -227,7 +239,28 @@ func AddTrace(ctx context.Context) context.Context {
 // attach a new node.
 func AddTraceTo(ctx context.Context, namespace string) context.Context {
 	nc := from(ctx, ctxKey(namespace))
-	return set(ctx, nc.add(nil))
+	return set(ctx, nc.trace(""))
+}
+
+// AddTraceName stacks a clues node onto this context.  Adding a node ensures
+// that this point in code is identified by an ID, which can later be
+// used to correlate and isolate logs to certain trace branches.
+// AddTrace is only needed for layers that don't otherwise call Add() or
+// similar functions, since those funcs already attach a new node.
+func AddTraceName(ctx context.Context, name string) context.Context {
+	nc := from(ctx, defaultNamespace)
+	return set(ctx, nc.trace(name))
+}
+
+// AddTraceNameTo stacks a clues node onto this context within the specified
+// namespace.  Adding a node ensures that a point in code is identified
+// by an ID, which can later be used to correlate and isolate logs to
+// certain trace branches.  AddTraceTo is only needed for layers that don't
+// otherwise call AddTo() or similar functions, since those funcs already
+// attach a new node.
+func AddTraceNameTo(ctx context.Context, name, namespace string) context.Context {
+	nc := from(ctx, ctxKey(namespace))
+	return set(ctx, nc.trace(name))
 }
 
 // ---------------------------------------------------------------------------

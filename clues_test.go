@@ -255,6 +255,41 @@ func TestAddTrace(t *testing.T) {
 	}
 }
 
+func TestAddTraceName(t *testing.T) {
+	table := []struct {
+		name        string
+		names       []string
+		expectTrace string
+		expectM     msa
+		expectS     sa
+	}{
+		{"single", []string{"single"}, "single", msa{}, sa{}},
+		{"multiple", []string{"single", "multiple"}, "single,multiple", msa{}, sa{}},
+		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", msa{}, sa{}},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
+			check := msa{}
+			mustEquals(t, check, clues.In(ctx).Map(), true)
+
+			for _, name := range test.names {
+				ctx = clues.AddTraceName(ctx, name)
+			}
+
+			assert(
+				t, ctx, "",
+				test.expectM, msa{},
+				test.expectS, sa{})
+
+			c := clues.In(ctx).Map()
+			if c["clues_trace"] != test.expectTrace {
+				t.Errorf("expected clues_trace to equal %q, got %q", test.expectTrace, c["clues_trace"])
+			}
+		})
+	}
+}
+
 func TestAddTo(t *testing.T) {
 	table := []struct {
 		name    string
