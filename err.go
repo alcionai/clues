@@ -145,11 +145,17 @@ func (err *Err) Label(labels ...string) *Err {
 	}
 
 	lc := getLabelCounter(err)
+	els := err.Labels()
+
 	for _, label := range labels {
-		// don't duplicate counts
-		if _, exists := err.labels[label]; !exists && lc != nil {
-			lc.Add(label, 1)
+		if lc != nil {
+			_, inPrior := els[label]
+			_, inCurrent := err.labels[label]
+			if !inPrior && !inCurrent {
+				lc.Add(label, 1)
+			}
 		}
+		// don't duplicate counts
 
 		err.labels[label] = struct{}{}
 	}

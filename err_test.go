@@ -905,65 +905,64 @@ func (tla labelCounter) Add(l string, i int64) {
 	tla[l] = tla[l] + i
 }
 
-func TestLabelCounter(t *testing.T) {
-	ctx := clues.AddLabelCounter(context.Background(), labelCounter{})
+var labelTable = []struct {
+	name   string
+	labels []string
+	expect map[string]int64
+}{
+	{
+		name:   "no labels",
+		labels: []string{},
+		expect: map[string]int64{},
+	},
+	{
+		name:   "single label",
+		labels: []string{"un"},
+		expect: map[string]int64{
+			"un": 1,
+		},
+	},
+	{
+		name:   "multiple labels",
+		labels: []string{"un", "deux"},
+		expect: map[string]int64{
+			"un":   1,
+			"deux": 1,
+		},
+	},
+	{
+		name:   "duplicated label",
+		labels: []string{"un", "un"},
+		expect: map[string]int64{
+			"un": 1,
+		},
+	},
+	{
+		name:   "multiple duplicated labels",
+		labels: []string{"un", "un", "deux", "deux"},
+		expect: map[string]int64{
+			"un":   1,
+			"deux": 1,
+		},
+	},
+	{
+		name:   "empty string labels",
+		labels: []string{"", "", "un", "deux"},
+		expect: map[string]int64{
+			"":     1,
+			"un":   1,
+			"deux": 1,
+		},
+	},
+}
 
-	table := []struct {
-		name   string
-		labels []string
-		expect map[string]int64
-	}{
-		{
-			name:   "no lables",
-			labels: []string{},
-			expect: map[string]int64{},
-		},
-		{
-			name:   "single label",
-			labels: []string{"un"},
-			expect: map[string]int64{
-				"un": 1,
-			},
-		},
-		{
-			name:   "multiple labels",
-			labels: []string{"un", "deux"},
-			expect: map[string]int64{
-				"un":   1,
-				"deux": 1,
-			},
-		},
-		{
-			name:   "duplicated label",
-			labels: []string{"un", "un"},
-			expect: map[string]int64{
-				"un": 1,
-			},
-		},
-		{
-			name:   "multiple duplicated labels",
-			labels: []string{"un", "un", "deux", "deux"},
-			expect: map[string]int64{
-				"un":   1,
-				"deux": 1,
-			},
-		},
-		{
-			name:   "empty string labels",
-			labels: []string{"", "", "un", "deux"},
-			expect: map[string]int64{
-				"":     1,
-				"un":   1,
-				"deux": 1,
-			},
-		},
-	}
-	for _, test := range table {
-		t.Run("iterative_"+test.name, func(t *testing.T) {
+func TestLabelCounter_iterative(t *testing.T) {
+	for _, test := range labelTable {
+		t.Run(test.name, func(t *testing.T) {
 			var (
-				lc   = labelCounter{}
-				tctx = clues.AddLabelCounter(ctx, lc)
-				err  = clues.NewWith(tctx, "an err")
+				lc  = labelCounter{}
+				ctx = clues.AddLabelCounter(context.Background(), lc)
+				err = clues.NewWith(ctx, "an err")
 			)
 
 			for _, l := range test.labels {
@@ -972,41 +971,144 @@ func TestLabelCounter(t *testing.T) {
 
 			mustEquals(t, toMSA(test.expect), toMSA(lc), false)
 		})
-		t.Run("variadic_"+test.name, func(t *testing.T) {
+	}
+}
+
+func TestLabelCounter_variadic(t *testing.T) {
+	for _, test := range labelTable {
+		t.Run(test.name, func(t *testing.T) {
 			var (
-				lc   = labelCounter{}
-				tctx = clues.AddLabelCounter(ctx, lc)
-				err  = clues.NewWith(tctx, "an err")
+				lc  = labelCounter{}
+				ctx = clues.AddLabelCounter(context.Background(), lc)
+				err = clues.NewWith(ctx, "an err")
 			)
 
 			err.Label(test.labels...)
 
 			mustEquals(t, toMSA(test.expect), toMSA(lc), false)
 		})
-		t.Run("iterative_"+test.name, func(t *testing.T) {
+	}
+}
+
+func TestLabelCounter_iterative_stacked(t *testing.T) {
+	for _, test := range labelTable {
+		t.Run(test.name, func(t *testing.T) {
 			var (
-				lc   = labelCounter{}
-				tctx = clues.AddLabelCounter(ctx, lc)
-				err  = clues.New("an err")
+				lc  = labelCounter{}
+				ctx = clues.AddLabelCounter(context.Background(), lc)
+				err = clues.NewWith(ctx, "an err")
 			)
 
 			for _, l := range test.labels {
 				err.Label(l)
 			}
 
-			err = err.WithClues(tctx)
+			err = clues.Stack(err)
+
+			// duplicates on the wrapped error should not get counted
+			for _, l := range test.labels {
+				err.Label(l)
+			}
+
+			mustEquals(t, toMSA(test.expect), toMSA(lc), false)
+		})
+	}
+}
+
+func TestLabelCounter_variadic_stacked(t *testing.T) {
+	for _, test := range labelTable {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				lc  = labelCounter{}
+				ctx = clues.AddLabelCounter(context.Background(), lc)
+				err = clues.NewWith(ctx, "an err")
+			)
+
+			err.Label(test.labels...)
+
+			// duplicates on the wrapped error should not get counted
+			err = clues.Stack(err).Label(test.labels...)
+
+			mustEquals(t, toMSA(test.expect), toMSA(lc), false)
+		})
+	}
+}
+
+func TestLabelCounter_iterative_wrapped(t *testing.T) {
+	for _, test := range labelTable {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				lc  = labelCounter{}
+				ctx = clues.AddLabelCounter(context.Background(), lc)
+				err = clues.NewWith(ctx, "an err")
+			)
+
+			for _, l := range test.labels {
+				err.Label(l)
+			}
+
+			err = clues.Wrap(err, "wrap")
+
+			// duplicates on the wrapped error should not get counted
+			for _, l := range test.labels {
+				err.Label(l)
+			}
+
+			mustEquals(t, toMSA(test.expect), toMSA(lc), false)
+		})
+	}
+}
+
+func TestLabelCounter_variadic_wrapped(t *testing.T) {
+	for _, test := range labelTable {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				lc  = labelCounter{}
+				ctx = clues.AddLabelCounter(context.Background(), lc)
+				err = clues.NewWith(ctx, "an err")
+			)
+
+			err.Label(test.labels...)
+
+			// duplicates on the wrapped error should not get counted
+			err = clues.Wrap(err, "wrap").Label(test.labels...)
+
+			mustEquals(t, toMSA(test.expect), toMSA(lc), false)
+		})
+	}
+}
+
+func TestLabelCounter_iterative_noCluesInErr(t *testing.T) {
+	for _, test := range labelTable {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				lc  = labelCounter{}
+				ctx = clues.AddLabelCounter(context.Background(), lc)
+				err = clues.New("an err")
+			)
+
+			for _, l := range test.labels {
+				err.Label(l)
+			}
+
+			err = err.WithClues(ctx)
 
 			// no labeling before WithClues is called on the error
 			mustEquals(t, toMSA(lc), msa{}, false)
 		})
+	}
+}
+
+func TestLabelCounter_variadic_noCluesInErr(t *testing.T) {
+	for _, test := range labelTable {
 		t.Run("variadic_"+test.name, func(t *testing.T) {
 			var (
-				lc   = labelCounter{}
-				tctx = clues.AddLabelCounter(ctx, lc)
-				err  = clues.New("an err")
+				lc  = labelCounter{}
+				ctx = clues.AddLabelCounter(context.Background(), lc)
+				err = clues.New("an err")
 			)
 
-			err.Label(test.labels...).WithClues(tctx)
+			err.Label(test.labels...).WithClues(ctx)
 
 			// no labeling before WithClues is called on the error
 			mustEquals(t, toMSA(lc), msa{}, false)
