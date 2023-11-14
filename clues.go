@@ -10,6 +10,10 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+type Adder interface {
+	Add(key string, n int64)
+}
+
 // ---------------------------------------------------------------------------
 // structure data storage and namespaces
 // ---------------------------------------------------------------------------
@@ -26,9 +30,10 @@ import (
 // with the root having the lowest priority.  IE: if a child overwrites a key
 // declared by an ancestor, the child's entry takes priority.
 type dataNode struct {
-	parent *dataNode
-	id     string
-	vs     map[string]any
+	parent       *dataNode
+	id           string
+	vs           map[string]any
+	labelCounter Adder
 }
 
 func makeNodeID() string {
@@ -42,9 +47,10 @@ func (dn *dataNode) add(m map[string]any) *dataNode {
 	}
 
 	return &dataNode{
-		parent: dn,
-		id:     makeNodeID(),
-		vs:     maps.Clone(m),
+		parent:       dn,
+		id:           makeNodeID(),
+		vs:           maps.Clone(m),
+		labelCounter: dn.labelCounter,
 	}
 }
 
@@ -261,6 +267,17 @@ func AddTraceName(ctx context.Context, name string) context.Context {
 func AddTraceNameTo(ctx context.Context, name, namespace string) context.Context {
 	nc := from(ctx, ctxKey(namespace))
 	return set(ctx, nc.trace(name))
+}
+
+// AddLabelCounter embeds an Adder interface into this context. Any already
+// embedded Adder will get replaced.  When adding Labels to a clues.Err the
+// LabelCounter will use the label as the key for the Add call, and increment
+// the count of that label by one.
+func AddLabelCounter(ctx context.Context, counter Adder) context.Context {
+	nc := from(ctx, defaultNamespace)
+	nn := nc.add(nil)
+	nn.labelCounter = counter
+	return set(ctx, nn)
 }
 
 // ---------------------------------------------------------------------------
