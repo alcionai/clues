@@ -598,8 +598,8 @@ func New(msg string) *Err {
 	return toErr(nil, msg, nil)
 }
 
-// NewWith is equivalent to clues.New("msg").WithClues(ctx)
-func NewWith(ctx context.Context, msg string) *Err {
+// NewWC is equivalent to clues.New("msg").WithClues(ctx)
+func NewWC(ctx context.Context, msg string) *Err {
 	return toErr(nil, msg, nil).WithClues(ctx)
 }
 
@@ -612,9 +612,9 @@ func Wrap(err error, msg string) *Err {
 	return toErr(err, msg, nil)
 }
 
-// WrapWith is equivalent to clues.Wrap(err, "msg").WithClues(ctx)
+// WrapWC is equivalent to clues.Wrap(err, "msg").WithClues(ctx)
 // Wrap returns a clues.Err with a new message wrapping the old error.
-func WrapWith(ctx context.Context, err error, msg string) *Err {
+func WrapWC(ctx context.Context, err error, msg string) *Err {
 	if err == nil {
 		return nil
 	}
@@ -646,8 +646,8 @@ func Stack(errs ...error) *Err {
 	return toStack(filtered[0], filtered[1:])
 }
 
-// StackWith is equivalent to clues.Stack(errs...).WithClues(ctx)
-func StackWith(ctx context.Context, errs ...error) *Err {
+// StackWC is equivalent to clues.Stack(errs...).WithClues(ctx)
+func StackWC(ctx context.Context, errs ...error) *Err {
 	stack := Stack(errs...)
 	if stack == nil {
 		return nil
