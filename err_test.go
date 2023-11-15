@@ -113,6 +113,9 @@ var (
 	werr = func() error {
 		return fmt.Errorf("%w", clues.Wrap(base, "wrapped error with vals").With("z", 0))
 	}
+	serr = func() error {
+		return clues.Stack(clues.New("primary").With("z", 0), errors.New("secondary"))
+	}
 )
 
 func TestWith(t *testing.T) {
@@ -139,6 +142,11 @@ func TestWith(t *testing.T) {
 		{"standard wrapped", werr(), "k", "v", [][]any{{"k2", "v2"}}, msa{"k": "v", "k2": "v2", "z": 0}},
 		{"duplicates wrapped", werr(), "k", "v", [][]any{{"k", "v2"}}, msa{"k": "v2", "z": 0}},
 		{"multi wrapped", werr(), "a", "1", [][]any{{"b", "2"}, {"c", "3"}}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
+		{"only stacked error vals", serr(), "k", "v", nil, msa{"k": "v", "z": 0}},
+		{"empty stacked error vals", serr(), "", "", nil, msa{"": "", "z": 0}},
+		{"standard stacked", serr(), "k", "v", [][]any{{"k2", "v2"}}, msa{"k": "v", "k2": "v2", "z": 0}},
+		{"duplicates stacked", serr(), "k", "v", [][]any{{"k", "v2"}}, msa{"k": "v2", "z": 0}},
+		{"multi stacked", serr(), "a", "1", [][]any{{"b", "2"}, {"c", "3"}}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
@@ -176,6 +184,11 @@ func TestWithMap(t *testing.T) {
 		{"standard wrapped", werr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2", "z": 0}},
 		{"duplicates wrapped", werr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2", "z": 0}},
 		{"multi wrapped", werr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
+		{"only stacked error vals", serr(), msa{"k": "v"}, nil, msa{"k": "v", "z": 0}},
+		{"empty stacked error vals", serr(), msa{"": ""}, nil, msa{"": "", "z": 0}},
+		{"standard stacked", serr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2", "z": 0}},
+		{"duplicates stacked", serr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2", "z": 0}},
+		{"multi stacked", serr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
@@ -213,6 +226,11 @@ func TestWithClues(t *testing.T) {
 		{"standard wrapped", werr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2", "z": 0}},
 		{"duplicates wrapped", werr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2", "z": 0}},
 		{"multi wrapped", werr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
+		{"only stacked error vals", serr(), msa{"k": "v"}, nil, msa{"k": "v", "z": 0}},
+		{"empty stacked error vals", serr(), msa{"": ""}, nil, msa{"": "", "z": 0}},
+		{"standard stacked", serr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2", "z": 0}},
+		{"duplicates stacked", serr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2", "z": 0}},
+		{"multi stacked", serr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
