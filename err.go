@@ -68,6 +68,7 @@ func toStack(e error, stack []error) *Err {
 		e:        e,
 		location: getTrace(3),
 		stack:    stack,
+		data:     &dataNode{id: makeNodeID(), vs: map[string]any{}},
 	}
 }
 
