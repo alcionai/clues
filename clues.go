@@ -245,7 +245,7 @@ func AddTrace(ctx context.Context) context.Context {
 // attach a new node.
 func AddTraceTo(ctx context.Context, namespace string) context.Context {
 	nc := from(ctx, ctxKey(namespace))
-	return set(ctx, nc.trace(""))
+	return setTo(ctx, namespace, nc.trace(""))
 }
 
 // AddTraceName stacks a clues node onto this context.  Adding a node ensures
@@ -266,7 +266,35 @@ func AddTraceName(ctx context.Context, name string) context.Context {
 // attach a new node.
 func AddTraceNameTo(ctx context.Context, name, namespace string) context.Context {
 	nc := from(ctx, ctxKey(namespace))
-	return set(ctx, nc.trace(name))
+	return setTo(ctx, namespace, nc.trace(name))
+}
+
+// AddWTraceName is a shorthand for calling Add(ctx, k, v) and
+// AddTraceName(ctx, "tn")
+func AddWTraceName(
+	ctx context.Context,
+	traceName string,
+	kvs ...any,
+) context.Context {
+	nc := from(ctx, defaultNamespace)
+	node := nc.add(normalize(kvs...))
+	node.id = traceName
+
+	return set(ctx, node)
+}
+
+// AddWTraceName is a shorthand for calling Add(ctx, k, v) and
+// AddTraceName(ctx, "tn")
+func AddWTraceNameTo(
+	ctx context.Context,
+	traceName, namespace string,
+	kvs ...any,
+) context.Context {
+	nc := from(ctx, ctxKey(namespace))
+	node := nc.add(normalize(kvs...))
+	node.id = traceName
+
+	return setTo(ctx, namespace, node)
 }
 
 // AddLabelCounter embeds an Adder interface into this context. Any already
