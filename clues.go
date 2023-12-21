@@ -283,8 +283,8 @@ func AddWTraceName(
 	return set(ctx, node)
 }
 
-// AddWTraceName is a shorthand for calling Add(ctx, k, v) and
-// AddTraceName(ctx, "tn")
+// AddWTraceName is a shorthand for calling AddTo(ctx, "ns", k, v) and
+// AddTraceNameTo(ctx, "tn", "ns")
 func AddWTraceNameTo(
 	ctx context.Context,
 	traceName, namespace string,
