@@ -260,56 +260,24 @@ func TestAddTraceName(t *testing.T) {
 		name        string
 		names       []string
 		expectTrace string
+		kvs         sa
 		expectM     msa
 		expectS     sa
 	}{
-		{"single", []string{"single"}, "single", msa{}, sa{}},
-		{"multiple", []string{"single", "multiple"}, "single,multiple", msa{}, sa{}},
-		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", msa{}, sa{}},
+		{"single", []string{"single"}, "single", nil, msa{}, sa{}},
+		{"multiple", []string{"single", "multiple"}, "single,multiple", nil, msa{}, sa{}},
+		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", nil, msa{}, sa{}},
+		{"single with kvs", []string{"single"}, "single", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
+		{"multiple with kvs", []string{"single", "multiple"}, "single,multiple", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
+		{"duplicates with kvs", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-			check := msa{}
-			mustEquals(t, check, clues.In(ctx).Map(), true)
+			mustEquals(t, msa{}, clues.In(ctx).Map(), true)
 
 			for _, name := range test.names {
-				ctx = clues.AddTraceName(ctx, name)
-			}
-
-			assert(
-				t, ctx, "",
-				test.expectM, msa{},
-				test.expectS, sa{})
-
-			c := clues.In(ctx).Map()
-			if c["clues_trace"] != test.expectTrace {
-				t.Errorf("expected clues_trace to equal %q, got %q", test.expectTrace, c["clues_trace"])
-			}
-		})
-	}
-}
-
-func TestAddWTraceName(t *testing.T) {
-	table := []struct {
-		name        string
-		names       []string
-		expectTrace string
-		expectM     msa
-		expectS     sa
-	}{
-		{"single", []string{"single"}, "single", msa{"k": "v"}, sa{"k", "v"}},
-		{"multiple", []string{"single", "multiple"}, "single,multiple", msa{"k": "v"}, sa{"k", "v"}},
-		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", msa{"k": "v"}, sa{"k", "v"}},
-	}
-	for _, test := range table {
-		t.Run(test.name, func(t *testing.T) {
-			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-			check := msa{}
-			mustEquals(t, check, clues.In(ctx).Map(), true)
-
-			for _, name := range test.names {
-				ctx = clues.AddWTraceName(ctx, name, "k", "v")
+				ctx = clues.AddTraceName(ctx, name, test.kvs...)
 			}
 
 			assert(
@@ -422,56 +390,24 @@ func TestAddTraceNameTo(t *testing.T) {
 		name        string
 		names       []string
 		expectTrace string
+		kvs         sa
 		expectM     msa
 		expectS     sa
 	}{
-		{"single", []string{"single"}, "single", msa{}, sa{}},
-		{"multiple", []string{"single", "multiple"}, "single,multiple", msa{}, sa{}},
-		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", msa{}, sa{}},
+		{"single", []string{"single"}, "single", nil, msa{}, sa{}},
+		{"multiple", []string{"single", "multiple"}, "single,multiple", nil, msa{}, sa{}},
+		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", nil, msa{}, sa{}},
+		{"single with kvs", []string{"single"}, "single", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
+		{"multiple with kvs", []string{"single", "multiple"}, "single,multiple", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
+		{"duplicates with kvs", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-			check := msa{}
-			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map(), true)
+			mustEquals(t, msa{}, clues.InNamespace(ctx, "ns").Map(), true)
 
 			for _, name := range test.names {
-				ctx = clues.AddTraceNameTo(ctx, name, "ns")
-			}
-
-			assert(
-				t, ctx, "ns",
-				msa{}, test.expectM,
-				sa{}, test.expectS)
-
-			c := clues.InNamespace(ctx, "ns").Map()
-			if c["clues_trace"] != test.expectTrace {
-				t.Errorf("expected clues_trace to equal %q, got %q", test.expectTrace, c["clues_trace"])
-			}
-		})
-	}
-}
-
-func TestAddWTraceNameTo(t *testing.T) {
-	table := []struct {
-		name        string
-		names       []string
-		expectTrace string
-		expectM     msa
-		expectS     sa
-	}{
-		{"single", []string{"single"}, "single", msa{"k": "v"}, sa{"k", "v"}},
-		{"multiple", []string{"single", "multiple"}, "single,multiple", msa{"k": "v"}, sa{"k", "v"}},
-		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", msa{"k": "v"}, sa{"k", "v"}},
-	}
-	for _, test := range table {
-		t.Run(test.name, func(t *testing.T) {
-			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-			check := msa{}
-			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map(), true)
-
-			for _, name := range test.names {
-				ctx = clues.AddWTraceNameTo(ctx, name, "ns", "k", "v")
+				ctx = clues.AddTraceNameTo(ctx, name, "ns", test.kvs...)
 			}
 
 			assert(

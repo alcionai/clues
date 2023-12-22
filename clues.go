@@ -60,9 +60,10 @@ func (dn *dataNode) trace(name string) *dataNode {
 	}
 
 	return &dataNode{
-		parent: dn,
-		id:     name,
-		vs:     map[string]any{},
+		parent:       dn,
+		id:           name,
+		vs:           map[string]any{},
+		labelCounter: dn.labelCounter,
 	}
 }
 
@@ -248,51 +249,44 @@ func AddTraceTo(ctx context.Context, namespace string) context.Context {
 	return setTo(ctx, namespace, nc.trace(""))
 }
 
-// AddTraceName stacks a clues node onto this context.  Adding a node ensures
-// that this point in code is identified by an ID, which can later be
-// used to correlate and isolate logs to certain trace branches.
-// AddTrace is only needed for layers that don't otherwise call Add() or
-// similar functions, since those funcs already attach a new node.
-func AddTraceName(ctx context.Context, name string) context.Context {
-	nc := from(ctx, defaultNamespace)
-	return set(ctx, nc.trace(name))
-}
-
-// AddTraceNameTo stacks a clues node onto this context within the specified
-// namespace.  Adding a node ensures that a point in code is identified
-// by an ID, which can later be used to correlate and isolate logs to
-// certain trace branches.  AddTraceTo is only needed for layers that don't
-// otherwise call AddTo() or similar functions, since those funcs already
-// attach a new node.
-func AddTraceNameTo(ctx context.Context, name, namespace string) context.Context {
-	nc := from(ctx, ctxKey(namespace))
-	return setTo(ctx, namespace, nc.trace(name))
-}
-
-// AddWTraceName is a shorthand for calling Add(ctx, k, v) and
-// AddTraceName(ctx, "tn")
-func AddWTraceName(
+// AddTraceName stacks a clues node onto this context and uses the provided
+// name for the trace id, instead of a randomly generated hash. AddTraceName
+// can be called without additional values if you only want to add a trace marker.
+func AddTraceName(
 	ctx context.Context,
-	traceName string,
+	name string,
 	kvs ...any,
 ) context.Context {
 	nc := from(ctx, defaultNamespace)
-	node := nc.add(normalize(kvs...))
-	node.id = traceName
+
+	var node *dataNode
+	if len(kvs) > 0 {
+		node = nc.add(normalize(kvs...))
+		node.id = name
+	} else {
+		node = nc.trace(name)
+	}
 
 	return set(ctx, node)
 }
 
-// AddWTraceName is a shorthand for calling AddTo(ctx, "ns", k, v) and
-// AddTraceNameTo(ctx, "tn", "ns")
-func AddWTraceNameTo(
+// AddTraceNameTo stacks a clues node onto this context and uses the provided
+// name for the trace id, instead of a randomly generated hash. AddTraceNameTo
+// can be called without additional values if you only want to add a trace marker.
+func AddTraceNameTo(
 	ctx context.Context,
-	traceName, namespace string,
+	name, namespace string,
 	kvs ...any,
 ) context.Context {
 	nc := from(ctx, ctxKey(namespace))
-	node := nc.add(normalize(kvs...))
-	node.id = traceName
+
+	var node *dataNode
+	if len(kvs) > 0 {
+		node = nc.add(normalize(kvs...))
+		node.id = name
+	} else {
+		node = nc.trace(name)
+	}
 
 	return setTo(ctx, namespace, node)
 }
