@@ -10,6 +10,106 @@ import (
 	"github.com/alcionai/clues"
 )
 
+type testingError struct{}
+
+func (e testingError) Error() string {
+	return "an error"
+}
+
+type testingErrorIface interface {
+	error
+}
+
+func TestStack(t *testing.T) {
+	table := []struct {
+		name      string
+		getErr    func() error
+		expectNil bool
+	}{
+		{
+			name: "SingleNil",
+			getErr: func() error {
+				return clues.Stack(nil).OrNil()
+			},
+			expectNil: true,
+		},
+		{
+			name: "DoubleNil",
+			getErr: func() error {
+				return clues.Stack(nil, nil).OrNil()
+			},
+			expectNil: true,
+		},
+		{
+			name: "TripleNil",
+			getErr: func() error {
+				return clues.Stack(nil, nil, nil).OrNil()
+			},
+			expectNil: true,
+		},
+		{
+			name: "StackNilNil",
+			getErr: func() error {
+				return clues.Stack(clues.Stack(nil), nil).OrNil()
+			},
+			expectNil: true,
+		},
+		{
+			name: "NilStackNilNil",
+			getErr: func() error {
+				return clues.Stack(nil, clues.Stack(nil), nil).OrNil()
+			},
+			expectNil: true,
+		},
+		{
+			name: "NilInterfaceError",
+			getErr: func() error {
+				var e testingErrorIface
+
+				return clues.Stack(nil, e, clues.Stack(nil)).OrNil()
+			},
+			expectNil: true,
+		},
+		{
+			name: "NonNilNonPointerInterfaceError",
+			getErr: func() error {
+				var e testingErrorIface = testingError{}
+
+				return clues.Stack(nil, e, clues.Stack(nil)).OrNil()
+			},
+			expectNil: false,
+		},
+		{
+			name: "NonNilNonPointerInterfaceError",
+			getErr: func() error {
+				var e testingErrorIface = &testingError{}
+
+				return clues.Stack(nil, e, clues.Stack(nil)).OrNil()
+			},
+			expectNil: false,
+		},
+		{
+			name: "NonPointerError",
+			getErr: func() error {
+				return clues.Stack(nil, testingError{}, clues.Stack(nil)).OrNil()
+			},
+			expectNil: false,
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.getErr()
+
+			if test.expectNil && err != nil {
+				t.Errorf("expected nil error but got: %+v\n", err)
+			} else if !test.expectNil && err == nil {
+				t.Error("expected non-nil error but got nil")
+			}
+		})
+	}
+}
+
 func TestLabel(t *testing.T) {
 	table := []struct {
 		name    string

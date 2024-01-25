@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -676,7 +677,11 @@ func WrapWC(ctx context.Context, err error, msg string) *Err {
 func Stack(errs ...error) *Err {
 	filtered := []error{}
 	for _, err := range errs {
-		if err != nil {
+		val := reflect.ValueOf(err)
+
+		if err != nil &&
+			!((val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface) &&
+				val.IsNil()) {
 			filtered = append(filtered, err)
 		}
 	}
