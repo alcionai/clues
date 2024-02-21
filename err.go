@@ -43,7 +43,7 @@ type Err struct {
 }
 
 func asErr(err error, msg string, m map[string]any) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -114,7 +114,7 @@ func getLabelCounter(e error) Adder {
 // ------------------------------------------------------------
 
 func (err *Err) HasLabel(label string) bool {
-	if err == nil {
+	if isNilErrIface(err) {
 		return false
 	}
 
@@ -126,7 +126,7 @@ func (err *Err) HasLabel(label string) bool {
 }
 
 func HasLabel(err error, label string) bool {
-	if err == nil {
+	if isNilErrIface(err) {
 		return false
 	}
 
@@ -138,7 +138,7 @@ func HasLabel(err error, label string) bool {
 }
 
 func (err *Err) Label(labels ...string) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -170,7 +170,7 @@ func Label(err error, label string) *Err {
 }
 
 func (err *Err) Labels() map[string]struct{} {
-	if err == nil {
+	if isNilErrIface(err) {
 		return map[string]struct{}{}
 	}
 
@@ -209,7 +209,7 @@ func Labels(err error) map[string]struct{} {
 // With adds every pair of values as a key,value pair to
 // the Err's data map.
 func (err *Err) With(kvs ...any) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -237,7 +237,7 @@ func With(err error, kvs ...any) *Err {
 // in a helper func and are not reporting the actual
 // error origin.
 func (err *Err) WithTrace(depth int) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -261,7 +261,7 @@ func (err *Err) WithTrace(depth int) *Err {
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
 func WithTrace(err error, depth int) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -281,7 +281,7 @@ func WithTrace(err error, depth int) *Err {
 
 // WithMap copies the map to the Err's data map.
 func (err *Err) WithMap(m map[string]any) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -311,7 +311,7 @@ func WithMap(err error, m map[string]any) *Err {
 // passed to the error.  WithClues must always be called first in
 // order to count labels.
 func (err *Err) WithClues(ctx context.Context) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -334,7 +334,7 @@ func (err *Err) WithClues(ctx context.Context) *Err {
 // passed to the error.  WithClues must always be called first in
 // order to count labels.
 func WithClues(err error, ctx context.Context) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -346,7 +346,7 @@ func WithClues(err error, ctx context.Context) *Err {
 // the end of error formatting chains to ensure a correct nil
 // return value.
 func (err *Err) OrNil() error {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -358,7 +358,7 @@ func (err *Err) OrNil() error {
 // maps are unioned. In case of collision, lower level error
 // data take least priority.
 func (err *Err) Values() *dataNode {
-	if err == nil {
+	if isNilErrIface(err) {
 		return &dataNode{vs: map[string]any{}}
 	}
 
@@ -366,7 +366,7 @@ func (err *Err) Values() *dataNode {
 }
 
 func (err *Err) values() map[string]any {
-	if err == nil {
+	if isNilErrIface(err) {
 		return map[string]any{}
 	}
 
@@ -387,7 +387,7 @@ func (err *Err) values() map[string]any {
 // unioned. In case of collision, lower level error data
 // take least priority.
 func InErr(err error) *dataNode {
-	if err == nil {
+	if isNilErrIface(err) {
 		return &dataNode{vs: map[string]any{}}
 	}
 
@@ -395,7 +395,7 @@ func InErr(err error) *dataNode {
 }
 
 func inErr(err error) map[string]any {
-	if err == nil {
+	if isNilErrIface(err) {
 		return map[string]any{}
 	}
 
@@ -413,7 +413,7 @@ func inErr(err error) map[string]any {
 var _ error = &Err{}
 
 func (err *Err) Error() string {
-	if err == nil {
+	if isNilErrIface(err) {
 		return "<nil>"
 	}
 
@@ -435,7 +435,7 @@ func (err *Err) Error() string {
 }
 
 func format(err error, s fmt.State, verb rune) {
-	if err == nil {
+	if isNilErrIface(err) {
 		return
 	}
 
@@ -450,7 +450,7 @@ func format(err error, s fmt.State, verb rune) {
 // For all formatting besides %+v, the error printout should closely
 // mimic that of err.Error().
 func formatReg(err *Err, s fmt.State, verb rune) {
-	if err == nil {
+	if isNilErrIface(err) {
 		return
 	}
 
@@ -474,7 +474,7 @@ func formatReg(err *Err, s fmt.State, verb rune) {
 // in %+v formatting, we output errors FIFO (ie, read from the
 // bottom of the stack first).
 func formatPlusV(err *Err, s fmt.State, verb rune) {
-	if err == nil {
+	if isNilErrIface(err) {
 		return
 	}
 
@@ -506,7 +506,7 @@ func formatPlusV(err *Err, s fmt.State, verb rune) {
 //
 //	%+v   Prints filename, function, and line number for each error in the stack.
 func (err *Err) Format(s fmt.State, verb rune) {
-	if err == nil {
+	if isNilErrIface(err) {
 		return
 	}
 
@@ -553,7 +553,7 @@ func write(
 // Stack() maintain multiple error pointers without failing the otherwise
 // linear errors.Is check.
 func (err *Err) Is(target error) bool {
-	if err == nil {
+	if isNilErrIface(err) {
 		return false
 	}
 
@@ -575,7 +575,7 @@ func (err *Err) Is(target error) bool {
 // Stack() maintain multiple error pointers without failing the otherwise
 // linear errors.As check.
 func (err *Err) As(target any) bool {
-	if err == nil {
+	if isNilErrIface(err) {
 		return false
 	}
 
@@ -602,7 +602,7 @@ func (err *Err) As(target any) bool {
 //
 // If the error does not implement Unwrap, returns the base error.
 func (err *Err) Unwrap() error {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -619,7 +619,7 @@ func (err *Err) Unwrap() error {
 //
 // If the error does not implement Unwrap, returns the error.
 func Unwrap(err error) error {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -651,7 +651,7 @@ func NewWC(ctx context.Context, msg string) *Err {
 
 // Wrap returns a clues.Err with a new message wrapping the old error.
 func Wrap(err error, msg string) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -661,7 +661,7 @@ func Wrap(err error, msg string) *Err {
 // WrapWC is equivalent to clues.Wrap(err, "msg").WithClues(ctx)
 // Wrap returns a clues.Err with a new message wrapping the old error.
 func WrapWC(ctx context.Context, err error, msg string) *Err {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -677,17 +677,14 @@ func WrapWC(ctx context.Context, err error, msg string) *Err {
 func Stack(errs ...error) *Err {
 	filtered := []error{}
 	for _, err := range errs {
-		val := reflect.ValueOf(err)
-
-		if err != nil &&
-			!((val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface) &&
-				val.IsNil()) {
+		if !isNilErrIface(err) {
 			filtered = append(filtered, err)
 		}
 	}
 
 	switch len(filtered) {
 	case 0:
+		fmt.Printf("\n-----\nALL NIL %+v\n-----\n", filtered)
 		return nil
 	case 1:
 		return toErr(filtered[0], "", nil)
@@ -706,6 +703,17 @@ func StackWC(ctx context.Context, errs ...error) *Err {
 	return stack.WithClues(ctx)
 }
 
+// returns true if the error is nil, or is a non-nil interface containing a nil value.
+func isNilErrIface(err error) bool {
+	if err == nil {
+		return true
+	}
+
+	val := reflect.ValueOf(err)
+
+	return ((val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface) && val.IsNil())
+}
+
 // ---------------------------------------------------------------------------
 // error core
 // ---------------------------------------------------------------------------
@@ -721,7 +729,7 @@ type ErrCore struct {
 // Core transforms the Err to an ErrCore, flattening all the errors in
 // the stack into a single struct.
 func (err *Err) Core() *ErrCore {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 
@@ -735,7 +743,7 @@ func (err *Err) Core() *ErrCore {
 // ToCore transforms the Err to an ErrCore, flattening all the errors in
 // the stack into a single struct
 func ToCore(err error) *ErrCore {
-	if err == nil {
+	if isNilErrIface(err) {
 		return nil
 	}
 

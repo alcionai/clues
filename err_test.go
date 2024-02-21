@@ -374,6 +374,19 @@ func TestUnwrap(t *testing.T) {
 	}
 }
 
+func TestWrapNilStackSlice(t *testing.T) {
+	// an empty slice of errors
+	sl := make([]error, 10)
+	// when stacked
+	st := clues.Stack(sl...)
+	// then wrapped
+	e := clues.Wrap(st, "wrapped")
+	// should contain nil
+	if e.OrNil() != nil {
+		t.Errorf("e.OrNil() <%+v> should be nil", e.OrNil())
+	}
+}
+
 func TestErr_Error(t *testing.T) {
 	sentinel := errors.New("sentinel")
 
