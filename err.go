@@ -684,7 +684,6 @@ func Stack(errs ...error) *Err {
 
 	switch len(filtered) {
 	case 0:
-		fmt.Printf("\n-----\nALL NIL %+v\n-----\n", filtered)
 		return nil
 	case 1:
 		return toErr(filtered[0], "", nil)
