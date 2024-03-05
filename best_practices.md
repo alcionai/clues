@@ -4,6 +4,11 @@ A guide for getting the most out of Clues.
 
 ## CTX
 
+The clues package can leverage golang's `context.Context` to pack in
+metadata that you can later retrieve for logging or observation.  These
+additions form a tree, so you're always safe to extend or replace existing
+state.
+
 ### Tracing
 
 Calling `AddTrace` or `AddTraceName` will append to an internal property
@@ -50,6 +55,13 @@ for _, user := range users {
 
 ## ERRORS
 
+Errors are the bottom-to-top metadata tracing counterpart to contexts.
+At minimum, they replicate the creation, wrapping, and stacking of
+errors.  You can also label clues errors for broad categorization and
+add key:value metadata sets, including the full set of clues embedded
+in a ctx value.
+
+
 ### Always Stack
 
 A single-error Stack ensures clues will append a stacktrace reference
@@ -66,13 +78,13 @@ if err != nil {
 
 ### With Ctx As Needed
 
-Clues doesn't automatically push the clues from a ctx into an error.  When
-you want to do that, you can either append to a clues error using WithClues(ctx),
-or call a constructor that includes the ctx.
+Clues doesn't automatically push the clues from a ctx into an error.
+When you want to do that, you can either append to a clues error using
+WithClues(ctx), or call a constructor that includes the ctx.
 
-While extracting errors from a ctx multiple times is a benign process, it
-isn't idiomatic, and you'll get the best results if you do it only once, at
-the beginning of the error chain.
+Although it's relatively benign to add the ctx at many different layers
+throughout the error return, it isn't idiomatic, and you'll get the best
+results if you do it only once: at the beginning of the error chain.
 
 ```go
 req, err := prepRequest()
@@ -135,13 +147,26 @@ clues.Stack(errByRespCode(resp.StatusCode), err)
 
 The best usage of labels is when you want to add _identifiable_ metadata
 to an error.  This is great for conditions where multiple different
-errors can be categorized as needing some specific handling, as that
-allows you to identify the condition without altering the error itself.
+errors can be flagged to get some specific handling.  This allows you
+to identify the condition without altering the error itself.
 
 ```go
+// example 1: 
+// doesn't matter what error took place, we want to end in a
+// certain process state as a categorical result
 for err := range processCh {
-    if clues.HasLabel(err, needsLogging) {
-        logger.With("err", clues.ToCore(err)).Error("processing work")
+    if clues.HasLabel(err, mustFailBackup) {
+       // set the backup state to 'failed' 
+    }
+}
+
+// example 2:
+// we can categorically ignore errors based on configuration. 
+for _, err := range processFailures {
+    for _, cat := range config.ignoreErrorCategories {
+        if clues.HasLabel(err, cat) {
+           processFailures.IgnoreError(err) 
+        }
     }
 }
 ```
