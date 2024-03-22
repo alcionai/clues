@@ -353,12 +353,16 @@ func TestValuePriority(t *testing.T) {
 			name: "lowest data wins",
 			err: func() error {
 				ctx := clues.Add(context.Background(), "in-ctx", 1)
-				err := clues.NewWC(ctx, "err").With("in-err", 1)
+				// the last addition to a ctx should take priority
 				ctx = clues.Add(ctx, "in-ctx", 2)
+
+				err := clues.NewWC(ctx, "err").With("in-err", 1)
+				// the first addition to an error should take priority
 				err = clues.StackWC(ctx, err).With("in-err", 2)
+
 				return err
 			}(),
-			expect: msa{"in-ctx": 1, "in-err": 1},
+			expect: msa{"in-ctx": 2, "in-err": 1},
 		},
 		{
 			name: "last stack wins",
@@ -372,9 +376,20 @@ func TestValuePriority(t *testing.T) {
 			}(),
 			expect: msa{"in-ctx": 1, "in-err": 1},
 		},
+		{
+			name: ".With wins over ctx",
+			err: func() error {
+				ctx := clues.Add(context.Background(), "k", 1)
+				err := clues.NewWC(ctx, "last in stack").With("k", 2)
+				return err
+			}(),
+			expect: msa{"k": 2},
+		},
 	}
 	for _, test := range table {
-		mustEquals(t, test.expect, clues.InErr(test.err).Map(), true)
+		t.Run(test.name, func(t *testing.T) {
+			mustEquals(t, test.expect, clues.InErr(test.err).Map(), true)
+		})
 	}
 }
 
