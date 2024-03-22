@@ -343,6 +343,56 @@ func TestWithClues(t *testing.T) {
 	}
 }
 
+func TestValuePriority(t *testing.T) {
+	table := []struct {
+		name   string
+		err    error
+		expect msa
+	}{
+		{
+			name: "lowest data wins",
+			err: func() error {
+				ctx := clues.Add(context.Background(), "in-ctx", 1)
+				// the last addition to a ctx should take priority
+				ctx = clues.Add(ctx, "in-ctx", 2)
+
+				err := clues.NewWC(ctx, "err").With("in-err", 1)
+				// the first addition to an error should take priority
+				err = clues.StackWC(ctx, err).With("in-err", 2)
+
+				return err
+			}(),
+			expect: msa{"in-ctx": 2, "in-err": 1},
+		},
+		{
+			name: "last stack wins",
+			err: func() error {
+				ctx := clues.Add(context.Background(), "in-ctx", 1)
+				err := clues.NewWC(ctx, "last in stack").With("in-err", 1)
+				err = clues.Stack(
+					clues.New("first in stack").With("in-err", 2),
+					err)
+				return err
+			}(),
+			expect: msa{"in-ctx": 1, "in-err": 1},
+		},
+		{
+			name: ".With wins over ctx",
+			err: func() error {
+				ctx := clues.Add(context.Background(), "k", 1)
+				err := clues.NewWC(ctx, "last in stack").With("k", 2)
+				return err
+			}(),
+			expect: msa{"k": 2},
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			mustEquals(t, test.expect, clues.InErr(test.err).Map(), true)
+		})
+	}
+}
+
 func TestUnwrap(t *testing.T) {
 	e := errors.New("cause")
 	we := clues.Wrap(e, "outer")
@@ -505,7 +555,7 @@ func TestErrValues_stacks(t *testing.T) {
 				clues.New("mid").With("k2", "v2"),
 				clues.New("base").With("k", "v3"),
 			),
-			expect: msa{"k": "v", "k2": "v2"},
+			expect: msa{"k": "v3", "k2": "v2"},
 		},
 		{
 			name: "double double",
@@ -539,7 +589,7 @@ func TestErrValues_stacks(t *testing.T) {
 				),
 			),
 			expect: msa{
-				"k":  "v",
+				"k":  "v4",
 				"k2": "v2",
 				"k3": "v3",
 			},
@@ -584,7 +634,7 @@ func TestErrValues_stacks(t *testing.T) {
 					"right-stack"),
 			),
 			expect: msa{
-				"k":  "v",
+				"k":  "v4",
 				"k2": "v2",
 				"k3": "v3",
 			},

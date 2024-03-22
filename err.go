@@ -371,13 +371,12 @@ func (err *Err) values() map[string]any {
 	}
 
 	vals := map[string]any{}
+	maps.Copy(vals, err.data.Map())
+	maps.Copy(vals, inErr(err.e))
 
 	for _, se := range err.stack {
 		maps.Copy(vals, inErr(se))
 	}
-
-	maps.Copy(vals, inErr(err.e))
-	maps.Copy(vals, err.data.Map())
 
 	return vals
 }
