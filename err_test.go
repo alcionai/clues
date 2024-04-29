@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"golang.org/x/exp/maps"
 
 	"github.com/alcionai/clues"
 )
@@ -105,6 +106,43 @@ func TestStack(t *testing.T) {
 				t.Errorf("expected nil error but got: %+v\n", err)
 			} else if !test.expectNil && err == nil {
 				t.Error("expected non-nil error but got nil")
+			}
+		})
+	}
+}
+
+func TestHasLabel(t *testing.T) {
+	const label = "some-label"
+
+	table := []struct {
+		name    string
+		initial error
+	}{
+		{
+			name: "multiple stacked clues errors with label on first",
+			initial: clues.Stack(
+				clues.New("Labeled").Label(label),
+				clues.New("NotLabeled")),
+		},
+		{
+			name: "multiple stacked clues errors with label on second",
+			initial: clues.Stack(
+				clues.New("NotLabeled"),
+				clues.New("Labeled").Label(label)),
+		},
+		{
+			name:    "single stacked clues error with label",
+			initial: clues.Stack(clues.New("Labeled").Label(label)),
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			if !clues.HasLabel(test.initial, label) {
+				t.Errorf(
+					"expected error to have label [%s] but got %v",
+					label,
+					maps.Keys(clues.Labels(test.initial)))
 			}
 		})
 	}

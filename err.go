@@ -118,7 +118,10 @@ func (err *Err) HasLabel(label string) bool {
 		return false
 	}
 
-	if _, ok := err.labels[label]; ok {
+	// Check all labels in the error and it's stack since the stack isn't
+	// traversed separately. If we don't check the stacked labels here we'll skip
+	// checking them completely.
+	if _, ok := err.Labels()[label]; ok {
 		return true
 	}
 
