@@ -1311,11 +1311,11 @@ func TestWithTrace(t *testing.T) {
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
 			expectWrapped: plusRE(
 				`an error\n`, `err_test.go:\d+\n`,
-				`wrap\n`, `err_test.go:\d+$`),
+				`wrap\n`, `err_fmt_test.go:\d+$`),
 			expectStacked: plusRE(
 				`an error\n`, `err_test.go:\d+\n`,
 				`an error\n`, `err_test.go:\d+\n`,
-				``, `err_test.go:\d+$`),
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "error 0",
@@ -1325,11 +1325,11 @@ func TestWithTrace(t *testing.T) {
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
 			expectWrapped: plusRE(
 				`an error\n`, `err_test.go:\d+\n`,
-				`wrap\n`, `err_test.go:\d+$`),
+				`wrap\n`, `err_fmt_test.go:\d+$`),
 			expectStacked: plusRE(
 				`an error\n`, `err_test.go:\d+\n`,
 				`an error\n`, `err_test.go:\d+\n`,
-				``, `err_test.go:\d+$`),
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "error 1",
@@ -1367,11 +1367,11 @@ func TestWithTrace(t *testing.T) {
 			expect: plusRE(`an error\n`, `testing/testing.go:\d+$`),
 			expectWrapped: plusRE(
 				`an error\n`, `testing/testing.go:\d+\n`,
-				`wrap\n`, `testing/testing.go:\d+$`),
+				`wrap\n`, `err_fmt_test.go:\d+$`),
 			expectStacked: plusRE(
 				`an error\n`, `testing/testing.go:\d+\n`,
 				`an error\n`, `testing/testing.go:\d+\n`,
-				``, `testing/testing.go:\d+$`),
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "error 4",
@@ -1381,25 +1381,35 @@ func TestWithTrace(t *testing.T) {
 			expect: plusRE(`an error\n`, `runtime/.*:\d+$`),
 			expectWrapped: plusRE(
 				`an error\n`, `runtime/.*:\d+\n`,
-				`wrap\n`, `runtime/.*:\d+$`),
+				`wrap\n`, `err_fmt_test.go:\d+$`),
 			expectStacked: plusRE(
 				`an error\n`, `runtime/.*:\d+\n`,
 				`an error\n`, `runtime/.*:\d+\n`,
-				``, `runtime/.*:\d+$`),
+				``, `err_fmt_test.go:\d+$`),
 		},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			checkFmt{"%+v", "", regexp.MustCompile(test.expect)}.
-				check(t, test.tracer(cluErr))
-			checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
-				check(t, test.tracer(clues.WrapWC(context.Background(), cluErr, "wrap")))
-			checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
-				check(t, test.tracer(clues.Wrap(cluErr, "wrap")))
-			checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
-				check(t, test.tracer(clues.StackWC(context.Background(), cluErr, cluErr)))
-			checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
-				check(t, test.tracer(clues.Stack(cluErr, cluErr)))
+			t.Run("plain error", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expect)}.
+					check(t, test.tracer(cluErr))
+			})
+			t.Run("wrapWC", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+					check(t, clues.WrapWC(context.Background(), test.tracer(cluErr), "wrap"))
+			})
+			t.Run("wrap", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+					check(t, clues.Wrap(test.tracer(cluErr), "wrap"))
+			})
+			t.Run("stackWC", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+					check(t, clues.StackWC(context.Background(), cluErr, test.tracer(cluErr)))
+			})
+			t.Run("stack", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+					check(t, clues.Stack(cluErr, test.tracer(cluErr)))
+			})
 		})
 	}
 	table2 := []struct {
@@ -1417,11 +1427,11 @@ func TestWithTrace(t *testing.T) {
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
 			expectWrapped: plusRE(
 				`an error\n`, `err_test.go:\d+\n`,
-				`wrap\n`, `err_test.go:\d+$`),
+				`wrap\n`, `err_fmt_test.go:\d+$`),
 			expectStacked: plusRE(
 				`an error\n`, `err_test.go:\d+\n`,
 				`an error\n`, `err_test.go:\d+\n`,
-				``, `err_test.go:\d+$`),
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "clues.Err 0",
@@ -1431,11 +1441,11 @@ func TestWithTrace(t *testing.T) {
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
 			expectWrapped: plusRE(
 				`an error\n`, `err_test.go:\d+\n`,
-				`wrap\n`, `err_test.go:\d+$`),
+				`wrap\n`, `err_fmt_test.go:\d+$`),
 			expectStacked: plusRE(
 				`an error\n`, `err_test.go:\d+\n`,
 				`an error\n`, `err_test.go:\d+\n`,
-				``, `err_test.go:\d+$`),
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "clues.Err 1",
@@ -1473,11 +1483,11 @@ func TestWithTrace(t *testing.T) {
 			expect: plusRE(`an error\n`, `testing/testing.go:\d+$`),
 			expectWrapped: plusRE(
 				`an error\n`, `testing/testing.go:\d+\n`,
-				`wrap\n`, `testing/testing.go:\d+$`),
+				`wrap\n`, `err_fmt_test.go:\d+$`),
 			expectStacked: plusRE(
 				`an error\n`, `testing/testing.go:\d+\n`,
 				`an error\n`, `testing/testing.go:\d+\n`,
-				``, `testing/testing.go:\d+$`),
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "clues.Err 4",
@@ -1487,25 +1497,35 @@ func TestWithTrace(t *testing.T) {
 			expect: plusRE(`an error\n`, `runtime/.*:\d+$`),
 			expectWrapped: plusRE(
 				`an error\n`, `runtime/.*:\d+\n`,
-				`wrap\n`, `runtime/.*:\d+$`),
+				`wrap\n`, `err_fmt_test.go:\d+$`),
 			expectStacked: plusRE(
 				`an error\n`, `runtime/.*:\d+\n`,
 				`an error\n`, `runtime/.*:\d+\n`,
-				``, `runtime/.*:\d+$`),
+				``, `err_fmt_test.go:\d+$`),
 		},
 	}
 	for _, test := range table2 {
 		t.Run(test.name, func(t *testing.T) {
-			checkFmt{"%+v", "", regexp.MustCompile(test.expect)}.
-				check(t, test.tracer(cluErr))
-			checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
-				check(t, test.tracer(clues.WrapWC(context.Background(), cluErr, "wrap")))
-			checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
-				check(t, test.tracer(clues.Wrap(cluErr, "wrap")))
-			checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
-				check(t, test.tracer(clues.StackWC(context.Background(), cluErr, cluErr)))
-			checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
-				check(t, test.tracer(clues.Stack(cluErr, cluErr)))
+			t.Run("plain error", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expect)}.
+					check(t, test.tracer(cluErr))
+			})
+			t.Run("wrapWC", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+					check(t, clues.WrapWC(context.Background(), test.tracer(cluErr), "wrap"))
+			})
+			t.Run("wrap", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+					check(t, clues.Wrap(test.tracer(cluErr), "wrap"))
+			})
+			t.Run("stackWC", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+					check(t, clues.StackWC(context.Background(), cluErr, test.tracer(cluErr)))
+			})
+			t.Run("stack", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+					check(t, clues.Stack(cluErr, test.tracer(cluErr)))
+			})
 		})
 	}
 }

@@ -42,39 +42,39 @@ type Err struct {
 	data *dataNode
 }
 
-func asErr(err error, msg string, m map[string]any) *Err {
+func asErr(err error, msg string, m map[string]any, traceDepth int) *Err {
 	if isNilErrIface(err) {
 		return nil
 	}
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = toErr(err, msg, m)
+		e = toErr(err, msg, m, traceDepth+1)
 	}
 
 	return e
 }
 
-func toErr(e error, msg string, m map[string]any) *Err {
+func toErr(e error, msg string, m map[string]any, traceDepth int) *Err {
 	return &Err{
 		e:        e,
-		location: getTrace(3),
+		location: getTrace(traceDepth + 1),
 		msg:      msg,
 		data:     &dataNode{id: makeNodeID(), vs: m},
 	}
 }
 
-func toStack(e error, stack []error) *Err {
+func toStack(e error, stack []error, traceDepth int) *Err {
 	return &Err{
 		e:        e,
-		location: getTrace(3),
+		location: getTrace(traceDepth + 1),
 		stack:    stack,
 		data:     &dataNode{id: makeNodeID(), vs: map[string]any{}},
 	}
 }
 
 func getTrace(depth int) string {
-	_, file, line, _ := runtime.Caller(depth)
+	_, file, line, _ := runtime.Caller(depth + 1)
 	return fmt.Sprintf("%s:%d", file, line)
 }
 
@@ -169,7 +169,7 @@ func (err *Err) Label(labels ...string) *Err {
 }
 
 func Label(err error, label string) *Err {
-	return asErr(err, "", nil).Label(label)
+	return asErr(err, "", nil, 1).Label(label)
 }
 
 func (err *Err) Labels() map[string]struct{} {
@@ -228,7 +228,7 @@ func (err *Err) With(kvs ...any) *Err {
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
 func With(err error, kvs ...any) *Err {
-	return asErr(err, "", nil).With(kvs...)
+	return asErr(err, "", nil, 1).With(kvs...)
 }
 
 // WithTrace sets the error trace to a certain depth.
@@ -248,7 +248,7 @@ func (err *Err) WithTrace(depth int) *Err {
 		depth = 0
 	}
 
-	err.location = getTrace(depth + 2)
+	err.location = getTrace(depth + 1)
 
 	return err
 }
@@ -268,15 +268,15 @@ func WithTrace(err error, depth int) *Err {
 		return nil
 	}
 
-	e, ok := err.(*Err)
-	if !ok {
-		return toErr(err, "", map[string]any{})
-	}
-
 	// needed both here and in withTrace() to
 	// correct for the extra call depth.
 	if depth < 0 {
 		depth = 0
+	}
+
+	e, ok := err.(*Err)
+	if !ok {
+		return toErr(err, "", map[string]any{}, depth+1)
 	}
 
 	return e.WithTrace(depth + 1)
@@ -299,7 +299,7 @@ func (err *Err) WithMap(m map[string]any) *Err {
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
 func WithMap(err error, m map[string]any) *Err {
-	return asErr(err, "", m).WithMap(m)
+	return asErr(err, "", m, 1).WithMap(m)
 }
 
 // WithClues is syntactical-sugar that assumes you're using
@@ -643,12 +643,12 @@ func Unwrap(err error) error {
 // ------------------------------------------------------------
 
 func New(msg string) *Err {
-	return toErr(nil, msg, nil)
+	return toErr(nil, msg, nil, 1)
 }
 
 // NewWC is equivalent to clues.New("msg").WithClues(ctx)
 func NewWC(ctx context.Context, msg string) *Err {
-	return toErr(nil, msg, nil).WithClues(ctx)
+	return toErr(nil, msg, nil, 1).WithClues(ctx)
 }
 
 // Wrap returns a clues.Err with a new message wrapping the old error.
@@ -657,7 +657,7 @@ func Wrap(err error, msg string) *Err {
 		return nil
 	}
 
-	return toErr(err, msg, nil)
+	return toErr(err, msg, nil, 1)
 }
 
 // WrapWC is equivalent to clues.Wrap(err, "msg").WithClues(ctx)
@@ -667,7 +667,7 @@ func WrapWC(ctx context.Context, err error, msg string) *Err {
 		return nil
 	}
 
-	return Wrap(err, msg).WithClues(ctx)
+	return toErr(err, msg, nil, 1).WithClues(ctx)
 }
 
 // Stack returns the error as a clues.Err.  If additional errors are
@@ -677,6 +677,21 @@ func WrapWC(ctx context.Context, err error, msg string) *Err {
 //
 // Ex: Stack(sentinel, errors.New("base")).Error() => "sentinel: base"
 func Stack(errs ...error) *Err {
+	return makeStack(1, errs...)
+}
+
+// StackWC is equivalent to clues.Stack(errs...).WithClues(ctx)
+func StackWC(ctx context.Context, errs ...error) *Err {
+	err := makeStack(1, errs...)
+
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	return err.WithClues(ctx)
+}
+
+func makeStack(traceDepth int, errs ...error) *Err {
 	filtered := []error{}
 	for _, err := range errs {
 		if !isNilErrIface(err) {
@@ -688,20 +703,10 @@ func Stack(errs ...error) *Err {
 	case 0:
 		return nil
 	case 1:
-		return toErr(filtered[0], "", nil)
+		return toErr(filtered[0], "", nil, traceDepth+1)
 	}
 
-	return toStack(filtered[0], filtered[1:])
-}
-
-// StackWC is equivalent to clues.Stack(errs...).WithClues(ctx)
-func StackWC(ctx context.Context, errs ...error) *Err {
-	stack := Stack(errs...)
-	if stack == nil {
-		return nil
-	}
-
-	return stack.WithClues(ctx)
+	return toStack(filtered[0], filtered[1:], traceDepth+1)
 }
 
 // returns true if the error is nil, or is a non-nil interface containing a nil value.
@@ -750,7 +755,7 @@ func ToCore(err error) *ErrCore {
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = toErr(err, "", nil)
+		e = toErr(err, "", nil, 1)
 	}
 
 	return e.Core()
