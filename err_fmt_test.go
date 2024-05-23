@@ -1,6 +1,7 @@
 package clues_test
 
 import (
+	"context"
 	stderr "errors"
 	"fmt"
 	"regexp"
@@ -1296,9 +1297,11 @@ func TestFmt_nestedFuncs(t *testing.T) {
 
 func TestWithTrace(t *testing.T) {
 	table := []struct {
-		name   string
-		tracer func(err error) error
-		expect string
+		name          string
+		tracer        func(err error) error
+		expect        string
+		expectWrapped string
+		expectStacked string
 	}{
 		{
 			name: "error -1",
@@ -1306,6 +1309,13 @@ func TestWithTrace(t *testing.T) {
 				return withTraceWrapper(err, -1)
 			},
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `err_test.go:\d+\n`,
+				`wrap\n`, `err_test.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `err_test.go:\d+\n`,
+				`an error\n`, `err_test.go:\d+\n`,
+				``, `err_test.go:\d+$`),
 		},
 		{
 			name: "error 0",
@@ -1313,6 +1323,13 @@ func TestWithTrace(t *testing.T) {
 				return withTraceWrapper(err, 0)
 			},
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `err_test.go:\d+\n`,
+				`wrap\n`, `err_test.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `err_test.go:\d+\n`,
+				`an error\n`, `err_test.go:\d+\n`,
+				``, `err_test.go:\d+$`),
 		},
 		{
 			name: "error 1",
@@ -1320,6 +1337,13 @@ func TestWithTrace(t *testing.T) {
 				return withTraceWrapper(err, 1)
 			},
 			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				`wrap\n`, `err_fmt_test.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "error 2",
@@ -1327,6 +1351,13 @@ func TestWithTrace(t *testing.T) {
 				return withTraceWrapper(err, 2)
 			},
 			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				`wrap\n`, `err_fmt_test.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "error 3",
@@ -1334,6 +1365,13 @@ func TestWithTrace(t *testing.T) {
 				return withTraceWrapper(err, 3)
 			},
 			expect: plusRE(`an error\n`, `testing/testing.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `testing/testing.go:\d+\n`,
+				`wrap\n`, `testing/testing.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `testing/testing.go:\d+\n`,
+				`an error\n`, `testing/testing.go:\d+\n`,
+				``, `testing/testing.go:\d+$`),
 		},
 		{
 			name: "error 4",
@@ -1341,18 +1379,35 @@ func TestWithTrace(t *testing.T) {
 				return withTraceWrapper(err, 4)
 			},
 			expect: plusRE(`an error\n`, `runtime/.*:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `runtime/.*:\d+\n`,
+				`wrap\n`, `runtime/.*:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `runtime/.*:\d+\n`,
+				`an error\n`, `runtime/.*:\d+\n`,
+				``, `runtime/.*:\d+$`),
 		},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			checkFmt{"%+v", "", regexp.MustCompile(test.expect)}.
 				check(t, test.tracer(cluErr))
+			checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+				check(t, test.tracer(clues.WrapWC(context.Background(), cluErr, "wrap")))
+			checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+				check(t, test.tracer(clues.Wrap(cluErr, "wrap")))
+			checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+				check(t, test.tracer(clues.StackWC(context.Background(), cluErr, cluErr)))
+			checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+				check(t, test.tracer(clues.Stack(cluErr, cluErr)))
 		})
 	}
 	table2 := []struct {
-		name   string
-		tracer func(err *clues.Err) error
-		expect string
+		name          string
+		tracer        func(err *clues.Err) error
+		expect        string
+		expectWrapped string
+		expectStacked string
 	}{
 		{
 			name: "clues.Err -1",
@@ -1360,6 +1415,13 @@ func TestWithTrace(t *testing.T) {
 				return cluesWithTraceWrapper(err, -1)
 			},
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `err_test.go:\d+\n`,
+				`wrap\n`, `err_test.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `err_test.go:\d+\n`,
+				`an error\n`, `err_test.go:\d+\n`,
+				``, `err_test.go:\d+$`),
 		},
 		{
 			name: "clues.Err 0",
@@ -1367,6 +1429,13 @@ func TestWithTrace(t *testing.T) {
 				return cluesWithTraceWrapper(err, 0)
 			},
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `err_test.go:\d+\n`,
+				`wrap\n`, `err_test.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `err_test.go:\d+\n`,
+				`an error\n`, `err_test.go:\d+\n`,
+				``, `err_test.go:\d+$`),
 		},
 		{
 			name: "clues.Err 1",
@@ -1374,6 +1443,13 @@ func TestWithTrace(t *testing.T) {
 				return cluesWithTraceWrapper(err, 1)
 			},
 			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				`wrap\n`, `err_fmt_test.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "clues.Err 2",
@@ -1381,6 +1457,13 @@ func TestWithTrace(t *testing.T) {
 				return cluesWithTraceWrapper(err, 2)
 			},
 			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				`wrap\n`, `err_fmt_test.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				`an error\n`, `err_fmt_test.go:\d+\n`,
+				``, `err_fmt_test.go:\d+$`),
 		},
 		{
 			name: "clues.Err 3",
@@ -1388,6 +1471,13 @@ func TestWithTrace(t *testing.T) {
 				return cluesWithTraceWrapper(err, 3)
 			},
 			expect: plusRE(`an error\n`, `testing/testing.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `testing/testing.go:\d+\n`,
+				`wrap\n`, `testing/testing.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `testing/testing.go:\d+\n`,
+				`an error\n`, `testing/testing.go:\d+\n`,
+				``, `testing/testing.go:\d+$`),
 		},
 		{
 			name: "clues.Err 4",
@@ -1395,12 +1485,27 @@ func TestWithTrace(t *testing.T) {
 				return cluesWithTraceWrapper(err, 4)
 			},
 			expect: plusRE(`an error\n`, `runtime/.*:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, `runtime/.*:\d+\n`,
+				`wrap\n`, `runtime/.*:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, `runtime/.*:\d+\n`,
+				`an error\n`, `runtime/.*:\d+\n`,
+				``, `runtime/.*:\d+$`),
 		},
 	}
 	for _, test := range table2 {
 		t.Run(test.name, func(t *testing.T) {
 			checkFmt{"%+v", "", regexp.MustCompile(test.expect)}.
 				check(t, test.tracer(cluErr))
+			checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+				check(t, test.tracer(clues.WrapWC(context.Background(), cluErr, "wrap")))
+			checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+				check(t, test.tracer(clues.Wrap(cluErr, "wrap")))
+			checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+				check(t, test.tracer(clues.StackWC(context.Background(), cluErr, cluErr)))
+			checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+				check(t, test.tracer(clues.Stack(cluErr, cluErr)))
 		})
 	}
 }
