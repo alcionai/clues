@@ -678,7 +678,7 @@ func TestAddComment_trace(t *testing.T) {
 	stack := comments.String()
 	expected := commentRE(
 		"TestAddComment_trace", "clues_test.go", "one",
-		"addCommentTo", "clues_test.go", "two",
+		"addCommentToCtx", "clues_test.go", "two",
 		"TestAddComment_trace", "clues_test.go", `three$`)
 
 	commentMatches(t, expected, stack)
