@@ -862,9 +862,10 @@ func isNilErrIface(err error) bool {
 // ErrCore is a minimized version of an Err{}.  Primarily intended for
 // serializing a flattened version of the error stack
 type ErrCore struct {
-	Msg    string              `json:"msg"`
-	Labels map[string]struct{} `json:"labels"`
-	Values map[string]any      `json:"values"`
+	Msg      string              `json:"msg"`
+	Labels   map[string]struct{} `json:"labels"`
+	Values   map[string]any      `json:"values"`
+	Comments comments            `json:"comments"`
 }
 
 // Core transforms the Err to an ErrCore, flattening all the errors in
@@ -875,9 +876,10 @@ func (err *Err) Core() *ErrCore {
 	}
 
 	return &ErrCore{
-		Msg:    err.Error(),
-		Labels: err.Labels(),
-		Values: err.values(),
+		Msg:      err.Error(),
+		Labels:   err.Labels(),
+		Values:   err.values(),
+		Comments: err.Comments(),
 	}
 }
 
@@ -915,8 +917,15 @@ func (ec *ErrCore) stringer(fancy bool) string {
 
 	vs := strings.Join(vsl, sep)
 
+	csl := []string{}
+	for _, c := range ec.Comments {
+		csl = append(csl, c.Caller+" - "+c.File+" - "+c.Message)
+	}
+
+	cs := strings.Join(csl, sep)
+
 	if fancy {
-		return `{msg:"` + ec.Msg + `", labels:[` + ls + `], values:{` + vs + `}}`
+		return `{msg:"` + ec.Msg + `", labels:[` + ls + `], values:{` + vs + `}, comments:[` + cs + `]}`
 	}
 
 	s := []string{}
@@ -931,6 +940,10 @@ func (ec *ErrCore) stringer(fancy bool) string {
 
 	if len(vs) > 0 {
 		s = append(s, "{"+vs+"}")
+	}
+
+	if len(cs) > 0 {
+		s = append(s, "["+cs+"]")
 	}
 
 	return "{" + strings.Join(s, ", ") + "}"
