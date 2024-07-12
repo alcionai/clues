@@ -1420,7 +1420,7 @@ func TestWithTrace(t *testing.T) {
 		expectStacked string
 	}{
 		{
-			name: "clues.Err -1",
+			name: "clues.Err 1",
 			tracer: func(err *clues.Err) error {
 				return cluesWithTraceWrapper(err, -1)
 			},
@@ -1525,6 +1525,141 @@ func TestWithTrace(t *testing.T) {
 			t.Run("stack", func(t *testing.T) {
 				checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
 					check(t, clues.Stack(cluErr, test.tracer(cluErr)))
+			})
+		})
+	}
+}
+
+func TestWithComment(t *testing.T) {
+	table := []struct {
+		name          string
+		commenter     func(err error) error
+		expect        string
+		expectWrapped string
+		expectStacked string
+	}{
+		{
+			name: "error flat comment",
+			commenter: func(err error) error {
+				return withCommentWrapper(err, "fisher")
+			},
+			expect: commentRE(
+				`withCommentWrapper`, `err_test.go`, `fisher`,
+				`withCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+			expectWrapped: commentRE(
+				`withCommentWrapper`, `err_test.go`, `fisher`,
+				`withCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+			expectStacked: commentRE(
+				`withCommentWrapper`, `err_test.go`, `fisher`,
+				`withCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+		},
+		{
+			name: "error formatted comment",
+			commenter: func(err error) error {
+				return withCommentWrapper(err, "%d", 42)
+			},
+			expect: commentRE(
+				`withCommentWrapper`, `err_test.go`, `42`,
+				`withCommentWrapper`, `err_test.go`, `42 - repeat$`),
+			expectWrapped: commentRE(
+				`withCommentWrapper`, `err_test.go`, `42`,
+				`withCommentWrapper`, `err_test.go`, `42 - repeat$`),
+			expectStacked: commentRE(
+				`withCommentWrapper`, `err_test.go`, `42`,
+				`withCommentWrapper`, `err_test.go`, `42 - repeat$`),
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			t.Run("plain error", func(t *testing.T) {
+				comments := clues.Comments(test.commenter(cluErr)).String()
+				commentMatches(t, test.expect, comments)
+			})
+			t.Run("wrapWC", func(t *testing.T) {
+				err := clues.WrapWC(context.Background(), test.commenter(cluErr), "wrap")
+				comments := clues.Comments(err).String()
+				commentMatches(t, test.expectWrapped, comments)
+			})
+			t.Run("wrap", func(t *testing.T) {
+				err := clues.Wrap(test.commenter(cluErr), "wrap")
+				comments := clues.Comments(err).String()
+				commentMatches(t, test.expectWrapped, comments)
+			})
+			t.Run("stackWC", func(t *testing.T) {
+				err := clues.StackWC(context.Background(), cluErr, test.commenter(cluErr))
+				comments := clues.Comments(err).String()
+				commentMatches(t, test.expectStacked, comments)
+			})
+			t.Run("stack", func(t *testing.T) {
+				err := clues.Stack(cluErr, test.commenter(cluErr))
+				comments := clues.Comments(err).String()
+				commentMatches(t, test.expectStacked, comments)
+			})
+		})
+	}
+	table2 := []struct {
+		name          string
+		commenter     func(err *clues.Err) error
+		expect        string
+		expectWrapped string
+		expectStacked string
+	}{
+		{
+			name: "clues.Err flat comment",
+			commenter: func(err *clues.Err) error {
+				return cluesWithCommentWrapper(err, "fisher")
+			},
+			expect: commentRE(
+				`cluesWithCommentWrapper`, `err_test.go`, `fisher`,
+				`cluesWithCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+			expectWrapped: commentRE(
+				`cluesWithCommentWrapper`, `err_test.go`, `fisher`,
+				`cluesWithCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+			expectStacked: commentRE(
+				`cluesWithCommentWrapper`, `err_test.go`, `fisher`,
+				`cluesWithCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+		},
+		{
+			name: "clues.Err formatted comment",
+			commenter: func(err *clues.Err) error {
+				return cluesWithCommentWrapper(err, "%d", 42)
+			},
+			expect: commentRE(
+				`cluesWithCommentWrapper`, `err_test.go`, `42`,
+				`cluesWithCommentWrapper`, `err_test.go`, `42 - repeat$`),
+			expectWrapped: commentRE(
+				`cluesWithCommentWrapper`, `err_test.go`, `42`,
+				`cluesWithCommentWrapper`, `err_test.go`, `42 - repeat$`),
+			expectStacked: commentRE(
+				`cluesWithCommentWrapper`, `err_test.go`, `42`,
+				`cluesWithCommentWrapper`, `err_test.go`, `42 - repeat$`),
+		},
+	}
+	for _, test := range table2 {
+		t.Run(test.name, func(t *testing.T) {
+			t.Run("plain error", func(t *testing.T) {
+				comments := clues.Comments(test.commenter(cluErr)).String()
+				commentMatches(t, test.expect, comments)
+			})
+			t.Run("wrapWC", func(t *testing.T) {
+				err := clues.WrapWC(context.Background(), test.commenter(cluErr), "wrap")
+				comments := clues.Comments(err).String()
+				commentMatches(t, test.expectWrapped, comments)
+			})
+			t.Run("wrap", func(t *testing.T) {
+				err := clues.Wrap(test.commenter(cluErr), "wrap")
+				comments := clues.Comments(err).String()
+				commentMatches(t, test.expectWrapped, comments)
+			})
+			t.Run("stackWC", func(t *testing.T) {
+				err := clues.StackWC(context.Background(), cluErr, test.commenter(cluErr))
+				comments := clues.Comments(err).String()
+				commentMatches(t, test.expectStacked, comments)
+			})
+			t.Run("stack", func(t *testing.T) {
+				err := clues.Stack(cluErr, test.commenter(cluErr))
+				comments := clues.Comments(err).String()
+				commentMatches(t, test.expectStacked, comments)
 			})
 		})
 	}

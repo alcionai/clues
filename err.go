@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"reflect"
 	"runtime"
 	"strings"
@@ -76,6 +77,23 @@ func toStack(e error, stack []error, traceDepth int) *Err {
 func getTrace(depth int) string {
 	_, file, line, _ := runtime.Caller(depth + 1)
 	return fmt.Sprintf("%s:%d", file, line)
+}
+
+func getCaller(depth int) string {
+	pc, _, _, ok := runtime.Caller(depth + 1)
+	if !ok {
+		return ""
+	}
+
+	funcPath := runtime.FuncForPC(pc).Name()
+	base := path.Base(funcPath)
+	parts := strings.Split(base, ".")
+
+	if len(parts) < 2 {
+		return base
+	}
+
+	return parts[len(parts)-1]
 }
 
 func getLabelCounter(e error) Adder {
@@ -344,6 +362,58 @@ func WithClues(err error, ctx context.Context) *Err {
 	return WithMap(err, In(ctx).Map())
 }
 
+// Comments are special case additions to the error.  They're here to, well,
+// let you add comments!  Why?  Because sometimes it's not sufficient to have
+// an error message describe what that error really means. Even a bunch of
+// clues  to describe system state may not be enough.  Sometimes what you need
+// in order to debug the situation is a long-form explanation (you do already
+// add that to your code, don't you?).  Or, even better, a linear history of
+// long-form explanations, each one building on the prior (which you can't
+// easily do in code).
+//
+// Unlike other additions, which are added as top-level key:value pairs to the
+// context, the whole history of comments gets retained, persisted in order of
+// appearance and prefixed by the file and line in which they appeared. This
+// means comments are always added to the error and never clobber each other,
+// regardless of their location.
+func (err *Err) WithComment(msg string, vs ...any) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	return &Err{
+		e: err,
+		// have to do a new dataNode here, or else comments will duplicate
+		data: &dataNode{comment: newComment(1, msg, vs...)},
+	}
+}
+
+// Comments are special case additions to the error.  They're here to, well,
+// let you add comments!  Why?  Because sometimes it's not sufficient to have
+// an error message describe what that error really means. Even a bunch of
+// clues  to describe system state may not be enough.  Sometimes what you need
+// in order to debug the situation is a long-form explanation (you do already
+// add that to your code, don't you?).  Or, even better, a linear history of
+// long-form explanations, each one building on the prior (which you can't
+// easily do in code).
+//
+// Unlike other additions, which are added as top-level key:value pairs to the
+// context, the whole history of comments gets retained, persisted in order of
+// appearance and prefixed by the file and line in which they appeared. This
+// means comments are always added to the error and never clobber each other,
+// regardless of their location.
+func WithComment(err error, msg string, vs ...any) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	return &Err{
+		e: err,
+		// have to do a new dataNode here, or else comments will duplicate
+		data: &dataNode{comment: newComment(1, msg, vs...)},
+	}
+}
+
 // OrNil is a workaround for golang's infamous "an interface
 // holding a nil value is not nil" gotcha.  You can use it at
 // the end of error formatting chains to ensure a correct nil
@@ -382,6 +452,71 @@ func (err *Err) values() map[string]any {
 	}
 
 	return vals
+}
+
+// Comments retrieves all comments in the error.
+func (err *Err) Comments() comments {
+	return Comments(err)
+}
+
+// Comments retrieves all comments in the error.
+func Comments(err error) comments {
+	if isNilErrIface(err) {
+		return comments{}
+	}
+
+	ancs := ancestors(err)
+	result := comments{}
+
+	for _, ancestor := range ancs {
+		ce, ok := ancestor.(*Err)
+		if !ok {
+			continue
+		}
+
+		result = append(result, ce.data.Comments()...)
+	}
+
+	return result
+}
+
+// TODO: this will need some cleanup in a follow-up PR.
+//
+// ancestors builds out the ancestor lineage of this
+// particular error.  This follows standard layout rules
+// already established elsewhere:
+// * the first entry is the oldest ancestor, the last is
+// the current error.
+// * Stacked errors get visited before wrapped errors.
+func ancestors(err error) []error {
+	return stackAncestorsOntoSelf(err)
+}
+
+// a recursive function, purely for building out ancestorStack.
+func stackAncestorsOntoSelf(err error) []error {
+	if err == nil {
+		return []error{}
+	}
+
+	errs := []error{}
+
+	ce, ok := err.(*Err)
+
+	if ok {
+		for _, e := range ce.stack {
+			errs = append(errs, stackAncestorsOntoSelf(e)...)
+		}
+	}
+
+	unwrapped := Unwrap(err)
+
+	if unwrapped != nil {
+		errs = append(errs, stackAncestorsOntoSelf(unwrapped)...)
+	}
+
+	errs = append(errs, err)
+
+	return errs
 }
 
 // InErr returns the map of contextual values in the error.
