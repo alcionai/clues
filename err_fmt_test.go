@@ -1686,7 +1686,7 @@ func TestErrCore_String(t *testing.T) {
 				Label("label").
 				Core(),
 			expectS:     `{"message", [label], {key:value}}`,
-			expectVPlus: `{msg:"message", labels:[label], values:{key:value}}`,
+			expectVPlus: `{msg:"message", labels:[label], values:{key:value}, comments:[]}`,
 		},
 		{
 			name: "message only",
@@ -1694,7 +1694,7 @@ func TestErrCore_String(t *testing.T) {
 				New("message").
 				Core(),
 			expectS:     `{"message"}`,
-			expectVPlus: `{msg:"message", labels:[], values:{}}`,
+			expectVPlus: `{msg:"message", labels:[], values:{}, comments:[]}`,
 		},
 		{
 			name: "labels only",
@@ -1703,7 +1703,7 @@ func TestErrCore_String(t *testing.T) {
 				Label("label").
 				Core(),
 			expectS:     `{[label]}`,
-			expectVPlus: `{msg:"", labels:[label], values:{}}`,
+			expectVPlus: `{msg:"", labels:[label], values:{}, comments:[]}`,
 		},
 		{
 			name: "values only",
@@ -1712,7 +1712,7 @@ func TestErrCore_String(t *testing.T) {
 				With("key", "value").
 				Core(),
 			expectS:     `{{key:value}}`,
-			expectVPlus: `{msg:"", labels:[], values:{key:value}}`,
+			expectVPlus: `{msg:"", labels:[], values:{key:value}, comments:[]}`,
 		},
 	}
 	for _, test := range table {
