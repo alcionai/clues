@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"path"
 	"reflect"
-	"slices"
 	"strings"
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 type Adder interface {
