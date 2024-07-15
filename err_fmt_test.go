@@ -1544,14 +1544,14 @@ func TestWithComment(t *testing.T) {
 				return withCommentWrapper(err, "fisher")
 			},
 			expect: commentRE(
-				`withCommentWrapper`, `err_test.go`, `fisher`,
-				`withCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+				`withCommentWrapper`, `clues/err_test.go`, `fisher`,
+				`withCommentWrapper`, `clues/err_test.go`, `fisher - repeat$`),
 			expectWrapped: commentRE(
-				`withCommentWrapper`, `err_test.go`, `fisher`,
-				`withCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+				`withCommentWrapper`, `clues/err_test.go`, `fisher`,
+				`withCommentWrapper`, `clues/err_test.go`, `fisher - repeat$`),
 			expectStacked: commentRE(
-				`withCommentWrapper`, `err_test.go`, `fisher`,
-				`withCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+				`withCommentWrapper`, `clues/err_test.go`, `fisher`,
+				`withCommentWrapper`, `clues/err_test.go`, `fisher - repeat$`),
 		},
 		{
 			name: "error formatted comment",
@@ -1559,14 +1559,14 @@ func TestWithComment(t *testing.T) {
 				return withCommentWrapper(err, "%d", 42)
 			},
 			expect: commentRE(
-				`withCommentWrapper`, `err_test.go`, `42`,
-				`withCommentWrapper`, `err_test.go`, `42 - repeat$`),
+				`withCommentWrapper`, `clues/err_test.go`, `42`,
+				`withCommentWrapper`, `clues/err_test.go`, `42 - repeat$`),
 			expectWrapped: commentRE(
-				`withCommentWrapper`, `err_test.go`, `42`,
-				`withCommentWrapper`, `err_test.go`, `42 - repeat$`),
+				`withCommentWrapper`, `clues/err_test.go`, `42`,
+				`withCommentWrapper`, `clues/err_test.go`, `42 - repeat$`),
 			expectStacked: commentRE(
-				`withCommentWrapper`, `err_test.go`, `42`,
-				`withCommentWrapper`, `err_test.go`, `42 - repeat$`),
+				`withCommentWrapper`, `clues/err_test.go`, `42`,
+				`withCommentWrapper`, `clues/err_test.go`, `42 - repeat$`),
 		},
 	}
 	for _, test := range table {
@@ -1610,14 +1610,14 @@ func TestWithComment(t *testing.T) {
 				return cluesWithCommentWrapper(err, "fisher")
 			},
 			expect: commentRE(
-				`cluesWithCommentWrapper`, `err_test.go`, `fisher`,
-				`cluesWithCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `fisher`,
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `fisher - repeat$`),
 			expectWrapped: commentRE(
-				`cluesWithCommentWrapper`, `err_test.go`, `fisher`,
-				`cluesWithCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `fisher`,
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `fisher - repeat$`),
 			expectStacked: commentRE(
-				`cluesWithCommentWrapper`, `err_test.go`, `fisher`,
-				`cluesWithCommentWrapper`, `err_test.go`, `fisher - repeat$`),
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `fisher`,
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `fisher - repeat$`),
 		},
 		{
 			name: "clues.Err formatted comment",
@@ -1625,14 +1625,14 @@ func TestWithComment(t *testing.T) {
 				return cluesWithCommentWrapper(err, "%d", 42)
 			},
 			expect: commentRE(
-				`cluesWithCommentWrapper`, `err_test.go`, `42`,
-				`cluesWithCommentWrapper`, `err_test.go`, `42 - repeat$`),
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `42`,
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `42 - repeat$`),
 			expectWrapped: commentRE(
-				`cluesWithCommentWrapper`, `err_test.go`, `42`,
-				`cluesWithCommentWrapper`, `err_test.go`, `42 - repeat$`),
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `42`,
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `42 - repeat$`),
 			expectStacked: commentRE(
-				`cluesWithCommentWrapper`, `err_test.go`, `42`,
-				`cluesWithCommentWrapper`, `err_test.go`, `42 - repeat$`),
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `42`,
+				`cluesWithCommentWrapper`, `clues/err_test.go`, `42 - repeat$`),
 		},
 	}
 	for _, test := range table2 {

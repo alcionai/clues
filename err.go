@@ -25,8 +25,11 @@ type Err struct {
 	// in pre-order traversal.
 	stack []error
 
-	// location is used for printing %+v stack traces
-	location string
+	// the func name in which the error was created.
+	// <parentFolder>/<filename>:<line>
+	file string
+	// the name of the file owning the caller.
+	caller string
 
 	// msg is the message for this error.
 	msg string
@@ -53,10 +56,13 @@ func newErr(
 	m map[string]any,
 	traceDepth int,
 ) *Err {
+	_, _, file := getDirAndFile(traceDepth + 1)
+
 	return &Err{
-		e:        e,
-		location: getTrace(traceDepth + 1),
-		msg:      msg,
+		e:      e,
+		file:   file,
+		caller: getCaller(traceDepth + 1),
+		msg:    msg,
 		data: &dataNode{
 			id:     makeNodeID(),
 			values: m,
@@ -93,10 +99,13 @@ func toStack(
 	stack []error,
 	traceDepth int,
 ) *Err {
+	_, _, file := getDirAndFile(traceDepth + 1)
+
 	return &Err{
-		e:        e,
-		location: getTrace(traceDepth + 1),
-		stack:    stack,
+		e:      e,
+		file:   file,
+		caller: getCaller(traceDepth + 1),
+		stack:  stack,
 		data: &dataNode{
 			id:     makeNodeID(),
 			values: map[string]any{},
@@ -481,7 +490,17 @@ func formatPlusV(err *Err, s fmt.State, verb rune) {
 	}
 
 	write(s, verb, err.msg)
-	write(s, verb, "\n\t%s", err.location)
+
+	parts := []string{}
+	if len(err.caller) > 0 {
+		parts = append(parts, err.caller)
+	}
+
+	if len(err.file) > 0 {
+		parts = append(parts, err.file)
+	}
+
+	write(s, verb, "\n\t%s", strings.Join(parts, " - "))
 }
 
 // Format ensures stack traces are printed appropariately.
@@ -949,7 +968,8 @@ func (err *Err) SkipCaller(depth int) *Err {
 		depth = 0
 	}
 
-	err.location = getTrace(depth + 1)
+	_, _, err.file = getDirAndFile(depth + 1)
+	err.caller = getCaller(depth + 1)
 
 	return err
 }
