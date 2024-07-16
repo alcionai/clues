@@ -12,6 +12,14 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+func mapEquals(
+	t *testing.T,
+	ctx context.Context,
+	expect msa,
+) {
+	mustEquals(t, expect, clues.In(ctx).Map(), true)
+}
+
 func mustEquals[K comparable, V any](
 	t *testing.T,
 	expect, got map[K]V,
@@ -21,7 +29,9 @@ func mustEquals[K comparable, V any](
 
 	if hasCluesTrace && len(g) > 0 {
 		if _, ok := g["clues_trace"]; !ok {
-			t.Error("expected map to contain key [clues_trace]")
+			t.Errorf(
+				"expected map to contain key [clues_trace]\ngot: %+v",
+				g)
 		}
 		delete(g, "clues_trace")
 	}
@@ -422,6 +432,154 @@ func TestAddTraceNameTo(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProxy(t *testing.T) {
+	table := []struct {
+		name     string
+		kvs      [][]string
+		isolated bool
+		expectM  msa
+		expectS  sa
+	}{
+		{
+			name:     "single",
+			kvs:      [][]string{{"k", "v"}},
+			isolated: false,
+			expectM:  msa{"k": "v"},
+			expectS:  sa{"k", "v"},
+		},
+		{
+			name:     "multiple",
+			kvs:      [][]string{{"a", "1"}, {"b", "2"}},
+			isolated: false,
+			expectM:  msa{"k": "v", "a": "1", "b": "2"},
+			expectS:  sa{"k", "v", "a", "1", "b", "2"},
+		},
+		{
+			name:     "duplicates",
+			kvs:      [][]string{{"a", "1"}, {"a", "2"}},
+			isolated: false,
+			expectM:  msa{"k": "v", "a": "2"},
+			expectS:  sa{"k", "v", "a", "2"},
+		},
+		{
+			name:     "single isolated",
+			kvs:      [][]string{{"k", "v"}},
+			isolated: true,
+			expectM:  msa{"k": "v", "proxy_pfx_k": "v"},
+			expectS:  sa{"k", "v", "proxy_pfx_k", "v"},
+		},
+		{
+			name:     "multiple isolated",
+			kvs:      [][]string{{"a", "1"}, {"b", "2"}},
+			isolated: true,
+			expectM:  msa{"k": "v", "proxy_pfx_a": "1", "proxy_pfx_b": "2"},
+			expectS:  sa{"k", "v", "proxy_pfx_a", "1", "proxy_pfx_b", "2"},
+		},
+		{
+			name:     "duplicates isolated",
+			kvs:      [][]string{{"a", "1"}, {"a", "2"}},
+			isolated: true,
+			expectM:  msa{"k": "v", "proxy_pfx_a": "2"},
+			expectS:  sa{"k", "v", "proxy_pfx_a", "2"},
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
+			ctx = clues.Add(ctx, "k", "v")
+
+			check := msa{"k": "v"}
+
+			mustEquals(t, check, clues.In(ctx).Map(), true)
+
+			ctx = clues.AddProxy(ctx, "proxy_pfx", test.isolated)
+
+			for _, kv := range test.kvs {
+				clues.Add(ctx, kv[0], kv[1])
+
+				if test.isolated {
+					check["proxy_pfx_"+kv[0]] = kv[1]
+				} else {
+					check[kv[0]] = kv[1]
+				}
+
+				mustEquals(t, check, clues.In(ctx).Map(), true)
+			}
+
+			assert(
+				t, ctx, "",
+				test.expectM, msa{},
+				test.expectS, sa{})
+		})
+	}
+}
+
+func TestProxy_multipleLayers(t *testing.T) {
+	ctx := clues.Add(context.Background(), 1, 1)
+	pxyCtx := clues.AddProxy(ctx, "p1", true)
+
+	t.Run("1", func(t *testing.T) {
+		mapEquals(t, ctx, msa{"1": 1})
+		mapEquals(t, pxyCtx, msa{"1": 1})
+	})
+
+	ctx2 := clues.Add(pxyCtx, 2, 2)
+	pxyCtx2 := clues.AddProxy(ctx2, "p2", true)
+
+	t.Run("2", func(t *testing.T) {
+		mapEquals(t, ctx, msa{"1": 1})
+		mapEquals(t, pxyCtx, msa{
+			"1":    1,
+			"p1_2": 2,
+		})
+		mapEquals(t, ctx2, msa{
+			"1":    1,
+			"2":    2,
+			"p1_2": 2,
+		})
+		mapEquals(t, pxyCtx2, msa{
+			"1": 1,
+			"2": 2,
+		})
+	})
+
+	ctx3 := clues.Add(pxyCtx2, 3, 3)
+
+	t.Run("3", func(t *testing.T) {
+		mapEquals(t, ctx, msa{"1": 1})
+		// proxy 1 is still accumulating all the values added
+		// to descendant contexts, even after proxy 2 replaces
+		// it, because proxy 2 should maintain an ancestry ref
+		// to proxy 1.
+		mapEquals(t, pxyCtx, msa{
+			"1":    1,
+			"p1_2": 2,
+			"p1_3": 3,
+		})
+		mapEquals(t, ctx2, msa{
+			"1":    1,
+			"2":    2,
+			"p1_2": 2,
+			"p1_3": 3,
+		})
+		// ctxs up to ctx2 only have a reference to proxy 1.
+		// once we add proxy 2, the contexts from that point
+		// on maintain only that reference, and no longer
+		// retrieve proxy 1 values.
+		mapEquals(t, pxyCtx2, msa{
+			"1":    1,
+			"2":    2,
+			"p2_3": 3,
+		})
+		mapEquals(t, ctx3, msa{
+			"1":    1,
+			"2":    2,
+			"3":    3,
+			"p2_3": 3,
+		})
+	})
 }
 
 func TestImmutableCtx(t *testing.T) {

@@ -63,10 +63,7 @@ func newErr(
 		file:   file,
 		caller: getCaller(traceDepth + 1),
 		msg:    msg,
-		data: &dataNode{
-			id:     makeNodeID(),
-			values: m,
-		},
+		data:   &dataNode{values: m},
 	}
 }
 
@@ -106,10 +103,7 @@ func toStack(
 		file:   file,
 		caller: getCaller(traceDepth + 1),
 		stack:  stack,
-		data: &dataNode{
-			id:     makeNodeID(),
-			values: map[string]any{},
-		},
+		data:   &dataNode{values: map[string]any{}},
 	}
 }
 

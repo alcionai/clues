@@ -194,7 +194,7 @@ func AddCommentTo(
 }
 
 // ---------------------------------------------------------------------------
-// hooks
+// error label counter
 // ---------------------------------------------------------------------------
 
 // AddLabelCounter embeds an Adder interface into this context. Any already
@@ -209,7 +209,7 @@ func AddLabelCounter(ctx context.Context, counter Adder) context.Context {
 	return setDefaultNodeInCtx(ctx, nn)
 }
 
-// AddLabelCounterTo embeds an Adder interface into this context. Any already
+// AddLabelCounterTo embeds an Adder interface within a namespace. Any already
 // embedded Adder will get replaced.  When adding Labels to a clues.Err the
 // LabelCounter will use the label as the key for the Add call, and increment
 // the count of that label by one.
@@ -221,6 +221,66 @@ func AddLabelCounterTo(
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
 	nn := nc.addValues(nil)
 	nn.labelCounter = counter
+
+	return setNodeInCtx(ctx, namespace, nn)
+}
+
+// ---------------------------------------------------------------------------
+// comments
+// ---------------------------------------------------------------------------
+
+// AddProxy attaches up a new clues proxy in the context.  All proxies are
+// passed down to all descendants which branch off of this context.  Whenever
+// a clues is added to the context, it gets added to the proxy as well.  As
+// a result, any clues added to the context in descendent funcs will appear in
+// this context as well.
+//
+// If the proxyID is an empty string, a random id will be generated.
+//
+// If isolateProxyValues is true, the proxy will namespace all of its values
+// using the proxyID to avoid clobbering any existing values.
+//
+// Proxy support is specifically useful in a unique situation: when you are
+// able to both pass in a ctx and also able to add clues data to it, but also
+// unable to later retrieve the ctx or to bind the ctx values into an error.
+// This case can manifest when passing ad-hoc functions or middleware to
+// callers who limit options to control for error returns.
+func AddProxy(
+	ctx context.Context,
+	proxyID string,
+	isolateProxyValues bool,
+) context.Context {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+	nn := nc.addValues(nil)
+	nn = nn.addProxy(proxyID, isolateProxyValues)
+
+	return setDefaultNodeInCtx(ctx, nn)
+}
+
+// AddProxyTo attaches up a new clues proxy within the context namespace.
+// All proxies are passed down to all descendants which branch off of this
+// context.  Whenever a clues is added to the context, it gets added to the
+// proxy as well.  As a result, any clues added to the context in descendent
+// funcs will appear in this context as well.
+//
+// If the proxyID is an empty string, a random id will be generated.
+//
+// If isolateProxyValues is true, the proxy will namespace all of its values
+// using the proxyID to avoid clobbering any existing values.
+//
+// Proxy support is specifically useful in a unique situation: when you are
+// able to both pass in a ctx and also able to add clues data to it, but also
+// unable to later retrieve the ctx or to bind the ctx values into an error.
+// This case can manifest when passing ad-hoc functions or middleware to
+// callers who limit options to control for error returns.
+func AddProxyTo(
+	ctx context.Context,
+	namespace, proxyID string,
+	isolateProxyValues bool,
+) context.Context {
+	nc := nodeFromCtx(ctx, ctxKey(namespace))
+	nn := nc.addValues(nil)
+	nn = nn.addProxy(proxyID, isolateProxyValues)
 
 	return setNodeInCtx(ctx, namespace, nn)
 }

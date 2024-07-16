@@ -40,6 +40,11 @@ type dataNode struct {
 	// full trace along the node's ancestry path in the tree.
 	id string
 
+	// isolationPrefix is an optional namespacing configuration.  When non-empty,
+	// all values will update their key with the isolationPrefix.
+	// IE: "foo": "bar" becomes "pfx_foo": "bar"
+	isolationPrefix string
+
 	// values are they arbitrary key:value pairs that appear in clues when callers
 	// use the Add(ctx, k, v) or err.With(k, v) adders.  Each key-value pair added
 	// to the node is used to produce the final set of Values() in the dataNode,
@@ -60,6 +65,37 @@ type dataNode struct {
 	// Errors will only utilize the first labelCounter they find.  The tree is searched
 	// from leaf to root when looking for populated labelCounters.
 	labelCounter Adder
+
+	// proxies contain all proxies (keyed by proxyID) attached to this context.
+	// Once a proxy has been added to this map, it should be passed down to
+	// all descendant dataNodes.  Therefore, any given child of a data node should
+	// have an equal or greater number of proxies compared to its parent.
+	//
+	// In the hierarchy of data collision priority, proxies have higher priority
+	// than other context data (eg: last descendant's data wins), but lower
+	// priority than any error values.
+	//
+	// Proxies construct their own data tree.  The root of the tree is the first
+	// proxy added to the context.  That proxy will get passed down to all descendants.
+	// If any descendant of the primary dataNode attaches another proxy, that new
+	// proxy becomes a descenant of the currently existing proxy.  This way, when we
+	// add a value to a proxy, we are able to walk its ascendancy tree to add the same
+	// valus to all ancestory proxies, thereby guaranteeing that every aded proxy gets
+	// the same data.
+	proxy *dataNode
+}
+
+// spawnDescendant generates a new dataNode that is a descendant of the current
+// node.  A descendant maintains a pointer to its parent, and carries any genetic
+// necessities (ie, copies of fields) that must be present for continued functionality.
+func (dn *dataNode) spawnDescendant() *dataNode {
+	return &dataNode{
+		parent:       dn,
+		labelCounter: dn.labelCounter,
+		// proxies construct their own data tree, and must be passed
+		// from parent to child to maintain references.
+		proxy: dn.proxy,
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -126,11 +162,38 @@ func (dn *dataNode) addValues(m map[string]any) *dataNode {
 		m = map[string]any{}
 	}
 
-	return &dataNode{
-		parent:       dn,
-		id:           makeNodeID(),
-		values:       maps.Clone(m),
-		labelCounter: dn.labelCounter,
+	spawn := dn.spawnDescendant()
+	spawn.id = makeNodeID()
+	spawn.setValues(m)
+
+	// if a proxy exists, add the same values to the proxy lineage.
+	if dn.proxy != nil {
+		for _, ancestor := range dn.proxy.ancestors() {
+			ancestor.setValues(m)
+		}
+	}
+
+	return spawn
+}
+
+// setValues is a helper called by addValues.
+func (dn *dataNode) setValues(m map[string]any) {
+	if len(m) == 0 {
+		return
+	}
+
+	if len(dn.values) == 0 {
+		dn.values = map[string]any{}
+	}
+
+	if len(dn.isolationPrefix) == 0 {
+		maps.Copy(dn.values, m)
+		return
+	}
+
+	for k, v := range m {
+		k = dn.isolationPrefix + "_" + k
+		dn.values[k] = v
 	}
 }
 
@@ -140,30 +203,35 @@ func (dn *dataNode) trace(name string) *dataNode {
 		name = makeNodeID()
 	}
 
-	return &dataNode{
-		parent:       dn,
-		id:           name,
-		values:       map[string]any{},
-		labelCounter: dn.labelCounter,
-	}
+	spawn := dn.spawnDescendant()
+	spawn.id = name
+
+	return spawn
 }
 
 // ---------------------------------------------------------------------------
 // getters
 // ---------------------------------------------------------------------------
 
-// lineage runs the fn on every valueNode in the ancestry tree,
-// starting at the root and ending at the dataNode.
-func (dn *dataNode) lineage(fn func(id string, vs map[string]any)) {
+// ancestors builds an ancestor lineage from this dataNode.
+// * the root dataNode is the zeroth, the leaf is last entry.
+func (dn *dataNode) ancestors() []*dataNode {
+	return stackParentOntoSelf(dn)
+}
+
+// a recursive function, purely for building out dn.ancestors.
+func stackParentOntoSelf(dn *dataNode) []*dataNode {
 	if dn == nil {
-		return
+		return []*dataNode{}
 	}
+
+	nodes := []*dataNode{}
 
 	if dn.parent != nil {
-		dn.parent.lineage(fn)
+		nodes = stackParentOntoSelf(dn.parent)
 	}
 
-	fn(dn.id, dn.values)
+	return append(nodes, dn)
 }
 
 // In returns the default dataNode from the context.
@@ -184,23 +252,38 @@ func InNamespace(ctx context.Context, namespace string) *dataNode {
 // take priority over ancestors in cases of collision.
 func (dn *dataNode) Map() map[string]any {
 	var (
-		m    = map[string]any{}
-		idsl = []string{}
+		m      = map[string]any{}
+		traces = []string{}
 	)
 
-	dn.lineage(func(id string, vs map[string]any) {
-		if len(id) > 0 {
-			idsl = append(idsl, id)
-		}
+	// build a root-to-leaf lineage through the tree.
+	lineage := dn.ancestors()
 
-		for k, v := range vs {
-			m[k] = v
-		}
-	})
+	// copy the values of each ancestor onto the map.
+	// descendant values will clobber ancestor values.
+	for _, ancestor := range lineage {
+		maps.Copy(m, ancestor.values)
 
-	if len(idsl) > 0 {
-		m["clues_trace"] = strings.Join(idsl, ",")
+		if len(ancestor.id) > 0 {
+			traces = append(traces, ancestor.id)
+		}
 	}
+
+	// if a proxy exists, it gets the highest priority
+	// for representing all unattached descendant data
+	// beyond the leaf.
+	if dn.proxy != nil {
+		// don't call proxy.Values() here, we don't want
+		// any of the proxy parent data in this result.
+		maps.Copy(m, dn.proxy.values)
+
+		if len(dn.proxy.id) > 0 {
+			traces = append(traces, "["+dn.proxy.id+"]")
+		}
+	}
+
+	// construct a clues trace of ids from root to leaf.
+	m["clues_trace"] = strings.Join(traces, ",")
 
 	return m
 }
@@ -266,11 +349,10 @@ func (dn *dataNode) addComment(
 		return dn
 	}
 
-	return &dataNode{
-		parent:       dn,
-		labelCounter: dn.labelCounter,
-		comment:      newComment(depth+1, msg, vs...),
-	}
+	spawn := dn.spawnDescendant()
+	spawn.comment = newComment(depth+1, msg, vs...)
+
+	return spawn
 }
 
 // comments allows us to put a stringer on a slice of comments.
@@ -315,6 +397,42 @@ func (dn *dataNode) Comments() comments {
 	slices.Reverse(result)
 
 	return result
+}
+
+// ---------------------------------------------------------------------------
+// proxies
+// ---------------------------------------------------------------------------
+
+// addProxy creates a new dataNode and adds this proxy to it.
+func (dn *dataNode) addProxy(
+	proxyID string,
+	isolateValues bool,
+) *dataNode {
+	spawn := dn.spawnDescendant()
+
+	if len(proxyID) == 0 {
+		proxyID = makeNodeID()
+	}
+
+	// generate a proxy
+	proxy := &dataNode{}
+
+	// proxies maintain their own tree, so that we can walk the.
+	// proxy tree to update all proxies, instead of walking the
+	// full ancestry tree.
+	if dn.proxy != nil {
+		proxy = dn.proxy.spawnDescendant()
+	}
+
+	proxy.id = proxyID
+
+	if isolateValues {
+		proxy.isolationPrefix = proxyID
+	}
+
+	spawn.proxy = proxy
+
+	return spawn
 }
 
 // ---------------------------------------------------------------------------

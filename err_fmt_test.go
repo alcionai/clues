@@ -1720,7 +1720,9 @@ func TestErrCore_String(t *testing.T) {
 			tc := test.core
 			if tc != nil {
 				if _, ok := tc.Values["clues_trace"]; !ok {
-					t.Error("expected core values to contain key [clues_trace]")
+					t.Errorf(
+						"expected core values to contain key [clues_trace]\ngot: %+v",
+						tc.Values)
 				}
 				delete(tc.Values, "clues_trace")
 			}
