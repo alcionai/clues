@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
 	"reflect"
-	"runtime"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -43,92 +41,199 @@ type Err struct {
 	data *dataNode
 }
 
-func asErr(err error, msg string, m map[string]any, traceDepth int) *Err {
+// ---------------------------------------------------------------------------
+// constructors
+// ---------------------------------------------------------------------------
+
+// newErr generates a new *Err from the parameters.
+// traceDepth should always be `1` or `depth+1`.
+func newErr(
+	e error,
+	msg string,
+	m map[string]any,
+	traceDepth int,
+) *Err {
+	return &Err{
+		e:        e,
+		location: getTrace(traceDepth + 1),
+		msg:      msg,
+		data: &dataNode{
+			id:     makeNodeID(),
+			values: m,
+		},
+	}
+}
+
+// tryExtendErr checks if err is an *Err. If it is, it extends the Err
+// with a child containing the provided parameters.  If not, it creates
+// a new Err containing the parameters.
+// traceDepth should always be `1` or `depth+1`.
+func tryExtendErr(
+	err error,
+	msg string,
+	m map[string]any,
+	traceDepth int,
+) *Err {
 	if isNilErrIface(err) {
 		return nil
 	}
 
 	e, ok := err.(*Err)
 	if !ok {
-		e = toErr(err, msg, m, traceDepth+1)
+		e = newErr(err, msg, m, traceDepth+1)
 	}
 
 	return e
 }
 
-func toErr(e error, msg string, m map[string]any, traceDepth int) *Err {
-	return &Err{
-		e:        e,
-		location: getTrace(traceDepth + 1),
-		msg:      msg,
-		data:     &dataNode{id: makeNodeID(), vs: m},
-	}
-}
-
-func toStack(e error, stack []error, traceDepth int) *Err {
+// newStack creates a new *Err containing the provided stack of errors.
+// traceDepth should always be `1` or `depth+1`.
+func toStack(
+	e error,
+	stack []error,
+	traceDepth int,
+) *Err {
 	return &Err{
 		e:        e,
 		location: getTrace(traceDepth + 1),
 		stack:    stack,
-		data:     &dataNode{id: makeNodeID(), vs: map[string]any{}},
+		data: &dataNode{
+			id:     makeNodeID(),
+			values: map[string]any{},
+		},
 	}
 }
 
-func getTrace(depth int) string {
-	_, file, line, _ := runtime.Caller(depth + 1)
-	return fmt.Sprintf("%s:%d", file, line)
-}
-
-func getCaller(depth int) string {
-	pc, _, _, ok := runtime.Caller(depth + 1)
-	if !ok {
-		return ""
-	}
-
-	funcPath := runtime.FuncForPC(pc).Name()
-	base := path.Base(funcPath)
-	parts := strings.Split(base, ".")
-
-	if len(parts) < 2 {
-		return base
-	}
-
-	return parts[len(parts)-1]
-}
-
-func getLabelCounter(e error) Adder {
-	if e == nil {
-		return nil
-	}
-
-	ce, ok := e.(*Err)
-	if !ok {
-		return nil
-	}
-
-	for i := len(ce.stack) - 1; i >= 0; i-- {
-		lc := getLabelCounter(ce.stack[i])
-		if lc != nil {
-			return lc
+// makeStack creates a new *Err from the provided stack of errors.
+// nil values are filtered out of the errs slice.  If all errs are nil,
+// returns nil.
+// traceDepth should always be `1` or `depth+1`.
+func makeStack(
+	traceDepth int,
+	errs ...error,
+) *Err {
+	filtered := []error{}
+	for _, err := range errs {
+		if !isNilErrIface(err) {
+			filtered = append(filtered, err)
 		}
 	}
 
-	if ce.e != nil {
-		lc := getLabelCounter(ce.e)
-		if lc != nil {
-			return lc
-		}
+	switch len(filtered) {
+	case 0:
+		return nil
+	case 1:
+		return newErr(filtered[0], "", nil, traceDepth+1)
 	}
 
-	if ce.data != nil && ce.data.labelCounter != nil {
-		return ce.data.labelCounter
-	}
-
-	return nil
+	return toStack(filtered[0], filtered[1:], traceDepth+1)
 }
 
 // ------------------------------------------------------------
-// labels
+// getters
+// TODO: transform all this to comply with a standard interface
+// ------------------------------------------------------------
+
+// TODO: this will need some cleanup in a follow-up PR.
+//
+// ancestors builds out the ancestor lineage of this
+// particular error.  This follows standard layout rules
+// already established elsewhere:
+// * the first entry is the oldest ancestor, the last is
+// the current error.
+// * Stacked errors get visited before wrapped errors.
+func ancestors(err error) []error {
+	return stackAncestorsOntoSelf(err)
+}
+
+// a recursive function, purely for building out ancestorStack.
+func stackAncestorsOntoSelf(err error) []error {
+	if err == nil {
+		return []error{}
+	}
+
+	errs := []error{}
+
+	ce, ok := err.(*Err)
+
+	if ok {
+		for _, e := range ce.stack {
+			errs = append(errs, stackAncestorsOntoSelf(e)...)
+		}
+	}
+
+	unwrapped := Unwrap(err)
+
+	if unwrapped != nil {
+		errs = append(errs, stackAncestorsOntoSelf(unwrapped)...)
+	}
+
+	errs = append(errs, err)
+
+	return errs
+}
+
+// InErr returns the map of contextual values in the error.
+// Each error in the stack is unwrapped and all maps are
+// unioned. In case of collision, lower level error data
+// take least priority.
+// TODO: remove this in favor of a type-independent In()
+// that returns an interface which both dataNodes and Err
+// comply with.
+func InErr(err error) *dataNode {
+	if isNilErrIface(err) {
+		return &dataNode{values: map[string]any{}}
+	}
+
+	return &dataNode{values: inErr(err)}
+}
+
+func inErr(err error) map[string]any {
+	if isNilErrIface(err) {
+		return map[string]any{}
+	}
+
+	if e, ok := err.(*Err); ok {
+		return e.values()
+	}
+
+	return inErr(Unwrap(err))
+}
+
+// ------------------------------------------------------------
+// getters - k:v store
+// ------------------------------------------------------------
+
+// Values returns a copy of all of the contextual data in
+// the error.  Each error in the stack is unwrapped and all
+// maps are unioned. In case of collision, lower level error
+// data take least priority.
+func (err *Err) Values() *dataNode {
+	if isNilErrIface(err) {
+		return &dataNode{values: map[string]any{}}
+	}
+
+	return &dataNode{values: err.values()}
+}
+
+func (err *Err) values() map[string]any {
+	if isNilErrIface(err) {
+		return map[string]any{}
+	}
+
+	vals := map[string]any{}
+	maps.Copy(vals, err.data.Map())
+	maps.Copy(vals, inErr(err.e))
+
+	for _, se := range err.stack {
+		maps.Copy(vals, inErr(se))
+	}
+
+	return vals
+}
+
+// ------------------------------------------------------------
+// getters - labels
 // ------------------------------------------------------------
 
 func (err *Err) HasLabel(label string) bool {
@@ -187,7 +292,7 @@ func (err *Err) Label(labels ...string) *Err {
 }
 
 func Label(err error, label string) *Err {
-	return asErr(err, "", nil, 1).Label(label)
+	return tryExtendErr(err, "", nil, 1).Label(label)
 }
 
 func (err *Err) Labels() map[string]struct{} {
@@ -224,235 +329,8 @@ func Labels(err error) map[string]struct{} {
 }
 
 // ------------------------------------------------------------
-// data
+// getters - comments
 // ------------------------------------------------------------
-
-// With adds every pair of values as a key,value pair to
-// the Err's data map.
-func (err *Err) With(kvs ...any) *Err {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	if len(kvs) > 0 {
-		err.data = err.data.add(normalize(kvs...))
-	}
-
-	return err
-}
-
-// With adds every two values as a key,value pair to
-// the Err's data map.
-// If err is not an *Err intance, returns the error wrapped
-// into an *Err struct.
-func With(err error, kvs ...any) *Err {
-	return asErr(err, "", nil, 1).With(kvs...)
-}
-
-// WithTrace sets the error trace to a certain depth.
-// A depth of 0 traces to the func where WithTrace is
-// called.  1 sets the trace to its parent, etc.
-// Error traces are already generated for the location
-// where clues.Wrap or clues.Stack was called.  This
-// call is for cases where Wrap or Stack calls are handled
-// in a helper func and are not reporting the actual
-// error origin.
-func (err *Err) WithTrace(depth int) *Err {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	if depth < 0 {
-		depth = 0
-	}
-
-	err.location = getTrace(depth + 1)
-
-	return err
-}
-
-// WithTrace sets the error trace to a certain depth.
-// A depth of 0 traces to the func where WithTrace is
-// called.  1 sets the trace to its parent, etc.
-// Error traces are already generated for the location
-// where clues.Wrap or clues.Stack was called.  This
-// call is for cases where Wrap or Stack calls are handled
-// in a helper func and are not reporting the actual
-// error origin.
-// If err is not an *Err intance, returns the error wrapped
-// into an *Err struct.
-func WithTrace(err error, depth int) *Err {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	// needed both here and in withTrace() to
-	// correct for the extra call depth.
-	if depth < 0 {
-		depth = 0
-	}
-
-	e, ok := err.(*Err)
-	if !ok {
-		return toErr(err, "", map[string]any{}, depth+1)
-	}
-
-	return e.WithTrace(depth + 1)
-}
-
-// WithMap copies the map to the Err's data map.
-func (err *Err) WithMap(m map[string]any) *Err {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	if len(m) > 0 {
-		err.data = err.data.add(m)
-	}
-
-	return err
-}
-
-// WithMap copies the map to the Err's data map.
-// If err is not an *Err intance, returns the error wrapped
-// into an *Err struct.
-func WithMap(err error, m map[string]any) *Err {
-	return asErr(err, "", m, 1).WithMap(m)
-}
-
-// WithClues is syntactical-sugar that assumes you're using
-// the clues package to store structured data in the context.
-// The values in the default namespace are retrieved and added
-// to the error.
-//
-// clues.Stack(err).WithClues(ctx) adds the same data as
-// clues.Stack(err).WithMap(clues.Values(ctx)).
-//
-// If the context contains a clues LabelCounter, that counter is
-// passed to the error.  WithClues must always be called first in
-// order to count labels.
-func (err *Err) WithClues(ctx context.Context) *Err {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	dn := In(ctx)
-	e := err.WithMap(dn.Map())
-	e.data.labelCounter = dn.labelCounter
-
-	return e
-}
-
-// WithClues is syntactical-sugar that assumes you're using
-// the clues package to store structured data in the context.
-// The values in the default namespace are retrieved and added
-// to the error.
-//
-// clues.WithClues(err, ctx) adds the same data as
-// clues.WithMap(err, clues.Values(ctx)).
-//
-// If the context contains a clues LabelCounter, that counter is
-// passed to the error.  WithClues must always be called first in
-// order to count labels.
-func WithClues(err error, ctx context.Context) *Err {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	return WithMap(err, In(ctx).Map())
-}
-
-// Comments are special case additions to the error.  They're here to, well,
-// let you add comments!  Why?  Because sometimes it's not sufficient to have
-// an error message describe what that error really means. Even a bunch of
-// clues  to describe system state may not be enough.  Sometimes what you need
-// in order to debug the situation is a long-form explanation (you do already
-// add that to your code, don't you?).  Or, even better, a linear history of
-// long-form explanations, each one building on the prior (which you can't
-// easily do in code).
-//
-// Unlike other additions, which are added as top-level key:value pairs to the
-// context, the whole history of comments gets retained, persisted in order of
-// appearance and prefixed by the file and line in which they appeared. This
-// means comments are always added to the error and never clobber each other,
-// regardless of their location.
-func (err *Err) WithComment(msg string, vs ...any) *Err {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	return &Err{
-		e: err,
-		// have to do a new dataNode here, or else comments will duplicate
-		data: &dataNode{comment: newComment(1, msg, vs...)},
-	}
-}
-
-// Comments are special case additions to the error.  They're here to, well,
-// let you add comments!  Why?  Because sometimes it's not sufficient to have
-// an error message describe what that error really means. Even a bunch of
-// clues  to describe system state may not be enough.  Sometimes what you need
-// in order to debug the situation is a long-form explanation (you do already
-// add that to your code, don't you?).  Or, even better, a linear history of
-// long-form explanations, each one building on the prior (which you can't
-// easily do in code).
-//
-// Unlike other additions, which are added as top-level key:value pairs to the
-// context, the whole history of comments gets retained, persisted in order of
-// appearance and prefixed by the file and line in which they appeared. This
-// means comments are always added to the error and never clobber each other,
-// regardless of their location.
-func WithComment(err error, msg string, vs ...any) *Err {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	return &Err{
-		e: err,
-		// have to do a new dataNode here, or else comments will duplicate
-		data: &dataNode{comment: newComment(1, msg, vs...)},
-	}
-}
-
-// OrNil is a workaround for golang's infamous "an interface
-// holding a nil value is not nil" gotcha.  You can use it at
-// the end of error formatting chains to ensure a correct nil
-// return value.
-func (err *Err) OrNil() error {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	return err
-}
-
-// Values returns a copy of all of the contextual data in
-// the error.  Each error in the stack is unwrapped and all
-// maps are unioned. In case of collision, lower level error
-// data take least priority.
-func (err *Err) Values() *dataNode {
-	if isNilErrIface(err) {
-		return &dataNode{vs: map[string]any{}}
-	}
-
-	return &dataNode{vs: err.values()}
-}
-
-func (err *Err) values() map[string]any {
-	if isNilErrIface(err) {
-		return map[string]any{}
-	}
-
-	vals := map[string]any{}
-	maps.Copy(vals, err.data.Map())
-	maps.Copy(vals, inErr(err.e))
-
-	for _, se := range err.stack {
-		maps.Copy(vals, inErr(se))
-	}
-
-	return vals
-}
 
 // Comments retrieves all comments in the error.
 func (err *Err) Comments() comments {
@@ -480,75 +358,13 @@ func Comments(err error) comments {
 	return result
 }
 
-// TODO: this will need some cleanup in a follow-up PR.
-//
-// ancestors builds out the ancestor lineage of this
-// particular error.  This follows standard layout rules
-// already established elsewhere:
-// * the first entry is the oldest ancestor, the last is
-// the current error.
-// * Stacked errors get visited before wrapped errors.
-func ancestors(err error) []error {
-	return stackAncestorsOntoSelf(err)
-}
-
-// a recursive function, purely for building out ancestorStack.
-func stackAncestorsOntoSelf(err error) []error {
-	if err == nil {
-		return []error{}
-	}
-
-	errs := []error{}
-
-	ce, ok := err.(*Err)
-
-	if ok {
-		for _, e := range ce.stack {
-			errs = append(errs, stackAncestorsOntoSelf(e)...)
-		}
-	}
-
-	unwrapped := Unwrap(err)
-
-	if unwrapped != nil {
-		errs = append(errs, stackAncestorsOntoSelf(unwrapped)...)
-	}
-
-	errs = append(errs, err)
-
-	return errs
-}
-
-// InErr returns the map of contextual values in the error.
-// Each error in the stack is unwrapped and all maps are
-// unioned. In case of collision, lower level error data
-// take least priority.
-func InErr(err error) *dataNode {
-	if isNilErrIface(err) {
-		return &dataNode{vs: map[string]any{}}
-	}
-
-	return &dataNode{vs: inErr(err)}
-}
-
-func inErr(err error) map[string]any {
-	if isNilErrIface(err) {
-		return map[string]any{}
-	}
-
-	if e, ok := err.(*Err); ok {
-		return e.values()
-	}
-
-	return inErr(Unwrap(err))
-}
-
 // ------------------------------------------------------------
-// eror interface compliance
+// eror interface compliance and stringers
 // ------------------------------------------------------------
 
 var _ error = &Err{}
 
+// Error allows Err to be used as a standard error interface.
 func (err *Err) Error() string {
 	if isNilErrIface(err) {
 		return "<nil>"
@@ -571,6 +387,7 @@ func (err *Err) Error() string {
 	return strings.Join(msg, ": ")
 }
 
+// format is the fallback formatting of an error
 func format(err error, s fmt.State, verb rune) {
 	if isNilErrIface(err) {
 		return
@@ -655,11 +472,7 @@ func (err *Err) Format(s fmt.State, verb rune) {
 	formatReg(err, s, verb)
 }
 
-func write(
-	s fmt.State,
-	verb rune,
-	msgs ...string,
-) {
+func write(s fmt.State, verb rune, msgs ...string) {
 	if len(msgs) == 0 || len(msgs[0]) == 0 {
 		return
 	}
@@ -685,10 +498,14 @@ func write(
 	}
 }
 
+// ------------------------------------------------------------
+// common interface compliance
+// ------------------------------------------------------------
+
 // Is overrides the standard Is check for Err.e, allowing us to check
-// the conditional for both Err.e and Err.next.  This allows clues to
-// Stack() maintain multiple error pointers without failing the otherwise
-// linear errors.Is check.
+// the conditional for both Err.e and Err.stack.  This allows clues to
+// Stack() multiple error pointers without failing the otherwise linear
+// errors.Is check.
 func (err *Err) Is(target error) bool {
 	if isNilErrIface(err) {
 		return false
@@ -708,9 +525,9 @@ func (err *Err) Is(target error) bool {
 }
 
 // As overrides the standard As check for Err.e, allowing us to check
-// the conditional for both Err.e and Err.next.  This allows clues to
-// Stack() maintain multiple error pointers without failing the otherwise
-// linear errors.As check.
+// the conditional for both Err.e and Err.stack.  This allows clues to
+// Stack() multiple error pointers without failing the otherwise linear
+// errors.As check.
 func (err *Err) As(target any) bool {
 	if isNilErrIface(err) {
 		return false
@@ -777,45 +594,133 @@ func Unwrap(err error) error {
 // constructors
 // ------------------------------------------------------------
 
+// New creates an *Err with the provided Msg.
+//
+// If you have a `ctx` containing other clues data, it is recommended
+// that you call `NewWC(ctx, msg)` to ensure that data gets added to
+// the error.
+//
+// The returned *Err is an error-compliant builder that can aggregate
+// additional data using funcs like With(...) or Label(...).
 func New(msg string) *Err {
-	return toErr(nil, msg, nil, 1)
+	return newErr(nil, msg, nil, 1)
 }
 
-// NewWC is equivalent to clues.New("msg").WithClues(ctx)
+// NewWC creates an *Err with the provided Msg, and additionally
+// extracts all of the clues data in the context into the error.
+//
+// NewWC is equivalent to clues.New("msg").WithClues(ctx).
+//
+// The returned *Err is an error-compliant builder that can aggregate
+// additional data using funcs like With(...) or Label(...).
 func NewWC(ctx context.Context, msg string) *Err {
-	return toErr(nil, msg, nil, 1).WithClues(ctx)
+	return newErr(nil, msg, nil, 1).WithClues(ctx)
 }
 
-// Wrap returns a clues.Err with a new message wrapping the old error.
+// Wrap extends an error with the provided message.  It is a replacement
+// for `errors.Wrap`, and complies with all golang unwrapping behavior.
+//
+// If you have a `ctx` containing other clues data, it is recommended
+// that you call `WrapWC(ctx, err, msg)` to ensure that data gets added to
+// the error.
+//
+// The returned *Err is an error-compliant builder that can aggregate
+// additional data using funcs like With(...) or Label(...).  There is
+// no Wrapf func in clues; we prefer that callers use Wrap().With()
+// instead.
+//
+// Wrap can be given a `nil` error value, and will return a nil *Err.
+// To avoid golang footguns when returning nil structs as interfaces
+// (such as error), callers should always return Wrap().OrNil() in cases
+// where the input error could be nil.
 func Wrap(err error, msg string) *Err {
 	if isNilErrIface(err) {
 		return nil
 	}
 
-	return toErr(err, msg, nil, 1)
+	return newErr(err, msg, nil, 1)
 }
 
-// WrapWC is equivalent to clues.Wrap(err, "msg").WithClues(ctx)
-// Wrap returns a clues.Err with a new message wrapping the old error.
+// WrapWC extends an error with the provided message.  It is a replacement
+// for `errors.Wrap`, and complies with all golang unwrapping behavior.
+//
+// WrapWC is equivalent to clues.Wrap(err, "msg").WithClues(ctx).
+//
+// If you have a `ctx` containing other clues data, it is recommended
+// that you call `WrapWC(ctx, err, msg)` to ensure that data gets added to
+// the error.
+//
+// The returned *Err is an error-compliant builder that can aggregate
+// additional data using funcs like With(...) or Label(...).  There is
+// no WrapWCf func in clues; we prefer that callers use WrapWC().With()
+// instead.
+//
+// Wrap can be given a `nil` error value, and will return a nil *Err.
+// To avoid golang footguns when returning nil structs as interfaces
+// (such as error), callers should always return WrapWC().OrNil() in cases
+// where the input error could be nil.
 func WrapWC(ctx context.Context, err error, msg string) *Err {
 	if isNilErrIface(err) {
 		return nil
 	}
 
-	return toErr(err, msg, nil, 1).WithClues(ctx)
+	return newErr(err, msg, nil, 1).WithClues(ctx)
 }
 
-// Stack returns the error as a clues.Err.  If additional errors are
-// provided, the entire stack is flattened and returned as a single
-// error chain.  All messages and stored structure is aggregated into
-// the returned err.
+// Stack composes a stack of one or more errors.  The first message in the
+// parameters is considered the "most recent".  Ex: a construction like
+// clues.Stack(errFoo, io.EOF, errSmarf), the resulting Error message would
+// be "foo: end-of-file: smarf".
 //
-// Ex: Stack(sentinel, errors.New("base")).Error() => "sentinel: base"
+// Unwrapping a Stack follows the same order.  This allows callers to inject
+// sentinel errors into error chains (ex: clues.Stack(io.EOF, myErr))  without
+// losing errors.Is or errors.As checks on lower errors.
+//
+// If given a single error, Stack acts as a thin wrapper around the error to
+// provide an *Err, giving the caller access to all the builder funcs and error
+// tracing.  It is always recommended that callers `return clues.Stack(err)`
+// instead of the plain `return err`.
+//
+// The returned *Err is an error-compliant builder that can aggregate
+// additional data using funcs like With(...) or Label(...).
+//
+// Stack can be given one or more `nil` error values.  Nil errors will be
+// automatically filered from the retained stack of errors.  Ex:
+// clues.Stack(errFoo, nil, errSmarf) == clues.Stack(errFoo, errSmarf).
+// If all input errors are nil, stack will return nil.  To avoid  golang
+// footguns when returning nil structs as interfaces (such as error), callers
+// should always return Stack().OrNil() in cases where the input error could
+// be nil.
 func Stack(errs ...error) *Err {
 	return makeStack(1, errs...)
 }
 
+// StackWC composes a stack of one or more errors.  The first message in the
+// parameters is considered the "most recent".  Ex: a construction like
+// clues.StackWC(errFoo, io.EOF, errSmarf), the resulting Error message would
+// be "foo: end-of-file: smarf".
+//
+// Unwrapping a Stack follows the same order.  This allows callers to inject
+// sentinel errors into error chains (ex: clues.StackWC(io.EOF, myErr))  without
+// losing errors.Is or errors.As checks on lower errors.
+//
+// If given a single error, Stack acts as a thin wrapper around the error to
+// provide an *Err, giving the caller access to all the builder funcs and error
+// tracing.  It is always recommended that callers `return clues.StackWC(err)`
+// instead of the plain `return err`.
+//
 // StackWC is equivalent to clues.Stack(errs...).WithClues(ctx)
+//
+// The returned *Err is an error-compliant builder that can aggregate
+// additional data using funcs like With(...) or Label(...).
+//
+// Stack can be given one or more `nil` error values.  Nil errors will be
+// automatically filered from the retained stack of errors.  Ex:
+// clues.StackWC(ctx, errFoo, nil, errSmarf) == clues.StackWC(ctx, errFoo, errSmarf).
+// If all input errors are nil, stack will return nil.  To avoid  golang
+// footguns when returning nil structs as interfaces (such as error), callers
+// should always return StackWC().OrNil() in cases where the input error could
+// be nil.
 func StackWC(ctx context.Context, errs ...error) *Err {
 	err := makeStack(1, errs...)
 
@@ -826,25 +731,272 @@ func StackWC(ctx context.Context, errs ...error) *Err {
 	return err.WithClues(ctx)
 }
 
-func makeStack(traceDepth int, errs ...error) *Err {
-	filtered := []error{}
-	for _, err := range errs {
-		if !isNilErrIface(err) {
-			filtered = append(filtered, err)
+// OrNil is a workaround for golang's infamous "an interface
+// holding a nil value is not nil" gotcha.  You should use it
+// to ensure the error value to produce is properly nil whenever
+// your wrapped or stacked error values could also possibly be
+// nil.
+//
+// ie:
+// ```
+// return clues.Stack(maybeNilErrValue).OrNil()
+// // or
+// return clues.Wrap(maybeNilErrValue, "msg").OrNil()
+// ```
+func (err *Err) OrNil() error {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	return err
+}
+
+// ------------------------------------------------------------
+// builders - clues ctx
+// ------------------------------------------------------------
+
+// WithClues is syntactical-sugar that assumes you're using
+// the clues package to store structured data in the context.
+// The values in the default namespace are retrieved and added
+// to the error.
+//
+// clues.Stack(err).WithClues(ctx) adds the same data as
+// clues.Stack(err).WithMap(clues.Values(ctx)).
+//
+// If the context contains a clues LabelCounter, that counter is
+// passed to the error.  WithClues must always be called first in
+// order to count labels.
+func (err *Err) WithClues(ctx context.Context) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	dn := In(ctx)
+	e := err.WithMap(dn.Map())
+	e.data.labelCounter = dn.labelCounter
+
+	return e
+}
+
+// WithClues is syntactical-sugar that assumes you're using
+// the clues package to store structured data in the context.
+// The values in the default namespace are retrieved and added
+// to the error.
+//
+// clues.WithClues(err, ctx) adds the same data as
+// clues.WithMap(err, clues.Values(ctx)).
+//
+// If the context contains a clues LabelCounter, that counter is
+// passed to the error.  WithClues must always be called first in
+// order to count labels.
+func WithClues(err error, ctx context.Context) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	return WithMap(err, In(ctx).Map())
+}
+
+// ------------------------------------------------------------
+// builders - k:v store
+// ------------------------------------------------------------
+
+// With adds every pair of values as a key,value pair to
+// the Err's data map.
+func (err *Err) With(kvs ...any) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	if len(kvs) > 0 {
+		err.data = err.data.addValues(normalize(kvs...))
+	}
+
+	return err
+}
+
+// With adds every two values as a key,value pair to
+// the Err's data map.
+// If err is not an *Err intance, a new *Err is generated
+// containing the original err.
+func With(err error, kvs ...any) *Err {
+	return tryExtendErr(err, "", nil, 1).With(kvs...)
+}
+
+// WithMap copies the map to the Err's data map.
+func (err *Err) WithMap(m map[string]any) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	if len(m) > 0 {
+		err.data = err.data.addValues(m)
+	}
+
+	return err
+}
+
+// WithMap copies the map to the Err's data map.
+// If err is not an *Err intance, returns the error wrapped
+// into an *Err struct.
+func WithMap(err error, m map[string]any) *Err {
+	return tryExtendErr(err, "", m, 1).WithMap(m)
+}
+
+// ------------------------------------------------------------
+// builders - tracing
+// ------------------------------------------------------------
+
+// WithTrace sets the error trace to a certain depth.
+// A depth of 0 traces to the func where WithTrace is
+// called.  1 sets the trace to its parent, etc.
+// Error traces are already generated for the location
+// where clues.Wrap or clues.Stack was called.  This
+// call is for cases where Wrap or Stack calls are handled
+// in a helper func and are not reporting the actual
+// error origin.
+// TODO: rename to `SkipCaller`.
+func (err *Err) WithTrace(depth int) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	if depth < 0 {
+		depth = 0
+	}
+
+	err.location = getTrace(depth + 1)
+
+	return err
+}
+
+// WithTrace sets the error trace to a certain depth.
+// A depth of 0 traces to the func where WithTrace is
+// called.  1 sets the trace to its parent, etc.
+// Error traces are already generated for the location
+// where clues.Wrap or clues.Stack was called.  This
+// call is for cases where Wrap or Stack calls are handled
+// in a helper func and are not reporting the actual
+// error origin.
+// If err is not an *Err intance, returns the error wrapped
+// into an *Err struct.
+// TODO: rename to `SkipCaller`.
+func WithTrace(err error, depth int) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	// needed both here and in withTrace() to
+	// correct for the extra call depth.
+	if depth < 0 {
+		depth = 0
+	}
+
+	e, ok := err.(*Err)
+	if !ok {
+		return newErr(err, "", map[string]any{}, depth+1)
+	}
+
+	return e.WithTrace(depth + 1)
+}
+
+// ------------------------------------------------------------
+// builders - comments
+// ------------------------------------------------------------
+
+// Comments are special case additions to the error.  They're here to, well,
+// let you add comments!  Why?  Because sometimes it's not sufficient to have
+// an error message describe what that error really means. Even a bunch of
+// clues  to describe system state may not be enough.  Sometimes what you need
+// in order to debug the situation is a long-form explanation (you do already
+// add that to your code, don't you?).  Or, even better, a linear history of
+// long-form explanations, each one building on the prior (which you can't
+// easily do in code).
+//
+// Unlike other additions, which are added as top-level key:value pairs to the
+// context, the whole history of comments gets retained, persisted in order of
+// appearance and prefixed by the file and line in which they appeared. This
+// means comments are always added to the error and never clobber each other,
+// regardless of their location.
+func (err *Err) WithComment(msg string, vs ...any) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	return &Err{
+		e: err,
+		// have to do a new dataNode here, or else comments will duplicate
+		data: &dataNode{comment: newComment(1, msg, vs...)},
+	}
+}
+
+// Comments are special case additions to the error.  They're here to, well,
+// let you add comments!  Why?  Because sometimes it's not sufficient to have
+// an error message describe what that error really means. Even a bunch of
+// clues  to describe system state may not be enough.  Sometimes what you need
+// in order to debug the situation is a long-form explanation (you do already
+// add that to your code, don't you?).  Or, even better, a linear history of
+// long-form explanations, each one building on the prior (which you can't
+// easily do in code).
+//
+// Unlike other additions, which are added as top-level key:value pairs to the
+// context, the whole history of comments gets retained, persisted in order of
+// appearance and prefixed by the file and line in which they appeared. This
+// means comments are always added to the error and never clobber each other,
+// regardless of their location.
+func WithComment(err error, msg string, vs ...any) *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	return &Err{
+		e: err,
+		// have to do a new dataNode here, or else comments will duplicate
+		data: &dataNode{comment: newComment(1, msg, vs...)},
+	}
+}
+
+// ------------------------------------------------------------
+// helpers
+// ------------------------------------------------------------
+
+// getLabelCounter retrieves the a labelCounter from the provided
+// error.  The algorithm works from the current error up the
+// hierarchy, looking into each dataNode tree along the way, and
+// eagerly takes the first available counter.
+func getLabelCounter(e error) Adder {
+	if e == nil {
+		return nil
+	}
+
+	ce, ok := e.(*Err)
+	if !ok {
+		return nil
+	}
+
+	for i := len(ce.stack) - 1; i >= 0; i-- {
+		lc := getLabelCounter(ce.stack[i])
+		if lc != nil {
+			return lc
 		}
 	}
 
-	switch len(filtered) {
-	case 0:
-		return nil
-	case 1:
-		return toErr(filtered[0], "", nil, traceDepth+1)
+	if ce.e != nil {
+		lc := getLabelCounter(ce.e)
+		if lc != nil {
+			return lc
+		}
 	}
 
-	return toStack(filtered[0], filtered[1:], traceDepth+1)
+	if ce.data != nil && ce.data.labelCounter != nil {
+		return ce.data.labelCounter
+	}
+
+	return nil
 }
 
-// returns true if the error is nil, or is a non-nil interface containing a nil value.
+// returns true if the error is nil, or if it is a non-nil interface
+// containing a nil value.
 func isNilErrIface(err error) bool {
 	if err == nil {
 		return true
@@ -853,127 +1005,4 @@ func isNilErrIface(err error) bool {
 	val := reflect.ValueOf(err)
 
 	return ((val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface) && val.IsNil())
-}
-
-// ---------------------------------------------------------------------------
-// error core
-// ---------------------------------------------------------------------------
-
-// ErrCore is a minimized version of an Err{}.  Primarily intended for
-// serializing a flattened version of the error stack
-type ErrCore struct {
-	Msg      string              `json:"msg"`
-	Labels   map[string]struct{} `json:"labels"`
-	Values   map[string]any      `json:"values"`
-	Comments comments            `json:"comments"`
-}
-
-// Core transforms the Err to an ErrCore, flattening all the errors in
-// the stack into a single struct.
-func (err *Err) Core() *ErrCore {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	return &ErrCore{
-		Msg:      err.Error(),
-		Labels:   err.Labels(),
-		Values:   err.values(),
-		Comments: err.Comments(),
-	}
-}
-
-// ToCore transforms the Err to an ErrCore, flattening all the errors in
-// the stack into a single struct
-func ToCore(err error) *ErrCore {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	e, ok := err.(*Err)
-	if !ok {
-		e = toErr(err, "", nil, 1)
-	}
-
-	return e.Core()
-}
-
-func (ec *ErrCore) String() string {
-	if ec == nil {
-		return "<nil>"
-	}
-
-	return ec.stringer(false)
-}
-
-func (ec *ErrCore) stringer(fancy bool) string {
-	sep := ", "
-	ls := strings.Join(maps.Keys(ec.Labels), sep)
-
-	vsl := []string{}
-	for k, v := range ec.Values {
-		vsl = append(vsl, k+":"+marshal(v, true))
-	}
-
-	vs := strings.Join(vsl, sep)
-
-	csl := []string{}
-	for _, c := range ec.Comments {
-		csl = append(csl, c.Caller+" - "+c.File+" - "+c.Message)
-	}
-
-	cs := strings.Join(csl, sep)
-
-	if fancy {
-		return `{msg:"` + ec.Msg + `", labels:[` + ls + `], values:{` + vs + `}, comments:[` + cs + `]}`
-	}
-
-	s := []string{}
-
-	if len(ec.Msg) > 0 {
-		s = append(s, `"`+ec.Msg+`"`)
-	}
-
-	if len(ls) > 0 {
-		s = append(s, "["+ls+"]")
-	}
-
-	if len(vs) > 0 {
-		s = append(s, "{"+vs+"}")
-	}
-
-	if len(cs) > 0 {
-		s = append(s, "["+cs+"]")
-	}
-
-	return "{" + strings.Join(s, ", ") + "}"
-}
-
-// Format provides cleaner printing of an ErrCore struct.
-//
-//	%s    only populated values are printed, without printing the property name.
-//	%v    same as %s.
-//
-// Format accepts flags that alter the printing of some verbs, as follows:
-//
-//	%+v    prints the full struct, including empty values and property names.
-func (ec *ErrCore) Format(s fmt.State, verb rune) {
-	if ec == nil {
-		write(s, verb, "<nil>")
-		return
-	}
-
-	if verb == 'v' {
-		if s.Flag('+') {
-			write(s, verb, ec.stringer(true))
-			return
-		}
-
-		if s.Flag('#') {
-			write(s, verb, ec.stringer(true))
-			return
-		}
-	}
-
-	write(s, verb, ec.stringer(false))
 }
