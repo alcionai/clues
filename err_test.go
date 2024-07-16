@@ -1346,3 +1346,25 @@ func withTraceWrapper(err error, depth int) error {
 func cluesWithTraceWrapper(err *clues.Err, depth int) error {
 	return err.WithTrace(depth)
 }
+
+func withCommentWrapper(
+	err error,
+	msg string,
+	vs ...any,
+) error {
+	// always add two comments to test that both are saved
+	return clues.
+		WithComment(err, msg, vs...).
+		WithComment(msg+" - repeat", vs...)
+}
+
+func cluesWithCommentWrapper(
+	err *clues.Err,
+	msg string,
+	vs ...any,
+) error {
+	// always add two comments to test that both are saved
+	return err.
+		WithComment(msg, vs...).
+		WithComment(msg+" - repeat", vs...)
+}

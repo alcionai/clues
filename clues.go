@@ -3,11 +3,13 @@ package clues
 import (
 	"context"
 	"fmt"
+	"path"
 	"reflect"
 	"strings"
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 type Adder interface {
@@ -34,6 +36,7 @@ type dataNode struct {
 	id           string
 	vs           map[string]any
 	labelCounter Adder
+	comment      comment
 }
 
 func makeNodeID() string {
@@ -113,6 +116,85 @@ func (dn *dataNode) Map() map[string]any {
 	}
 
 	return m
+}
+
+type comment struct {
+	Caller  string
+	Dir     string
+	File    string
+	Message string
+}
+
+func (c comment) isEmpty() bool {
+	return len(c.Message) == 0
+}
+
+func newComment(
+	depth int,
+	template string,
+	values ...any,
+) comment {
+	caller := getCaller(depth + 1)
+	longTrace := getTrace(depth + 1)
+	dir, file := path.Split(longTrace)
+
+	return comment{
+		Caller:  caller,
+		Dir:     dir,
+		File:    file,
+		Message: fmt.Sprintf(template, values...),
+	}
+}
+
+func (dn *dataNode) addComment(
+	depth int,
+	msg string,
+	vs ...any,
+) *dataNode {
+	if len(msg) == 0 {
+		return dn
+	}
+
+	return &dataNode{
+		parent:       dn,
+		labelCounter: dn.labelCounter,
+		comment:      newComment(depth+1, msg, vs...),
+	}
+}
+
+type comments []comment
+
+func (cs comments) String() string {
+	result := []string{}
+
+	for _, c := range cs {
+		result = append(result, c.Caller+" - "+c.File)
+		result = append(result, "\t"+c.Message)
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// Comments retrieves the full ancestor comment chain.
+// The return value is ordered from the first added comment
+// to the last one.
+func (dn *dataNode) Comments() comments {
+	result := comments{}
+
+	if !dn.comment.isEmpty() {
+		result = append(result, dn.comment)
+	}
+
+	for dn.parent != nil {
+		dn = dn.parent
+		if !dn.comment.isEmpty() {
+			result = append(result, dn.comment)
+		}
+	}
+
+	slices.Reverse(result)
+
+	return result
 }
 
 // ---------------------------------------------------------------------------
@@ -299,6 +381,32 @@ func AddLabelCounter(ctx context.Context, counter Adder) context.Context {
 	nc := from(ctx, defaultNamespace)
 	nn := nc.add(nil)
 	nn.labelCounter = counter
+	return set(ctx, nn)
+}
+
+// Comments are special case additions to the context.  They're here to, well,
+// let you add comments!  Why?  Because sometimes it's not sufficient to have a
+// log let you know that a line of code was reached. Even a bunch of clues to
+// describe system state may not be enough.  Sometimes what you need in order
+// to debug the situation is a long-form explanation (you do already add that
+// to your code, don't you?).  Or, even better, a linear history of long-form
+// explanations, each one building on the prior (which you can't easily do in
+// code).
+//
+// Should you transfer all your comments to clues?  Absolutely not.  But in
+// cases where extra explantion is truly important to debugging production,
+// when all you've got are some logs and (maybe if you're lucky) a span trace?
+// Those are the ones you want.
+//
+// Unlike other additions, which are added as top-level key:value pairs to the
+// context, comments are all held as a single array of additions, persisted in
+// order of appearance, and prefixed by the file and line in which they appeared.
+// This means comments are always added to the context and never clobber each
+// other, regardless of their location.  IE: don't add them to a loop.
+func AddComment(ctx context.Context, msg string, vs ...any) context.Context {
+	nc := from(ctx, defaultNamespace)
+	nn := nc.addComment(1, msg, vs...)
+
 	return set(ctx, nn)
 }
 

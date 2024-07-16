@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"testing"
 
 	"github.com/alcionai/clues"
@@ -570,4 +571,115 @@ func TestPointerDereferenceMarshal(t *testing.T) {
 
 	// should not panic
 	clues.Add(ctx, "pointable", p)
+}
+
+func TestAddComment(t *testing.T) {
+	ctx := context.Background()
+	dn := clues.In(ctx)
+
+	comments := dn.Comments()
+	if len(comments) > 0 {
+		t.Errorf("no comments should have been added\n\tgot: %v", comments)
+	}
+
+	ctx = clues.AddComment(ctx, "first comment!")
+	dn2 := clues.In(ctx)
+
+	comments = dn2.Comments()
+	if len(comments) != 1 {
+		t.Errorf("should have found exactly one comment\n\tgot: %v", comments)
+	}
+
+	if comments[0].Message != "first comment!" {
+		t.Errorf("unexpected comment:\n\twant: %s\n\tgot: %s", "first comment!", comments[0])
+	}
+
+	comments = dn.Comments()
+	if len(comments) > 0 {
+		t.Errorf("no comments should have been added to the original ctx\n\tgot: %v", comments)
+	}
+
+	ctx = clues.AddComment(ctx, "comment %d!", 2)
+	dn3 := clues.In(ctx)
+
+	comments = dn3.Comments()
+	if len(comments) != 2 {
+		t.Errorf("should have found exactly two comments\n\tgot: %v", comments)
+	}
+
+	if comments[0].Message != "first comment!" {
+		t.Errorf("unexpected comment:\n\twant: %s\n\tgot: %s", "first comment!", comments[0])
+	}
+
+	if comments[1].Message != "comment 2!" {
+		t.Errorf("unexpected comment:\n\twant: %s\n\tgot: %s", "comment 2!", comments[1])
+	}
+
+	comments = dn2.Comments()
+	if len(comments) != 1 {
+		t.Errorf("parent should have found exactly one comment\n\tgot: %v", comments)
+	}
+
+	if comments[0].Message != "first comment!" {
+		t.Errorf("parent had unexpected comment:\n\twant: %s\n\tgot: %s", "first comment!", comments[0])
+	}
+
+	comments = dn.Comments()
+	if len(comments) > 0 {
+		t.Errorf("no comments should have been added to the original ctx\n\tgot: %v", comments)
+	}
+}
+
+func addCommentTo(ctx context.Context, msg string) context.Context {
+	return clues.AddComment(ctx, msg)
+}
+
+// requires sets of 3 strings
+func commentRE(ss ...string) string {
+	result := ""
+
+	for i := 0; i < len(ss); i += 3 {
+		result += ss[i] + " - "
+		result += ss[i+1] + `:\d+\n`
+		result += `\t` + ss[i+2]
+
+		if len(ss) > i+3 {
+			result += `\n`
+		}
+	}
+
+	return result
+}
+
+func commentMatches(
+	t *testing.T,
+	expect, result string,
+) {
+	re := regexp.MustCompile(expect)
+
+	if !re.MatchString(result) {
+		t.Errorf(
+			"unexpected comments stack"+
+				"\n\nexpected (raw)\n\"%s\""+
+				"\n\ngot (raw)\n%#v"+
+				"\n\ngot (fmt)\n\"%s\"",
+			re, result, result)
+	}
+}
+
+func TestAddComment_trace(t *testing.T) {
+	ctx := context.Background()
+	ctx = clues.AddComment(ctx, "one")
+	ctx = addCommentTo(ctx, "two")
+	ctx = clues.AddComment(ctx, "three")
+
+	dn := clues.In(ctx)
+	comments := dn.Comments()
+	stack := comments.String()
+	expected := commentRE(
+		"TestAddComment_trace", "clues_test.go", "one",
+		"addCommentTo", "clues_test.go", "two",
+		"TestAddComment_trace", "clues_test.go", `three$`)
+
+	commentMatches(t, expected, stack)
 }
