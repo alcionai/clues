@@ -64,9 +64,12 @@ func AddMapTo[K comparable, V any](
 // used to correlate and isolate logs to certain trace branches.
 // AddTrace is only needed for layers that don't otherwise call Add() or
 // similar functions, since those funcs already attach a new node.
-func AddTrace(ctx context.Context) context.Context {
+func AddTrace(
+	ctx context.Context,
+	traceID string,
+) context.Context {
 	nc := nodeFromCtx(ctx, defaultNamespace)
-	return setDefaultNodeInCtx(ctx, nc.trace(""))
+	return setDefaultNodeInCtx(ctx, nc.trace(traceID))
 }
 
 // AddTraceTo stacks a clues node onto this context within the specified
@@ -75,17 +78,17 @@ func AddTrace(ctx context.Context) context.Context {
 // certain trace branches.  AddTraceTo is only needed for layers that don't
 // otherwise call AddTo() or similar functions, since those funcs already
 // attach a new node.
-func AddTraceTo(ctx context.Context, namespace string) context.Context {
+func AddTraceTo(ctx context.Context, traceID, namespace string) context.Context {
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
-	return setNodeInCtx(ctx, namespace, nc.trace(""))
+	return setNodeInCtx(ctx, namespace, nc.trace(traceID))
 }
 
-// AddTraceName stacks a clues node onto this context and uses the provided
-// name for the trace id, instead of a randomly generated hash. AddTraceName
+// AddTraceWith stacks a clues node onto this context and uses the provided
+// name for the trace id, instead of a randomly generated hash. AddTraceWith
 // can be called without additional values if you only want to add a trace marker.
-func AddTraceName(
+func AddTraceWith(
 	ctx context.Context,
-	name string,
+	traceID string,
 	kvs ...any,
 ) context.Context {
 	nc := nodeFromCtx(ctx, defaultNamespace)
@@ -93,20 +96,20 @@ func AddTraceName(
 	var node *dataNode
 	if len(kvs) > 0 {
 		node = nc.addValues(normalize(kvs...))
-		node.id = name
+		node.id = traceID
 	} else {
-		node = nc.trace(name)
+		node = nc.trace(traceID)
 	}
 
 	return setDefaultNodeInCtx(ctx, node)
 }
 
-// AddTraceNameTo stacks a clues node onto this context and uses the provided
-// name for the trace id, instead of a randomly generated hash. AddTraceNameTo
+// AddTraceWithTo stacks a clues node onto this context and uses the provided
+// name for the trace id, instead of a randomly generated hash. AddTraceWithTo
 // can be called without additional values if you only want to add a trace marker.
-func AddTraceNameTo(
+func AddTraceWithTo(
 	ctx context.Context,
-	name, namespace string,
+	traceID, namespace string,
 	kvs ...any,
 ) context.Context {
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
@@ -114,9 +117,9 @@ func AddTraceNameTo(
 	var node *dataNode
 	if len(kvs) > 0 {
 		node = nc.addValues(normalize(kvs...))
-		node.id = name
+		node.id = traceID
 	} else {
-		node = nc.trace(name)
+		node = nc.trace(traceID)
 	}
 
 	return setNodeInCtx(ctx, namespace, node)
@@ -126,6 +129,8 @@ func AddTraceNameTo(
 // comments
 // ---------------------------------------------------------------------------
 
+// AddComment adds a long form comment to the clues.
+//
 // Comments are special case additions to the context.  They're here to, well,
 // let you add comments!  Why?  Because sometimes it's not sufficient to have a
 // log let you know that a line of code was reached. Even a bunch of clues to
@@ -156,6 +161,38 @@ func AddComment(
 	return setDefaultNodeInCtx(ctx, nn)
 }
 
+// AddCommentTo adds a long form comment to the clues in a certain namespace.
+//
+// Comments are special case additions to the context.  They're here to, well,
+// let you add comments!  Why?  Because sometimes it's not sufficient to have a
+// log let you know that a line of code was reached. Even a bunch of clues to
+// describe system state may not be enough.  Sometimes what you need in order
+// to debug the situation is a long-form explanation (you do already add that
+// to your code, don't you?).  Or, even better, a linear history of long-form
+// explanations, each one building on the prior (which you can't easily do in
+// code).
+//
+// Should you transfer all your comments to clues?  Absolutely not.  But in
+// cases where extra explantion is truly important to debugging production,
+// when all you've got are some logs and (maybe if you're lucky) a span trace?
+// Those are the ones you want.
+//
+// Unlike other additions, which are added as top-level key:value pairs to the
+// context, comments are all held as a single array of additions, persisted in
+// order of appearance, and prefixed by the file and line in which they appeared.
+// This means comments are always added to the context and never clobber each
+// other, regardless of their location.  IE: don't add them to a loop.
+func AddCommentTo(
+	ctx context.Context,
+	namespace, msg string,
+	vs ...any,
+) context.Context {
+	nc := nodeFromCtx(ctx, ctxKey(namespace))
+	nn := nc.addComment(1, msg, vs...)
+
+	return setNodeInCtx(ctx, namespace, nn)
+}
+
 // ---------------------------------------------------------------------------
 // hooks
 // ---------------------------------------------------------------------------
@@ -170,4 +207,20 @@ func AddLabelCounter(ctx context.Context, counter Adder) context.Context {
 	nn.labelCounter = counter
 
 	return setDefaultNodeInCtx(ctx, nn)
+}
+
+// AddLabelCounterTo embeds an Adder interface into this context. Any already
+// embedded Adder will get replaced.  When adding Labels to a clues.Err the
+// LabelCounter will use the label as the key for the Add call, and increment
+// the count of that label by one.
+func AddLabelCounterTo(
+	ctx context.Context,
+	namespace string,
+	counter Adder,
+) context.Context {
+	nc := nodeFromCtx(ctx, ctxKey(namespace))
+	nn := nc.addValues(nil)
+	nn.labelCounter = counter
+
+	return setNodeInCtx(ctx, namespace, nn)
 }

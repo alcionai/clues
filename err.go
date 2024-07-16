@@ -134,14 +134,15 @@ func makeStack(
 // TODO: transform all this to comply with a standard interface
 // ------------------------------------------------------------
 
-// TODO: this will need some cleanup in a follow-up PR.
-//
 // ancestors builds out the ancestor lineage of this
 // particular error.  This follows standard layout rules
 // already established elsewhere:
 // * the first entry is the oldest ancestor, the last is
 // the current error.
 // * Stacked errors get visited before wrapped errors.
+//
+// TODO: get other ancestor stack builders to work off of this
+// func instead of spreading that handling everywhere.
 func ancestors(err error) []error {
 	return stackAncestorsOntoSelf(err)
 }
@@ -847,20 +848,25 @@ func WithMap(err error, m map[string]any) *Err {
 // builders - tracing
 // ------------------------------------------------------------
 
-// WithTrace sets the error trace to a certain depth.
-// A depth of 0 traces to the func where WithTrace is
-// called.  1 sets the trace to its parent, etc.
-// Error traces are already generated for the location
-// where clues.Wrap or clues.Stack was called.  This
-// call is for cases where Wrap or Stack calls are handled
-// in a helper func and are not reporting the actual
-// error origin.
-// TODO: rename to `SkipCaller`.
-func (err *Err) WithTrace(depth int) *Err {
+// SkipCaller skips <depth> callers when constructing the
+// error trace stack.  The caller is the file, line, and func
+// where the *clues.Err was generated.
+//
+// A depth of 0 performs no skips, and returns the same
+// caller info as if SkipCaller was not called.  1 skips the
+// immediate parent, etc.
+//
+// Error traces are already generated for the location where
+// clues.Wrap or clues.Stack was called.  This func is for
+// cases where Wrap or Stack calls are handled in a helper
+// func and are not reporting the actual error origin.
+func (err *Err) SkipCaller(depth int) *Err {
 	if isNilErrIface(err) {
 		return nil
 	}
 
+	// needed both here and in withTrace() to
+	// correct for the extra call depth.
 	if depth < 0 {
 		depth = 0
 	}
@@ -870,18 +876,22 @@ func (err *Err) WithTrace(depth int) *Err {
 	return err
 }
 
-// WithTrace sets the error trace to a certain depth.
-// A depth of 0 traces to the func where WithTrace is
-// called.  1 sets the trace to its parent, etc.
-// Error traces are already generated for the location
-// where clues.Wrap or clues.Stack was called.  This
-// call is for cases where Wrap or Stack calls are handled
-// in a helper func and are not reporting the actual
-// error origin.
+// SkipCaller skips <depth> callers when constructing the
+// error trace stack.  The caller is the file, line, and func
+// where the *clues.Err was generated.
+//
+// A depth of 0 performs no skips, and returns the same
+// caller info as if SkipCaller was not called.  1 skips the
+// immediate parent, etc.
+//
+// Error traces are already generated for the location where
+// clues.Wrap or clues.Stack was called.  This func is for
+// cases where Wrap or Stack calls are handled in a helper
+// func and are not reporting the actual error origin.
+//
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
-// TODO: rename to `SkipCaller`.
-func WithTrace(err error, depth int) *Err {
+func WithSkipCaller(err error, depth int) *Err {
 	if isNilErrIface(err) {
 		return nil
 	}
@@ -897,7 +907,7 @@ func WithTrace(err error, depth int) *Err {
 		return newErr(err, "", map[string]any{}, depth+1)
 	}
 
-	return e.WithTrace(depth + 1)
+	return e.SkipCaller(depth + 1)
 }
 
 // ------------------------------------------------------------

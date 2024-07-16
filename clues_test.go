@@ -246,7 +246,7 @@ func TestAddTrace(t *testing.T) {
 			check := msa{}
 			mustEquals(t, check, clues.In(ctx).Map(), true)
 
-			ctx = clues.AddTrace(ctx)
+			ctx = clues.AddTrace(ctx, "")
 
 			assert(
 				t, ctx, "",
@@ -278,7 +278,7 @@ func TestAddTraceName(t *testing.T) {
 			mustEquals(t, msa{}, clues.In(ctx).Map(), true)
 
 			for _, name := range test.names {
-				ctx = clues.AddTraceName(ctx, name, test.kvs...)
+				ctx = clues.AddTraceWith(ctx, name, test.kvs...)
 			}
 
 			assert(
@@ -376,7 +376,7 @@ func TestAddTraceTo(t *testing.T) {
 			check := msa{}
 			mustEquals(t, check, clues.InNamespace(ctx, "ns").Map(), true)
 
-			ctx = clues.AddTraceTo(ctx, "ns")
+			ctx = clues.AddTraceTo(ctx, "", "ns")
 
 			assert(
 				t, ctx, "ns",
@@ -408,7 +408,7 @@ func TestAddTraceNameTo(t *testing.T) {
 			mustEquals(t, msa{}, clues.InNamespace(ctx, "ns").Map(), true)
 
 			for _, name := range test.names {
-				ctx = clues.AddTraceNameTo(ctx, name, "ns", test.kvs...)
+				ctx = clues.AddTraceWithTo(ctx, name, "ns", test.kvs...)
 			}
 
 			assert(
@@ -630,7 +630,7 @@ func TestAddComment(t *testing.T) {
 	}
 }
 
-func addCommentTo(ctx context.Context, msg string) context.Context {
+func addCommentToCtx(ctx context.Context, msg string) context.Context {
 	return clues.AddComment(ctx, msg)
 }
 
@@ -670,7 +670,7 @@ func commentMatches(
 func TestAddComment_trace(t *testing.T) {
 	ctx := context.Background()
 	ctx = clues.AddComment(ctx, "one")
-	ctx = addCommentTo(ctx, "two")
+	ctx = addCommentToCtx(ctx, "two")
 	ctx = clues.AddComment(ctx, "three")
 
 	dn := clues.In(ctx)
@@ -678,7 +678,7 @@ func TestAddComment_trace(t *testing.T) {
 	stack := comments.String()
 	expected := commentRE(
 		"TestAddComment_trace", "clues_test.go", "one",
-		"addCommentTo", "clues_test.go", "two",
+		"addCommentToCtx", "clues_test.go", "two",
 		"TestAddComment_trace", "clues_test.go", `three$`)
 
 	commentMatches(t, expected, stack)
