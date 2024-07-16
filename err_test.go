@@ -788,6 +788,20 @@ var testTable = []struct {
 		expectValues: msa{},
 	},
 	{
+		name:         "stackwrap",
+		err:          clues.StackWrap(target, sentinel, "wrap"),
+		expectMsg:    "target: wrap: sentinel",
+		expectLabels: msa{},
+		expectValues: msa{},
+	},
+	{
+		name:         "stackwrapWC",
+		err:          clues.StackWrapWC(context.Background(), target, sentinel, "wrap"),
+		expectMsg:    "target: wrap: sentinel",
+		expectLabels: msa{},
+		expectValues: msa{},
+	},
+	{
 		name:         "wrap two stack: top",
 		err:          clues.Wrap(clues.Stack(target, sentinel, other), "wrap"),
 		expectMsg:    "wrap: target: sentinel: other",

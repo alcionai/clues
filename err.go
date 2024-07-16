@@ -129,6 +129,38 @@ func makeStack(
 	return toStack(filtered[0], filtered[1:], traceDepth+1)
 }
 
+// makeStackWrap creates a new *Err from the provided pair of sentinal
+// and wrapped errors.  If sentinel is nil, wraps the wrapped error.
+// If wrapped is nil, wraps the sentinel error.  If the message is empty,
+// returns a stack(sentinel, wrapped).  Otherwise, makes a stack headed
+// by the sentinel error, and wraps the wrapped error in the message.
+func makeStackWrap(
+	traceDepth int,
+	sentinel, wrapped error,
+	msg string,
+) *Err {
+	if isNilErrIface(sentinel) && isNilErrIface(wrapped) {
+		return nil
+	}
+
+	if len(msg) == 0 {
+		return makeStack(traceDepth+1, sentinel, wrapped)
+	}
+
+	if isNilErrIface(sentinel) {
+		return newErr(wrapped, msg, nil, traceDepth+1)
+	}
+
+	if isNilErrIface(wrapped) {
+		return newErr(sentinel, msg, nil, traceDepth+1)
+	}
+
+	return makeStack(
+		1,
+		sentinel,
+		newErr(wrapped, msg, nil, traceDepth+1))
+}
+
 // ------------------------------------------------------------
 // getters
 // TODO: transform all this to comply with a standard interface
@@ -686,9 +718,9 @@ func WrapWC(ctx context.Context, err error, msg string) *Err {
 // additional data using funcs like With(...) or Label(...).
 //
 // Stack can be given one or more `nil` error values.  Nil errors will be
-// automatically filered from the retained stack of errors.  Ex:
+// automatically filtered from the retained stack of errors.  Ex:
 // clues.Stack(errFoo, nil, errSmarf) == clues.Stack(errFoo, errSmarf).
-// If all input errors are nil, stack will return nil.  To avoid  golang
+// If all input errors are nil, stack will return nil.  To avoid golang
 // footguns when returning nil structs as interfaces (such as error), callers
 // should always return Stack().OrNil() in cases where the input error could
 // be nil.
@@ -716,14 +748,60 @@ func Stack(errs ...error) *Err {
 // additional data using funcs like With(...) or Label(...).
 //
 // Stack can be given one or more `nil` error values.  Nil errors will be
-// automatically filered from the retained stack of errors.  Ex:
+// automatically filtered from the retained stack of errors.  Ex:
 // clues.StackWC(ctx, errFoo, nil, errSmarf) == clues.StackWC(ctx, errFoo, errSmarf).
-// If all input errors are nil, stack will return nil.  To avoid  golang
+// If all input errors are nil, stack will return nil.  To avoid golang
 // footguns when returning nil structs as interfaces (such as error), callers
 // should always return StackWC().OrNil() in cases where the input error could
 // be nil.
 func StackWC(ctx context.Context, errs ...error) *Err {
 	err := makeStack(1, errs...)
+
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	return err.WithClues(ctx)
+}
+
+// StackWrap is a quality-of-life shorthand for a common usage of clues errors:
+// clues.Stack(sentinel, clues.Wrap(myErr, "my message")).  The result follows
+// all standard behavior of stacked and wrapped errors.
+//
+// The returned *Err is an error-compliant builder that can aggregate
+// additional data using funcs like With(...) or Label(...).
+//
+// StackWrap can be given one or more `nil` error values.  Nil errors will be
+// automatically filtered from the retained stack of errors.  Ex:
+// clues.StackWrap(errFoo, nil, "msg") == clues.Wrap(errFoo, "msg").
+// If both input errors are nil, StackWrap will return nil.  To avoid golang
+// footguns when returning nil structs as interfaces (such as error), callers
+// should always return StackWrap().OrNil() in cases where the input errors
+// could be nil.
+func StackWrap(sentinel, wrapped error, msg string) *Err {
+	return makeStackWrap(1, sentinel, wrapped, msg)
+}
+
+// StackWrapWC is a quality-of-life shorthand for a common usage of clues errors:
+// clues.Stack(sentinel, clues.Wrap(myErr, "my message")).WithClues(ctx).
+// The result follows all standard behavior of stacked and wrapped errors.
+//
+// The returned *Err is an error-compliant builder that can aggregate
+// additional data using funcs like With(...) or Label(...).
+//
+// StackWrapWC can be given one or more `nil` error values.  Nil errors will be
+// automatically filtered from the retained stack of errors.  Ex:
+// clues.StackWrapWC(ctx, errFoo, nil, "msg") == clues.WrapWC(ctx, errFoo, "msg").
+// If both input errors are nil, StackWrap will return nil.  To avoid golang
+// footguns when returning nil structs as interfaces (such as error), callers
+// should always return StackWrap().OrNil() in cases where the input errors
+// could be nil.
+func StackWrapWC(
+	ctx context.Context,
+	sentinel, wrapped error,
+	msg string,
+) *Err {
+	err := makeStackWrap(1, sentinel, wrapped, msg)
 
 	if isNilErrIface(err) {
 		return nil
