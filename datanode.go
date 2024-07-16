@@ -226,8 +226,6 @@ func (dn *dataNode) Slice() []any {
 type comment struct {
 	// the func name in which the comment was created.
 	Caller string
-	// the directory path of the file owning the Caller.
-	Dir string
 	// the name of the file owning the caller.
 	File string
 	// the comment message itself.
@@ -249,13 +247,11 @@ func newComment(
 	values ...any,
 ) comment {
 	caller := getCaller(depth + 1)
-	longTrace := getTrace(depth + 1)
-	dir, file := path.Split(longTrace)
+	_, _, parentFileLine := getDirAndFile(depth + 1)
 
 	return comment{
 		Caller:  caller,
-		Dir:     dir,
-		File:    file,
+		File:    parentFileLine,
 		Message: fmt.Sprintf(template, values...),
 	}
 }
@@ -376,14 +372,30 @@ func makeNodeID() string {
 	return uns[:4] + uns[len(uns)-4:]
 }
 
-// getTrace retrieves the file and line number of the caller. Depth is the
-// skip-caller count.  Clues funcs that call this one should provide either
-// `1` (if they do not already have a depth value), or `depth+1` otherwise`.
+// getDirAndFile retrieves the file and line number of the caller.
+// Depth is the skip-caller count.  Clues funcs that call this one should
+// provide either `1` (if they do not already have a depth value), or `depth+1`
+// otherwise`.
 //
-// Formats to: `<file>:<line>`
-func getTrace(depth int) string {
+// formats:
+// dir `absolute/os/path/to/parent/folder`
+// fileAndLine `<file>:<line>`
+// parentAndFileAndLine `<parent>/<file>:<line>`
+func getDirAndFile(
+	depth int,
+) (dir, fileAndLine, parentAndFileAndLine string) {
 	_, file, line, _ := runtime.Caller(depth + 1)
-	return fmt.Sprintf("%s:%d", file, line)
+	dir, file = path.Split(file)
+
+	fileLine := fmt.Sprintf("%s:%d", file, line)
+	parentFileLine := fileLine
+
+	parent := path.Base(dir)
+	if len(parent) > 0 {
+		parentFileLine = path.Join(parent, fileLine)
+	}
+
+	return dir, fileLine, parentFileLine
 }
 
 // getCaller retrieves the func name of the caller. Depth is the  skip-caller
