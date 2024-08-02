@@ -194,7 +194,49 @@ func AddCommentTo(
 }
 
 // ---------------------------------------------------------------------------
-// hooks
+// witness
+// ---------------------------------------------------------------------------
+
+// AddWitness adds a witness with a given name to the contex.  The caller can
+// pass the witness clues directly in a downstream instance to add those clues
+// to the current clues node.  This can be handy in a certain set of uncommon
+// cases where retrieving clues is otherwise difficult to do, such as working
+// with middleware that doesn't allow control over error creation.
+//
+// When retreiving clues from a context, each witness will produce its own
+// namespaced set of values
+func AddWitness(
+	ctx context.Context,
+	name string,
+) context.Context {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+	nn := nc.addWitness(name)
+
+	return setDefaultNodeInCtx(ctx, nn)
+}
+
+// Relay adds all key-value pairs to the provided witness.  The witness will
+// record those values to the dataNode in which it was created.  All relayed
+// values are namespaced to the owning witness.
+func Relay(
+	ctx context.Context,
+	witness string,
+	vs ...any,
+) {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+	wit, ok := nc.witnesses[witness]
+
+	if !ok {
+		return
+	}
+
+	// set values, not add.  We don't want witnesses
+	// to own a full clues tree.
+	wit.data.setValues(normalize(vs...))
+}
+
+// ---------------------------------------------------------------------------
+// error label counter
 // ---------------------------------------------------------------------------
 
 // AddLabelCounter embeds an Adder interface into this context. Any already
