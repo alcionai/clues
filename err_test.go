@@ -1368,8 +1368,8 @@ func withCommentWrapper(
 ) error {
 	// always add two comments to test that both are saved
 	return clues.
-		WithComment(err, msg, vs...).
-		WithComment(msg+" - repeat", vs...)
+		Comment(err, msg, vs...).
+		Comment(msg+" - repeat", vs...)
 }
 
 func cluesWithCommentWrapper(
@@ -1379,6 +1379,6 @@ func cluesWithCommentWrapper(
 ) error {
 	// always add two comments to test that both are saved
 	return err.
-		WithComment(msg, vs...).
-		WithComment(msg+" - repeat", vs...)
+		Comment(msg, vs...).
+		Comment(msg+" - repeat", vs...)
 }

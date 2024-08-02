@@ -63,10 +63,8 @@ func newErr(
 		file:   file,
 		caller: getCaller(traceDepth + 1),
 		msg:    msg,
-		data: &dataNode{
-			id:     makeNodeID(),
-			values: m,
-		},
+		// no ID needed for err data nodes
+		data: &dataNode{values: m},
 	}
 }
 
@@ -106,10 +104,8 @@ func toStack(
 		file:   file,
 		caller: getCaller(traceDepth + 1),
 		stack:  stack,
-		data: &dataNode{
-			id:     makeNodeID(),
-			values: map[string]any{},
-		},
+		// no ID needed for err dataNodes
+		data: &dataNode{},
 	}
 }
 
@@ -224,7 +220,7 @@ func stackAncestorsOntoSelf(err error) []error {
 // comply with.
 func InErr(err error) *dataNode {
 	if isNilErrIface(err) {
-		return &dataNode{values: map[string]any{}}
+		return &dataNode{}
 	}
 
 	return &dataNode{values: inErr(err)}
@@ -252,7 +248,7 @@ func inErr(err error) map[string]any {
 // data take least priority.
 func (err *Err) Values() *dataNode {
 	if isNilErrIface(err) {
-		return &dataNode{values: map[string]any{}}
+		return &dataNode{}
 	}
 
 	return &dataNode{values: err.values()}
@@ -1026,7 +1022,7 @@ func WithSkipCaller(err error, depth int) *Err {
 // appearance and prefixed by the file and line in which they appeared. This
 // means comments are always added to the error and never clobber each other,
 // regardless of their location.
-func (err *Err) WithComment(msg string, vs ...any) *Err {
+func (err *Err) Comment(msg string, vs ...any) *Err {
 	if isNilErrIface(err) {
 		return nil
 	}
@@ -1052,7 +1048,7 @@ func (err *Err) WithComment(msg string, vs ...any) *Err {
 // appearance and prefixed by the file and line in which they appeared. This
 // means comments are always added to the error and never clobber each other,
 // regardless of their location.
-func WithComment(err error, msg string, vs ...any) *Err {
+func Comment(err error, msg string, vs ...any) *Err {
 	if isNilErrIface(err) {
 		return nil
 	}
