@@ -12,6 +12,19 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+func mapEquals(
+	t *testing.T,
+	ctx context.Context,
+	expect msa,
+	expectCluesTrace bool,
+) {
+	mustEquals(
+		t,
+		expect,
+		clues.In(ctx).Map(),
+		expectCluesTrace)
+}
+
 func mustEquals[K comparable, V any](
 	t *testing.T,
 	expect, got map[K]V,
@@ -21,7 +34,9 @@ func mustEquals[K comparable, V any](
 
 	if hasCluesTrace && len(g) > 0 {
 		if _, ok := g["clues_trace"]; !ok {
-			t.Error("expected map to contain key [clues_trace]")
+			t.Errorf(
+				"expected map to contain key [clues_trace]\ngot: %+v",
+				g)
 		}
 		delete(g, "clues_trace")
 	}
@@ -682,4 +697,88 @@ func TestAddComment_trace(t *testing.T) {
 		"TestAddComment_trace", "clues/clues_test.go", `three$`)
 
 	commentMatches(t, expected, stack)
+}
+
+func TestAddAgent(t *testing.T) {
+	ctx := context.Background()
+	ctx = clues.Add(ctx, "one", 1)
+
+	mapEquals(t, ctx, msa{
+		"one": 1,
+	}, true)
+
+	ctxWithWit := clues.AddAgent(ctx, "wit")
+	clues.Gather(ctx, "wit", "zero", 0)
+	clues.Gather(ctxWithWit, "wit", "two", 2)
+
+	mapEquals(t, ctx, msa{
+		"one": 1,
+	}, true)
+
+	mapEquals(t, ctxWithWit, msa{
+		"one": 1,
+		"agents": map[string]map[string]any{
+			"wit": {
+				"two": 2,
+			},
+		},
+	}, true)
+
+	ctxWithTim := clues.AddAgent(ctxWithWit, "tim")
+	clues.Gather(ctxWithTim, "tim", "three", 3)
+
+	mapEquals(t, ctx, msa{
+		"one": 1,
+	}, true)
+
+	mapEquals(t, ctxWithTim, msa{
+		"one": 1,
+		"agents": map[string]map[string]any{
+			"wit": {
+				"two": 2,
+			},
+			"tim": {
+				"three": 3,
+			},
+		},
+	}, true)
+
+	ctxWithBob := clues.AddAgent(ctx, "bob")
+	clues.Gather(ctxWithBob, "bob", "four", 4)
+
+	mapEquals(t, ctx, msa{
+		"one": 1,
+	}, true)
+
+	// should not have changed since its first usage
+	mapEquals(t, ctxWithWit, msa{
+		"one": 1,
+		"agents": map[string]map[string]any{
+			"wit": {
+				"two": 2,
+			},
+		},
+	}, true)
+
+	// should not have changed since its first usage
+	mapEquals(t, ctxWithTim, msa{
+		"one": 1,
+		"agents": map[string]map[string]any{
+			"wit": {
+				"two": 2,
+			},
+			"tim": {
+				"three": 3,
+			},
+		},
+	}, true)
+
+	mapEquals(t, ctxWithBob, msa{
+		"one": 1,
+		"agents": map[string]map[string]any{
+			"bob": {
+				"four": 4,
+			},
+		},
+	}, true)
 }

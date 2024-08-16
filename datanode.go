@@ -60,6 +60,30 @@ type dataNode struct {
 	// Errors will only utilize the first labelCounter they find.  The tree is searched
 	// from leaf to root when looking for populated labelCounters.
 	labelCounter Adder
+
+	// agents act as proxy dataNodes that can gather specific, intentional data
+	// additions.  They're namespaced so that additions to the agents don't accidentally
+	// clobber other values in the dataNode. This also allows agents to protect
+	// variations of data from each other, in case users need to compare differences
+	// on the same keys.  That's not the goal for agents, exactly, but it is capable.
+	agents map[string]*agent
+}
+
+// spawnDescendant generates a new dataNode that is a descendant of the current
+// node.  A descendant maintains a pointer to its parent, and carries any genetic
+// necessities (ie, copies of fields) that must be present for continued functionality.
+func (dn *dataNode) spawnDescendant() *dataNode {
+	agents := maps.Clone(dn.agents)
+
+	if agents == nil && dn.agents != nil {
+		agents = map[string]*agent{}
+	}
+
+	return &dataNode{
+		parent:       dn,
+		labelCounter: dn.labelCounter,
+		agents:       agents,
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -126,12 +150,24 @@ func (dn *dataNode) addValues(m map[string]any) *dataNode {
 		m = map[string]any{}
 	}
 
-	return &dataNode{
-		parent:       dn,
-		id:           makeNodeID(),
-		values:       maps.Clone(m),
-		labelCounter: dn.labelCounter,
+	spawn := dn.spawnDescendant()
+	spawn.id = makeNodeID()
+	spawn.setValues(m)
+
+	return spawn
+}
+
+// setValues is a helper called by addValues.
+func (dn *dataNode) setValues(m map[string]any) {
+	if len(m) == 0 {
+		return
 	}
+
+	if len(dn.values) == 0 {
+		dn.values = map[string]any{}
+	}
+
+	maps.Copy(dn.values, m)
 }
 
 // trace adds a new leaf containing a trace ID and no other values.
@@ -140,12 +176,10 @@ func (dn *dataNode) trace(name string) *dataNode {
 		name = makeNodeID()
 	}
 
-	return &dataNode{
-		parent:       dn,
-		id:           name,
-		values:       map[string]any{},
-		labelCounter: dn.labelCounter,
-	}
+	spawn := dn.spawnDescendant()
+	spawn.id = name
+
+	return spawn
 }
 
 // ---------------------------------------------------------------------------
@@ -184,13 +218,13 @@ func InNamespace(ctx context.Context, namespace string) *dataNode {
 // take priority over ancestors in cases of collision.
 func (dn *dataNode) Map() map[string]any {
 	var (
-		m    = map[string]any{}
-		idsl = []string{}
+		m       = map[string]any{}
+		nodeIDs = []string{}
 	)
 
 	dn.lineage(func(id string, vs map[string]any) {
 		if len(id) > 0 {
-			idsl = append(idsl, id)
+			nodeIDs = append(nodeIDs, id)
 		}
 
 		for k, v := range vs {
@@ -198,9 +232,21 @@ func (dn *dataNode) Map() map[string]any {
 		}
 	})
 
-	if len(idsl) > 0 {
-		m["clues_trace"] = strings.Join(idsl, ",")
+	if len(nodeIDs) > 0 {
+		m["clues_trace"] = strings.Join(nodeIDs, ",")
 	}
+
+	if len(dn.agents) == 0 {
+		return m
+	}
+
+	agentVals := map[string]map[string]any{}
+
+	for _, agent := range dn.agents {
+		agentVals[agent.id] = agent.data.Map()
+	}
+
+	m["agents"] = agentVals
 
 	return m
 }
@@ -266,11 +312,11 @@ func (dn *dataNode) addComment(
 		return dn
 	}
 
-	return &dataNode{
-		parent:       dn,
-		labelCounter: dn.labelCounter,
-		comment:      newComment(depth+1, msg, vs...),
-	}
+	spawn := dn.spawnDescendant()
+	spawn.id = makeNodeID()
+	spawn.comment = newComment(depth+1, msg, vs...)
+
+	return spawn
 }
 
 // comments allows us to put a stringer on a slice of comments.
@@ -315,6 +361,38 @@ func (dn *dataNode) Comments() comments {
 	slices.Reverse(result)
 
 	return result
+}
+
+// ---------------------------------------------------------------------------
+// agents
+// ---------------------------------------------------------------------------
+
+type agent struct {
+	// the name of the agent
+	id string
+
+	// dataNode is used here instead of a basic value map so that
+	// we can extend the usage of agents in the future by allowing
+	// the full set of dataNode behavior.  We'll need a builder for that,
+	// but we'll get there eventually.
+	data *dataNode
+}
+
+// addAgent adds a new named agent to the dataNode.
+func (dn *dataNode) addAgent(name string) *dataNode {
+	spawn := dn.spawnDescendant()
+
+	if len(spawn.agents) == 0 {
+		spawn.agents = map[string]*agent{}
+	}
+
+	spawn.agents[name] = &agent{
+		id: name,
+		// no spawn here, this needs an isolated node
+		data: &dataNode{},
+	}
+
+	return spawn
 }
 
 // ---------------------------------------------------------------------------
