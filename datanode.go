@@ -61,22 +61,28 @@ type dataNode struct {
 	// from leaf to root when looking for populated labelCounters.
 	labelCounter Adder
 
-	// witnesses act as proxy dataNodes that can gather specific, intentional data
-	// additions.  They're namespaced so that additions to the witness don't accidentally
-	// clobber other values in the dataNode. This also allows witnesses to protect
+	// agents act as proxy dataNodes that can gather specific, intentional data
+	// additions.  They're namespaced so that additions to the agents don't accidentally
+	// clobber other values in the dataNode. This also allows agents to protect
 	// variations of data from each other, in case users need to compare differences
-	// on the same keys.  That's not the goal for witnesses, exactly, but it is capable.
-	witnesses map[string]*witness
+	// on the same keys.  That's not the goal for agents, exactly, but it is capable.
+	agents map[string]*agent
 }
 
 // spawnDescendant generates a new dataNode that is a descendant of the current
 // node.  A descendant maintains a pointer to its parent, and carries any genetic
 // necessities (ie, copies of fields) that must be present for continued functionality.
 func (dn *dataNode) spawnDescendant() *dataNode {
+	agents := maps.Clone(dn.agents)
+
+	if agents == nil && dn.agents != nil {
+		agents = map[string]*agent{}
+	}
+
 	return &dataNode{
 		parent:       dn,
 		labelCounter: dn.labelCounter,
-		witnesses:    maps.Clone(dn.witnesses),
+		agents:       agents,
 	}
 }
 
@@ -230,17 +236,17 @@ func (dn *dataNode) Map() map[string]any {
 		m["clues_trace"] = strings.Join(nodeIDs, ",")
 	}
 
-	if len(dn.witnesses) == 0 {
+	if len(dn.agents) == 0 {
 		return m
 	}
 
-	witnessVals := map[string]map[string]any{}
+	agentVals := map[string]map[string]any{}
 
-	for _, witness := range dn.witnesses {
-		witnessVals[witness.id] = witness.data.Map()
+	for _, agent := range dn.agents {
+		agentVals[agent.id] = agent.data.Map()
 	}
 
-	m["witnessed"] = witnessVals
+	m["agents"] = agentVals
 
 	return m
 }
@@ -358,29 +364,29 @@ func (dn *dataNode) Comments() comments {
 }
 
 // ---------------------------------------------------------------------------
-// witnesses
+// agents
 // ---------------------------------------------------------------------------
 
-type witness struct {
-	// the name of the witness
+type agent struct {
+	// the name of the agent
 	id string
 
 	// dataNode is used here instead of a basic value map so that
-	// we can extend the usage of witnesses in the future by allowing
+	// we can extend the usage of agents in the future by allowing
 	// the full set of dataNode behavior.  We'll need a builder for that,
 	// but we'll get there eventually.
 	data *dataNode
 }
 
-// addWitness adds a new named witness to the dataNode.
-func (dn *dataNode) addWitness(name string) *dataNode {
+// addAgent adds a new named agent to the dataNode.
+func (dn *dataNode) addAgent(name string) *dataNode {
 	spawn := dn.spawnDescendant()
 
-	if len(spawn.witnesses) == 0 {
-		spawn.witnesses = map[string]*witness{}
+	if len(spawn.agents) == 0 {
+		spawn.agents = map[string]*agent{}
 	}
 
-	spawn.witnesses[name] = &witness{
+	spawn.agents[name] = &agent{
 		id: name,
 		// no spawn here, this needs an isolated node
 		data: &dataNode{},

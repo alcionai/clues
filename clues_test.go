@@ -699,7 +699,7 @@ func TestAddComment_trace(t *testing.T) {
 	commentMatches(t, expected, stack)
 }
 
-func TestAddWitness(t *testing.T) {
+func TestAddAgent(t *testing.T) {
 	ctx := context.Background()
 	ctx = clues.Add(ctx, "one", 1)
 
@@ -707,9 +707,9 @@ func TestAddWitness(t *testing.T) {
 		"one": 1,
 	}, true)
 
-	ctxWithWit := clues.AddWitness(ctx, "wit")
-	clues.Relay(ctx, "wit", "zero", 0)
-	clues.Relay(ctxWithWit, "wit", "two", 2)
+	ctxWithWit := clues.AddAgent(ctx, "wit")
+	clues.Gather(ctx, "wit", "zero", 0)
+	clues.Gather(ctxWithWit, "wit", "two", 2)
 
 	mapEquals(t, ctx, msa{
 		"one": 1,
@@ -717,15 +717,15 @@ func TestAddWitness(t *testing.T) {
 
 	mapEquals(t, ctxWithWit, msa{
 		"one": 1,
-		"witnessed": map[string]map[string]any{
+		"agents": map[string]map[string]any{
 			"wit": {
 				"two": 2,
 			},
 		},
 	}, true)
 
-	ctxWithTim := clues.AddWitness(ctxWithWit, "tim")
-	clues.Relay(ctxWithTim, "tim", "three", 3)
+	ctxWithTim := clues.AddAgent(ctxWithWit, "tim")
+	clues.Gather(ctxWithTim, "tim", "three", 3)
 
 	mapEquals(t, ctx, msa{
 		"one": 1,
@@ -733,7 +733,7 @@ func TestAddWitness(t *testing.T) {
 
 	mapEquals(t, ctxWithTim, msa{
 		"one": 1,
-		"witnessed": map[string]map[string]any{
+		"agents": map[string]map[string]any{
 			"wit": {
 				"two": 2,
 			},
@@ -743,16 +743,39 @@ func TestAddWitness(t *testing.T) {
 		},
 	}, true)
 
-	ctxWithBob := clues.AddWitness(ctx, "bob")
-	clues.Relay(ctxWithBob, "bob", "four", 4)
+	ctxWithBob := clues.AddAgent(ctx, "bob")
+	clues.Gather(ctxWithBob, "bob", "four", 4)
 
 	mapEquals(t, ctx, msa{
 		"one": 1,
 	}, true)
 
+	// should not have changed since its first usage
+	mapEquals(t, ctxWithWit, msa{
+		"one": 1,
+		"agents": map[string]map[string]any{
+			"wit": {
+				"two": 2,
+			},
+		},
+	}, true)
+
+	// should not have changed since its first usage
+	mapEquals(t, ctxWithTim, msa{
+		"one": 1,
+		"agents": map[string]map[string]any{
+			"wit": {
+				"two": 2,
+			},
+			"tim": {
+				"three": 3,
+			},
+		},
+	}, true)
+
 	mapEquals(t, ctxWithBob, msa{
 		"one": 1,
-		"witnessed": map[string]map[string]any{
+		"agents": map[string]map[string]any{
 			"bob": {
 				"four": 4,
 			},

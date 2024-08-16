@@ -194,45 +194,49 @@ func AddCommentTo(
 }
 
 // ---------------------------------------------------------------------------
-// witness
+// agents
 // ---------------------------------------------------------------------------
 
-// AddWitness adds a witness with a given name to the contex.  The caller can
-// pass the witness clues directly in a downstream instance to add those clues
-// to the current clues node.  This can be handy in a certain set of uncommon
-// cases where retrieving clues is otherwise difficult to do, such as working
-// with middleware that doesn't allow control over error creation.
+// AddAgent adds an agent with a given name to the context.  What's an agent?
+// It's a special case info gatherer that you can spawn to collect clues for
+// you.  Unlike standard clues additions, you have to tell the agent exactly
+// what data you want it to Gather() for you.
 //
-// When retreiving clues from a context, each witness will produce its own
-// namespaced set of values
-func AddWitness(
+// Agents are recorded in the current clues node and all of its descendants.
+// Data gathered by the agent will appear as part of the standard data map,
+// namespaced by each agent.
+//
+// Agents are specifically handy in a certain set of uncommon cases where
+// retrieving clues is otherwise difficult to do, such as working with
+// middleware that doesn't allow control over error creation.  In these cases
+// your only option is to relay that data back to some prior clues node.
+func AddAgent(
 	ctx context.Context,
 	name string,
 ) context.Context {
 	nc := nodeFromCtx(ctx, defaultNamespace)
-	nn := nc.addWitness(name)
+	nn := nc.addAgent(name)
 
 	return setDefaultNodeInCtx(ctx, nn)
 }
 
-// Relay adds all key-value pairs to the provided witness.  The witness will
-// record those values to the dataNode in which it was created.  All relayed
-// values are namespaced to the owning witness.
-func Relay(
+// Gather adds all key-value pairs to the provided agent.  The agent will
+// record those values to the dataNode in which it was created.  All gathered
+// values are namespaced to the owning agent.
+func Gather(
 	ctx context.Context,
-	witness string,
+	agent string,
 	vs ...any,
 ) {
 	nc := nodeFromCtx(ctx, defaultNamespace)
-	wit, ok := nc.witnesses[witness]
+	ag, ok := nc.agents[agent]
 
 	if !ok {
 		return
 	}
 
-	// set values, not add.  We don't want witnesses
-	// to own a full clues tree.
-	wit.data.setValues(normalize(vs...))
+	// set values, not add.  We don't want agents to own a full clues tree.
+	ag.data.setValues(normalize(vs...))
 }
 
 // ---------------------------------------------------------------------------
