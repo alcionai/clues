@@ -198,12 +198,12 @@ func AddCommentTo(
 // ---------------------------------------------------------------------------
 
 // AddAgent adds an agent with a given name to the context.  What's an agent?
-// It's a special case info gatherer that you can spawn to collect clues for
+// It's a special case data adder that you can spawn to collect clues for
 // you.  Unlike standard clues additions, you have to tell the agent exactly
-// what data you want it to Gather() for you.
+// what data you want it to Relay() for you.
 //
 // Agents are recorded in the current clues node and all of its descendants.
-// Data gathered by the agent will appear as part of the standard data map,
+// Data relayed by the agent will appear as part of the standard data map,
 // namespaced by each agent.
 //
 // Agents are specifically handy in a certain set of uncommon cases where
@@ -220,10 +220,10 @@ func AddAgent(
 	return setDefaultNodeInCtx(ctx, nn)
 }
 
-// Gather adds all key-value pairs to the provided agent.  The agent will
-// record those values to the dataNode in which it was created.  All gathered
+// Relay adds all key-value pairs to the provided agent.  The agent will
+// record those values to the dataNode in which it was created.  All relayed
 // values are namespaced to the owning agent.
-func Gather(
+func Relay(
 	ctx context.Context,
 	agent string,
 	vs ...any,

@@ -708,8 +708,8 @@ func TestAddAgent(t *testing.T) {
 	}, true)
 
 	ctxWithWit := clues.AddAgent(ctx, "wit")
-	clues.Gather(ctx, "wit", "zero", 0)
-	clues.Gather(ctxWithWit, "wit", "two", 2)
+	clues.Relay(ctx, "wit", "zero", 0)
+	clues.Relay(ctxWithWit, "wit", "two", 2)
 
 	mapEquals(t, ctx, msa{
 		"one": 1,
@@ -725,7 +725,7 @@ func TestAddAgent(t *testing.T) {
 	}, true)
 
 	ctxWithTim := clues.AddAgent(ctxWithWit, "tim")
-	clues.Gather(ctxWithTim, "tim", "three", 3)
+	clues.Relay(ctxWithTim, "tim", "three", 3)
 
 	mapEquals(t, ctx, msa{
 		"one": 1,
@@ -744,7 +744,7 @@ func TestAddAgent(t *testing.T) {
 	}, true)
 
 	ctxWithBob := clues.AddAgent(ctx, "bob")
-	clues.Gather(ctxWithBob, "bob", "four", 4)
+	clues.Relay(ctxWithBob, "bob", "four", 4)
 
 	mapEquals(t, ctx, msa{
 		"one": 1,

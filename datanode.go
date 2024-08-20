@@ -61,7 +61,7 @@ type dataNode struct {
 	// from leaf to root when looking for populated labelCounters.
 	labelCounter Adder
 
-	// agents act as proxy dataNodes that can gather specific, intentional data
+	// agents act as proxy dataNodes that can relay specific, intentional data
 	// additions.  They're namespaced so that additions to the agents don't accidentally
 	// clobber other values in the dataNode. This also allows agents to protect
 	// variations of data from each other, in case users need to compare differences
