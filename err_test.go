@@ -1353,12 +1353,20 @@ func TestLabelCounter_variadic_noCluesInErr(t *testing.T) {
 // helpers
 // ---------------------------------------------------------------------------
 
-func withTraceWrapper(err error, depth int) error {
+func withSkipCaller(err error, depth int) error {
 	return clues.WithSkipCaller(err, depth)
 }
 
-func cluesWithTraceWrapper(err *clues.Err, depth int) error {
+func cluesWithSkipCaller(err *clues.Err, depth int) error {
 	return err.SkipCaller(depth)
+}
+
+func wrapWithFuncWithGeneric[E error](err E) *clues.Err {
+	return clues.Wrap(err, "with-generic")
+}
+
+func withNoTrace(err error) *clues.Err {
+	return clues.Wrap(err, "no-trace").NoTrace()
 }
 
 func withCommentWrapper(

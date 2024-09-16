@@ -25,10 +25,10 @@ type Err struct {
 	// in pre-order traversal.
 	stack []error
 
-	// the func name in which the error was created.
-	// <parentFolder>/<filename>:<line>
+	// the name of the file where the caller func is found.
 	file string
-	// the name of the file owning the caller.
+	// the name of the func where the error (or wrapper) was generated.
+	// <parentFolder>/<filename>:<line>
 	caller string
 
 	// msg is the message for this error.
@@ -1002,6 +1002,20 @@ func WithSkipCaller(err error, depth int) *Err {
 	}
 
 	return e.SkipCaller(depth + 1)
+}
+
+// NoTrace prevents the error from appearing in the trace stack.
+// This is particularly useful for global sentinels that get stacked
+// or wrapped into other error cases.
+func (err *Err) NoTrace() *Err {
+	if isNilErrIface(err) {
+		return nil
+	}
+
+	err.file = ""
+	err.caller = ""
+
+	return err
 }
 
 // ------------------------------------------------------------

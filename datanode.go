@@ -490,8 +490,8 @@ func getCaller(depth int) string {
 	parts := strings.Split(base, ".")
 
 	if len(parts) < 2 {
-		return base
+		return strings.ReplaceAll(base, "[...]", "")
 	}
 
-	return parts[len(parts)-1]
+	return strings.TrimSuffix(parts[1], "[")
 }
