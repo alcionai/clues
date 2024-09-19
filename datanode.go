@@ -486,12 +486,25 @@ func getCaller(depth int) string {
 	}
 
 	funcPath := runtime.FuncForPC(pc).Name()
+
+	// the funcpath base looks something like this:
+	// prefix.funcName[...].foo.bar
+	// with the [...] only appearing for funcs with generics.
 	base := path.Base(funcPath)
+
+	// so when we split it into parts by '.', we get
+	// [prefix, funcName[, ], foo, bar]
 	parts := strings.Split(base, ".")
 
+	// in certain conditions we'll only get the funcName
+	// itself, without the other parts.  In that case, we
+	// just need to strip the generic portion from the base.
 	if len(parts) < 2 {
-		return base
+		return strings.ReplaceAll(base, "[...]", "")
 	}
 
-	return parts[len(parts)-1]
+	// in most cases we'll take the 1th index (the func
+	// name) and trim off the bracket that remains from
+	// splitting on a period.
+	return strings.TrimSuffix(parts[1], "[")
 }

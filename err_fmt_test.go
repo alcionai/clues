@@ -1295,7 +1295,7 @@ func TestFmt_nestedFuncs(t *testing.T) {
 	}
 }
 
-func TestWithTrace(t *testing.T) {
+func TestSkipCaller(t *testing.T) {
 	table := []struct {
 		name          string
 		tracer        func(err error) error
@@ -1306,7 +1306,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "error -1",
 			tracer: func(err error) error {
-				return withTraceWrapper(err, -1)
+				return withSkipCaller(err, -1)
 			},
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1320,7 +1320,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "error 0",
 			tracer: func(err error) error {
-				return withTraceWrapper(err, 0)
+				return withSkipCaller(err, 0)
 			},
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1334,7 +1334,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "error 1",
 			tracer: func(err error) error {
-				return withTraceWrapper(err, 1)
+				return withSkipCaller(err, 1)
 			},
 			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1348,7 +1348,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "error 2",
 			tracer: func(err error) error {
-				return withTraceWrapper(err, 2)
+				return withSkipCaller(err, 2)
 			},
 			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1362,7 +1362,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "error 3",
 			tracer: func(err error) error {
-				return withTraceWrapper(err, 3)
+				return withSkipCaller(err, 3)
 			},
 			expect: plusRE(`an error\n`, `testing/testing.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1376,7 +1376,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "error 4",
 			tracer: func(err error) error {
-				return withTraceWrapper(err, 4)
+				return withSkipCaller(err, 4)
 			},
 			expect: plusRE(`an error\n`, `runtime/.*:\d+$`),
 			expectWrapped: plusRE(
@@ -1422,7 +1422,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "clues.Err 1",
 			tracer: func(err *clues.Err) error {
-				return cluesWithTraceWrapper(err, -1)
+				return cluesWithSkipCaller(err, -1)
 			},
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1436,7 +1436,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "clues.Err 0",
 			tracer: func(err *clues.Err) error {
-				return cluesWithTraceWrapper(err, 0)
+				return cluesWithSkipCaller(err, 0)
 			},
 			expect: plusRE(`an error\n`, `err_test.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1450,7 +1450,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "clues.Err 1",
 			tracer: func(err *clues.Err) error {
-				return cluesWithTraceWrapper(err, 1)
+				return cluesWithSkipCaller(err, 1)
 			},
 			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1464,7 +1464,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "clues.Err 2",
 			tracer: func(err *clues.Err) error {
-				return cluesWithTraceWrapper(err, 2)
+				return cluesWithSkipCaller(err, 2)
 			},
 			expect: plusRE(`an error\n`, `err_fmt_test.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1478,7 +1478,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "clues.Err 3",
 			tracer: func(err *clues.Err) error {
-				return cluesWithTraceWrapper(err, 3)
+				return cluesWithSkipCaller(err, 3)
 			},
 			expect: plusRE(`an error\n`, `testing/testing.go:\d+$`),
 			expectWrapped: plusRE(
@@ -1492,7 +1492,7 @@ func TestWithTrace(t *testing.T) {
 		{
 			name: "clues.Err 4",
 			tracer: func(err *clues.Err) error {
-				return cluesWithTraceWrapper(err, 4)
+				return cluesWithSkipCaller(err, 4)
 			},
 			expect: plusRE(`an error\n`, `runtime/.*:\d+$`),
 			expectWrapped: plusRE(
@@ -1525,6 +1525,73 @@ func TestWithTrace(t *testing.T) {
 			t.Run("stack", func(t *testing.T) {
 				checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
 					check(t, clues.Stack(cluErr, test.tracer(cluErr)))
+			})
+		})
+	}
+	table3 := []struct {
+		name          string
+		tracer        func(err *clues.Err) error
+		expect        string
+		expectWrapped string
+		expectStacked string
+	}{
+		{
+			name: "clues.Err wrapped with generic",
+			tracer: func(err *clues.Err) error {
+				return wrapWithFuncWithGeneric(err)
+			},
+			expect: plusRE(
+				`an error\n`, ``,
+				`with-generic\n`, `wrapWithFuncWithGeneric - .*err_test.go:\d+$`),
+			expectWrapped: plusRE(
+				`an error\n`, ``,
+				`with-generic\n`, `wrapWithFuncWithGeneric - .*err_test.go:\d+\n`,
+				`wrap\n`, `err_fmt_test.go:\d+$`),
+			expectStacked: plusRE(
+				`an error\n`, ``,
+				`with-generic\n`, `wrapWithFuncWithGeneric - .*err_test.go:\d+\n`,
+				`an error\n`, `err_fmt_test.go:\d+$`),
+		},
+		{
+			name: "clues.Err wrapped with no trace",
+			tracer: func(err *clues.Err) error {
+				return withNoTrace(err)
+			},
+			expect: plusRE(
+				`an error\n`, ``,
+				`no-trace`, ``),
+			expectWrapped: plusRE(
+				`an error\n`, ``,
+				`no-trace\n`, ``),
+			expectStacked: plusRE(
+				`an error\n`, ``,
+				`no-trace\n`, ``,
+				`an error\n`, `err_fmt_test.go:\d+$`),
+		},
+	}
+	for _, test := range table3 {
+		t.Run(test.name, func(t *testing.T) {
+			err := cluErr.NoTrace()
+
+			t.Run("plain error", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expect)}.
+					check(t, test.tracer(err))
+			})
+			t.Run("wrapWC", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+					check(t, clues.WrapWC(context.Background(), test.tracer(err), "wrap"))
+			})
+			t.Run("wrap", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectWrapped)}.
+					check(t, clues.Wrap(test.tracer(err), "wrap"))
+			})
+			t.Run("stackWC", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+					check(t, clues.StackWC(context.Background(), err, test.tracer(err)))
+			})
+			t.Run("stack", func(t *testing.T) {
+				checkFmt{"%+v", "", regexp.MustCompile(test.expectStacked)}.
+					check(t, clues.Stack(err, test.tracer(err)))
 			})
 		})
 	}
