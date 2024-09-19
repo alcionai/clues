@@ -28,7 +28,6 @@ type Err struct {
 	// the name of the file where the caller func is found.
 	file string
 	// the name of the func where the error (or wrapper) was generated.
-	// <parentFolder>/<filename>:<line>
 	caller string
 
 	// msg is the message for this error.
