@@ -2,125 +2,208 @@ package clues
 
 import (
 	"context"
+
+	"go.opentelemetry.io/otel/trace"
+	"go.temporal.io/sdk/workflow"
 )
+
+// ---------------------------------------------------------------------------
+// persistent client initialization
+// ---------------------------------------------------------------------------
+
+// Initialize will spin up any persistent clients that are held by clues,
+// such as OTEL communication.  Clues will use these optimistically in the
+// background to provide additional telemetry hook-ins.
+//
+// --- NOTICE ----
+// This is an alpha feature, and may not yet work properly.
+//
+// If initialization has already been run, this func no-ops.
+//
+// Clues will operate as expected in the event of an error, or of initialization
+// is not called.  This is a purely optional step.
+func Initialize[CTX valuer](
+	ctx CTX,
+	serviceName string,
+	config OTELConfig,
+) (CTX, error) {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+
+	err := nc.init(ctx, serviceName, config)
+	if err != nil {
+		return ctx, err
+	}
+
+	return setDefaultNodeInCtx(ctx, nc), nil
+}
+
+// Close will flush all buffered data waiting to be read.  If Initialize was not
+// called, this call is a no-op.  Should be called in a defer after initializing.
+func Close[CTX valuer](
+	ctx CTX,
+) error {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+
+	if nc.otel != nil {
+		var cCtx context.Context = valuer(ctx).(context.Context)
+
+		// FIXME: there's probably a better way to extract a context in case of temporal
+		// in case of temporal, extract the context from the workflow ctx.  Maybe the
+		// best thing to do is mock the Done status from the workflow channel, since it's
+		// not being used for anything other than that.
+		if _, match := valuer(ctx).(workflow.Context); match {
+			// only effect here is that TODO won't hit the Done() channel select.
+			cCtx = context.TODO()
+		}
+
+		err := nc.otel.close(cCtx)
+		if err != nil {
+			return Wrap(err, "closing otel client")
+		}
+	}
+
+	return nil
+}
 
 // ---------------------------------------------------------------------------
 // key-value metadata
 // ---------------------------------------------------------------------------
 
 // Add adds all key-value pairs to the clues.
-func Add(ctx context.Context, kvs ...any) context.Context {
+func Add[CTX valuer](
+	ctx CTX,
+	kvs ...any,
+) CTX {
 	nc := nodeFromCtx(ctx, defaultNamespace)
-	return setDefaultNodeInCtx(ctx, nc.addValues(normalize(kvs...)))
+	return setDefaultNodeInCtx(ctx, add(nc, kvs...))
 }
 
 // AddTo adds all key-value pairs to a namespaced set of clues.
-func AddTo(
-	ctx context.Context,
+func AddTo[CTX valuer](
+	ctx CTX,
 	namespace string,
 	kvs ...any,
-) context.Context {
+) CTX {
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
-	return setNodeInCtx(ctx, namespace, nc.addValues(normalize(kvs...)))
+	return setNodeInCtx(ctx, namespace, add(nc, kvs...))
 }
 
 // AddMap adds a shallow clone of the map to a namespaced set of clues.
-func AddMap[K comparable, V any](
-	ctx context.Context,
+func AddMap[CTX valuer, K comparable, V any](
+	ctx CTX,
 	m map[K]V,
-) context.Context {
+) CTX {
 	nc := nodeFromCtx(ctx, defaultNamespace)
-
-	kvs := make([]any, 0, len(m)*2)
-	for k, v := range m {
-		kvs = append(kvs, k, v)
-	}
-
-	return setDefaultNodeInCtx(ctx, nc.addValues(normalize(kvs...)))
+	return setDefaultNodeInCtx(ctx, addMap(nc, m))
 }
 
 // AddMapTo adds a shallow clone of the map to a namespaced set of clues.
-func AddMapTo[K comparable, V any](
-	ctx context.Context,
+func AddMapTo[CTX valuer, K comparable, V any](
+	ctx CTX,
 	namespace string,
 	m map[K]V,
-) context.Context {
+) CTX {
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
-
-	kvs := make([]any, 0, len(m)*2)
-	for k, v := range m {
-		kvs = append(kvs, k, v)
-	}
-
-	return setNodeInCtx(ctx, namespace, nc.addValues(normalize(kvs...)))
+	return setNodeInCtx(ctx, namespace, addMap(nc, m))
 }
 
 // ---------------------------------------------------------------------------
 // traces
 // ---------------------------------------------------------------------------
 
-// AddTrace stacks a clues node onto this context.  Adding a node ensures
-// that this point in code is identified by an ID, which can later be
-// used to correlate and isolate logs to certain trace branches.
-// AddTrace is only needed for layers that don't otherwise call Add() or
-// similar functions, since those funcs already attach a new node.
-func AddTrace(
+// AddSpan stacks a clues node onto this context and uses the provided
+// name for the trace id. AddSpan can be called without additional values
+// if you only want to add a trace marker.  The assumption is that an otel
+// span is generated and attached to the node.  Callers should always follow
+// this addition with a closing `defer clues.CloseSpan(ctx)`.
+func AddSpan(
+	// span addition only works with context.Context, and cannot be called
+	// on a temporal workflow.Context.
 	ctx context.Context,
-	traceID string,
-) context.Context {
-	nc := nodeFromCtx(ctx, defaultNamespace)
-	return setDefaultNodeInCtx(ctx, nc.trace(traceID))
-}
-
-// AddTraceTo stacks a clues node onto this context within the specified
-// namespace.  Adding a node ensures that a point in code is identified
-// by an ID, which can later be used to correlate and isolate logs to
-// certain trace branches.  AddTraceTo is only needed for layers that don't
-// otherwise call AddTo() or similar functions, since those funcs already
-// attach a new node.
-func AddTraceTo(ctx context.Context, traceID, namespace string) context.Context {
-	nc := nodeFromCtx(ctx, ctxKey(namespace))
-	return setNodeInCtx(ctx, namespace, nc.trace(traceID))
-}
-
-// AddTraceWith stacks a clues node onto this context and uses the provided
-// name for the trace id, instead of a randomly generated hash. AddTraceWith
-// can be called without additional values if you only want to add a trace marker.
-func AddTraceWith(
-	ctx context.Context,
-	traceID string,
+	name string,
 	kvs ...any,
 ) context.Context {
 	nc := nodeFromCtx(ctx, defaultNamespace)
+	ctx, nc = nc.addSpan(ctx, name)
 
-	var node *dataNode
-	if len(kvs) > 0 {
-		node = nc.addValues(normalize(kvs...))
-		node.id = traceID
-	} else {
-		node = nc.trace(traceID)
-	}
+	return setDefaultNodeInCtx(ctx, addSpanWith(nc, name, kvs...))
+}
+
+// PassTrace adds the current trace details to the provided
+// headers.  If otel is not initialized, no-ops.
+//
+// The mapCarrier is mutated by this request.  The passed
+// reference is returned mostly as a quality-of-life step
+// so that callers don't need to declare the map outside of
+// this call.
+func PassTrace[C traceMapCarrierBase](
+	ctx context.Context,
+	mapCarrier C,
+) C {
+	nodeFromCtx(ctx, defaultNamespace).
+		passTrace(ctx, asTraceMapCarrier(mapCarrier))
+
+	return mapCarrier
+}
+
+// ReceiveTrace extracts the current trace details from the
+// headers and adds them to the context.  If otel is not
+// initialized, no-ops.
+func ReceiveTrace[C traceMapCarrierBase](
+	ctx context.Context,
+	mapCarrier C,
+) context.Context {
+	return nodeFromCtx(ctx, defaultNamespace).
+		receiveTrace(ctx, asTraceMapCarrier(mapCarrier))
+}
+
+// AddSpanTo stacks a clues node onto this context and uses the provided
+// name for the trace id. AddSpanTo can be called without additional values
+// if you only want to add a trace marker.  The assumption is that an otel
+// span is generated and attached to the node.  Callers should always follow
+// this addition with a closing `defer clues.CloseSpan(ctx)`.
+func AddSpanTo(
+	// span addition only works with context.Context, and cannot be called
+	// on a temporal workflow.Context.
+	ctx context.Context,
+	name, namespace string,
+	kvs ...any,
+) context.Context {
+	nc := nodeFromCtx(ctx, ctxKey(namespace))
+	ctx, nc = nc.addSpan(ctx, name)
+
+	return setNodeInCtx(ctx, namespace, addSpanWith(nc, name, kvs...))
+}
+
+// CurrentSpan retrieves the current span context details
+// If otel is not initialized, returns nil.
+func SpanContext(
+	ctx context.Context,
+) trace.SpanContext {
+	return nodeFromCtx(ctx, defaultNamespace).
+		currentSpan(ctx).
+		SpanContext()
+}
+
+// CloseSpan closes the current span in the clues node.  Should only be called
+// following a `clues.AddSpan()` call.
+func CloseSpan[CTX valuer](
+	ctx CTX,
+) CTX {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+	node := nc.closeSpan()
 
 	return setDefaultNodeInCtx(ctx, node)
 }
 
-// AddTraceWithTo stacks a clues node onto this context and uses the provided
-// name for the trace id, instead of a randomly generated hash. AddTraceWithTo
-// can be called without additional values if you only want to add a trace marker.
-func AddTraceWithTo(
-	ctx context.Context,
-	traceID, namespace string,
-	kvs ...any,
-) context.Context {
+// CloseSpan closes the current span in the clues node.  Should only be called
+// following a `clues.AddSpan()` call.
+func CloseSpanTo[CTX valuer](
+	ctx CTX,
+	namespace string,
+) CTX {
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
-
-	var node *dataNode
-	if len(kvs) > 0 {
-		node = nc.addValues(normalize(kvs...))
-		node.id = traceID
-	} else {
-		node = nc.trace(traceID)
-	}
+	node := nc.closeSpan()
 
 	return setNodeInCtx(ctx, namespace, node)
 }
@@ -150,15 +233,13 @@ func AddTraceWithTo(
 // order of appearance, and prefixed by the file and line in which they appeared.
 // This means comments are always added to the context and never clobber each
 // other, regardless of their location.  IE: don't add them to a loop.
-func AddComment(
-	ctx context.Context,
+func AddComment[CTX valuer](
+	ctx CTX,
 	msg string,
 	vs ...any,
-) context.Context {
+) CTX {
 	nc := nodeFromCtx(ctx, defaultNamespace)
-	nn := nc.addComment(1, msg, vs...)
-
-	return setDefaultNodeInCtx(ctx, nn)
+	return setDefaultNodeInCtx(ctx, nc.addComment(1, msg, vs...))
 }
 
 // AddCommentTo adds a long form comment to the clues in a certain namespace.
@@ -182,15 +263,13 @@ func AddComment(
 // order of appearance, and prefixed by the file and line in which they appeared.
 // This means comments are always added to the context and never clobber each
 // other, regardless of their location.  IE: don't add them to a loop.
-func AddCommentTo(
-	ctx context.Context,
+func AddCommentTo[CTX valuer](
+	ctx CTX,
 	namespace, msg string,
 	vs ...any,
-) context.Context {
+) CTX {
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
-	nn := nc.addComment(1, msg, vs...)
-
-	return setNodeInCtx(ctx, namespace, nn)
+	return setNodeInCtx(ctx, namespace, nc.addComment(1, msg, vs...))
 }
 
 // ---------------------------------------------------------------------------
@@ -210,33 +289,26 @@ func AddCommentTo(
 // retrieving clues is otherwise difficult to do, such as working with
 // middleware that doesn't allow control over error creation.  In these cases
 // your only option is to relay that data back to some prior clues node.
-func AddAgent(
-	ctx context.Context,
+func AddAgent[CTX valuer](
+	ctx CTX,
 	name string,
-) context.Context {
+) CTX {
 	nc := nodeFromCtx(ctx, defaultNamespace)
-	nn := nc.addAgent(name)
-
-	return setDefaultNodeInCtx(ctx, nn)
+	return setDefaultNodeInCtx(ctx, nc.addAgent(name))
 }
 
 // Relay adds all key-value pairs to the provided agent.  The agent will
 // record those values to the dataNode in which it was created.  All relayed
 // values are namespaced to the owning agent.
-func Relay(
-	ctx context.Context,
+func Relay[CTX valuer](
+	ctx CTX,
 	agent string,
-	vs ...any,
+	kvs ...any,
 ) {
-	nc := nodeFromCtx(ctx, defaultNamespace)
-	ag, ok := nc.agents[agent]
-
-	if !ok {
-		return
-	}
-
-	// set values, not add.  We don't want agents to own a full clues tree.
-	ag.data.setValues(normalize(vs...))
+	relay(
+		nodeFromCtx(ctx, defaultNamespace),
+		agent,
+		kvs...)
 }
 
 // ---------------------------------------------------------------------------
@@ -247,26 +319,23 @@ func Relay(
 // embedded Adder will get replaced.  When adding Labels to a clues.Err the
 // LabelCounter will use the label as the key for the Add call, and increment
 // the count of that label by one.
-func AddLabelCounter(ctx context.Context, counter Adder) context.Context {
+func AddLabelCounter[CTX valuer](
+	ctx CTX,
+	counter Adder,
+) CTX {
 	nc := nodeFromCtx(ctx, defaultNamespace)
-	nn := nc.addValues(nil)
-	nn.labelCounter = counter
-
-	return setDefaultNodeInCtx(ctx, nn)
+	return setDefaultNodeInCtx(ctx, addLabelCounter(nc, counter))
 }
 
 // AddLabelCounterTo embeds an Adder interface into this context. Any already
 // embedded Adder will get replaced.  When adding Labels to a clues.Err the
 // LabelCounter will use the label as the key for the Add call, and increment
 // the count of that label by one.
-func AddLabelCounterTo(
-	ctx context.Context,
+func AddLabelCounterTo[CTX valuer](
+	ctx CTX,
 	namespace string,
 	counter Adder,
-) context.Context {
+) CTX {
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
-	nn := nc.addValues(nil)
-	nn.labelCounter = counter
-
-	return setNodeInCtx(ctx, namespace, nn)
+	return setNodeInCtx(ctx, namespace, addLabelCounter(nc, counter))
 }

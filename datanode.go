@@ -2,13 +2,20 @@ package clues
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"path"
-	"reflect"
 	"runtime"
 	"strings"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
+	"go.temporal.io/sdk/workflow"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
@@ -34,6 +41,13 @@ type Adder interface {
 // declared by an ancestor, the child's entry takes priority.
 type dataNode struct {
 	parent *dataNode
+
+	// otel contains the client instance for the in memory otel runtime.  It is only
+	// present if the end user calls the clues initialization step.
+	otel *otelClient
+
+	// span is the current otel Span.
+	span trace.Span
 
 	// ids are optional and are used primarily as tracing markers.
 	// if empty, the trace for that node will get skipped when building the
@@ -81,6 +95,8 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 
 	return &dataNode{
 		parent:       dn,
+		otel:         dn.otel,
+		span:         dn.span,
 		labelCounter: dn.labelCounter,
 		agents:       agents,
 	}
@@ -90,69 +106,32 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 // setters
 // ---------------------------------------------------------------------------
 
-// normalize ensures that the variadic of key-value pairs is even in length,
-// and then transforms that slice of values into a map[string]any, where all
-// keys are transformed to string using the marshal() func.
-func normalize(kvs ...any) map[string]any {
-	norm := map[string]any{}
-
-	for i := 0; i < len(kvs); i += 2 {
-		key := marshal(kvs[i], true)
-
-		var value any
-		if i+1 < len(kvs) {
-			value = marshal(kvs[i+1], true)
-		}
-
-		norm[key] = value
-	}
-
-	return norm
+func add(dn *dataNode, kvs ...any) *dataNode {
+	return dn.addValues(normalize(kvs...))
 }
 
-// marshal is the central marshalling handler for the entire package.  All
-// stringification of values comes down to this function.  Priority for
-// stringification follows this order:
-// 1. nil -> ""
-// 2. conceal all concealer interfaces
-// 3. flat string values
-// 4. string all stringer interfaces
-// 5. fmt.sprintf the rest
-func marshal(a any, conceal bool) string {
-	if a == nil {
-		return ""
+func addMap[K comparable, V any](
+	dn *dataNode,
+	m map[K]V,
+) *dataNode {
+	kvs := make([]any, 0, len(m)*2)
+	for k, v := range m {
+		kvs = append(kvs, k, v)
 	}
 
-	// protect against nil pointer values with value-receiver funcs
-	rvo := reflect.ValueOf(a)
-	if rvo.Kind() == reflect.Ptr && rvo.IsNil() {
-		return ""
-	}
-
-	if as, ok := a.(Concealer); conceal && ok {
-		return as.Conceal()
-	}
-
-	if as, ok := a.(string); ok {
-		return as
-	}
-
-	if as, ok := a.(fmt.Stringer); ok {
-		return as.String()
-	}
-
-	return fmt.Sprintf("%+v", a)
+	return add(dn, kvs...)
 }
 
 // addValues adds all entries in the map to the dataNode's values.
+// automatically propagates values onto the current span.
 func (dn *dataNode) addValues(m map[string]any) *dataNode {
 	if m == nil {
 		m = map[string]any{}
 	}
 
 	spawn := dn.spawnDescendant()
-	spawn.id = makeNodeID()
 	spawn.setValues(m)
+	spawn.addSpanAttributes(m)
 
 	return spawn
 }
@@ -203,14 +182,19 @@ func (dn *dataNode) lineage(fn func(id string, vs map[string]any)) {
 // In returns the default dataNode from the context.
 // TODO: turn return an interface instead of a dataNode, have dataNodes
 // and errors both comply with that wrapper.
-func In(ctx context.Context) *dataNode {
+func In[CTX valuer](
+	ctx CTX,
+) *dataNode {
 	return nodeFromCtx(ctx, defaultNamespace)
 }
 
 // InNamespace returns the map of values in the given namespace.
 // TODO: turn return an interface instead of a dataNode, have dataNodes
 // and errors both comply with that wrapper.
-func InNamespace(ctx context.Context, namespace string) *dataNode {
+func InNamespace[CTX valuer](
+	ctx CTX,
+	namespace string,
+) *dataNode {
 	return nodeFromCtx(ctx, ctxKey(namespace))
 }
 
@@ -263,6 +247,47 @@ func (dn *dataNode) Slice() []any {
 	}
 
 	return s
+}
+
+// ---------------------------------------------------------------------------
+// initialization
+// ---------------------------------------------------------------------------
+
+// init sets up persistent clients in the clues ecosystem such as otel.
+// Initialization is NOT required.  It is an optional step that end
+// users can take if and when they want those clients running in their
+// clues instance.
+//
+// Multiple initializations will no-op.
+func (dn *dataNode) init(
+	ctx valuer,
+	name string,
+	config OTELConfig,
+) error {
+	if dn == nil {
+		return nil
+	}
+
+	// if any of these already exist, initialization was previously called.
+	if dn.otel != nil {
+		return nil
+	}
+
+	var cCtx context.Context = ctx.(context.Context)
+
+	if _, matches := ctx.(workflow.Context); matches {
+		// FIXME: temporary hack for temporal setup.  I think the only thing we lose
+		// with a TODO here is deadline and Done() checks.  Since the context isn't
+		// propagated back up to us, we know it's not storing any references we'll
+		// need to retrieve on cleanup.  Still would be nice to
+		cCtx = context.TODO()
+	}
+
+	cli, err := newOTELClient(cCtx, name, config)
+
+	dn.otel = cli
+
+	return Stack(err).OrNil()
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +420,21 @@ func (dn *dataNode) addAgent(name string) *dataNode {
 	return spawn
 }
 
+func relay(
+	dn *dataNode,
+	agent string,
+	kvs ...any,
+) {
+	ag, ok := dn.agents[agent]
+
+	if !ok {
+		return
+	}
+
+	// set values, not add.  We don't want agents to own a full clues tree.
+	ag.data.setValues(normalize(kvs...))
+}
+
 // ---------------------------------------------------------------------------
 // ctx handling
 // ---------------------------------------------------------------------------
@@ -407,37 +447,210 @@ func ctxKey(namespace string) cluesCtxKey {
 	return cluesCtxKey(namespace)
 }
 
+type valuer interface {
+	Value(key any) any
+}
+
 // nodeFromCtx pulls the datanode within a given namespace out of the context.
 func nodeFromCtx(
-	ctx context.Context,
+	ctx valuer,
 	namespace cluesCtxKey,
 ) *dataNode {
-	dn := ctx.Value(namespace)
+	var (
+		dn    *dataNode
+		iface = ctx.Value(namespace)
+	)
 
-	if dn == nil {
+	dn, matches := iface.(*dataNode)
+	if !matches || dn == nil {
 		return &dataNode{}
 	}
 
-	return dn.(*dataNode)
+	return dn
 }
 
 // setDefaultNodeInCtx adds the context to the dataNode within the given
 // namespace and returns the updated context.
-func setDefaultNodeInCtx(
-	ctx context.Context,
+func setDefaultNodeInCtx[CTX valuer](
+	ctx CTX,
 	dn *dataNode,
-) context.Context {
-	return context.WithValue(ctx, defaultNamespace, dn)
+) CTX {
+	// standard context.Context
+	if cCtx, ok := valuer(ctx).(context.Context); ok {
+		return context.WithValue(cCtx, defaultNamespace, dn).(CTX)
+	}
+
+	// temporal workflow.Context
+	if tCtx, ok := valuer(ctx).(workflow.Context); ok {
+		return workflow.WithValue(tCtx, defaultNamespace, dn).(CTX)
+	}
+
+	return ctx
 }
 
 // setNodeInCtx adds the context to the dataNode within the given namespace
 // and returns the updated context.
-func setNodeInCtx(
-	ctx context.Context,
+func setNodeInCtx[CTX valuer](
+	ctx CTX,
 	namespace string,
 	dn *dataNode,
+) CTX {
+	// standard context.Context
+	if cCtx, ok := valuer(ctx).(context.Context); ok {
+		return context.WithValue(cCtx, cluesCtxKey(namespace), dn).(CTX)
+	}
+
+	// temporal workflow.Context
+	if tCtx, ok := valuer(ctx).(workflow.Context); ok {
+		return workflow.WithValue(tCtx, cluesCtxKey(namespace), dn).(CTX)
+	}
+
+	return ctx
+}
+
+// ------------------------------------------------------------
+// span handling
+// ------------------------------------------------------------
+
+func addSpanWith(
+	dn *dataNode,
+	name string,
+	kvs ...any,
+) *dataNode {
+	if len(kvs) > 0 {
+		dn.id = name
+		dn = dn.addValues(normalize(kvs...))
+	} else {
+		dn = dn.trace(name)
+	}
+
+	return dn
+}
+
+// addSpan adds a new otel span.  If the otel client is nil, no-ops.
+// Attrs can be added to the span with addSpanAttrs.  This span will
+// continue to be used for that purpose until replaced with another
+// span, which will appear in a separate context (and thus a separate,
+// dataNode).
+func (dn *dataNode) addSpan(
+	ctx context.Context,
+	name string,
+) (context.Context, *dataNode) {
+	if dn == nil || dn.otel == nil {
+		return ctx, dn.spawnDescendant()
+	}
+
+	ctx, span := dn.otel.tracer.Start(ctx, name)
+
+	spawn := dn.spawnDescendant()
+	spawn.span = span
+
+	return ctx, spawn
+}
+
+type traceMapCarrierBase interface {
+	map[string]string | http.Header
+}
+
+func asTraceMapCarrier[C traceMapCarrierBase](
+	carrier C,
+) propagation.TextMapCarrier {
+	if carrier == nil {
+		return propagation.MapCarrier{}
+	}
+
+	if mss, ok := any(carrier).(map[string]string); ok {
+		return propagation.MapCarrier(mss)
+	}
+
+	if hh, ok := any(carrier).(http.Header); ok {
+		return propagation.HeaderCarrier(hh)
+	}
+
+	return propagation.MapCarrier{}
+}
+
+// passTrace adds the current trace details to the provided
+// carrier.  If otel is not initialized, no-ops.
+func (dn *dataNode) passTrace(
+	ctx context.Context,
+	carrier propagation.TextMapCarrier,
+) {
+	if dn == nil || dn.otel == nil {
+		return
+	}
+
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+}
+
+// receiveTrace extracts the current trace details from the
+// carrier and adds them to the context.  If otel is not
+// initialized, no-ops.
+func (dn *dataNode) receiveTrace(
+	ctx context.Context,
+	carrier propagation.TextMapCarrier,
 ) context.Context {
-	return context.WithValue(ctx, ctxKey(namespace), dn)
+	if dn == nil || dn.otel == nil {
+		return ctx
+	}
+
+	return otel.GetTextMapPropagator().Extract(ctx, carrier)
+}
+
+// currentSpan retrieves the span held in the node.
+// If no span is found, returns nil.
+func (dn *dataNode) currentSpan(
+	ctx context.Context,
+) trace.Span {
+	if dn == nil {
+		return nil
+	}
+
+	return dn.span
+}
+
+// closeSpan closes the otel span and removes it span from the data node.
+// If no span is present, no ops.
+func (dn *dataNode) closeSpan() *dataNode {
+	if dn == nil || dn.span == nil {
+		return dn.spawnDescendant()
+	}
+
+	dn.span.End()
+
+	spawn := dn.spawnDescendant()
+	spawn.span = nil
+
+	return spawn
+}
+
+// addSpanAttributes adds the values to the current span.  If the span
+// is nil (such as if otel wasn't initialized or no span has been generated),
+// this call no-ops.
+func (dn *dataNode) addSpanAttributes(
+	values map[string]any,
+) {
+	if dn == nil || dn.span == nil {
+		return
+	}
+
+	if len(values) == 0 {
+		return
+	}
+
+	for k, v := range values {
+		dn.span.SetAttributes(attribute.String(k, marshal(v, false)))
+	}
+}
+
+// OTELLogger gets the otel logger instance from the otel client.
+// Returns nil if otel wasn't initialized.
+func (dn *dataNode) OTELLogger() otellog.Logger {
+	if dn == nil || dn.otel == nil {
+		return nil
+	}
+
+	return dn.otel.logger
 }
 
 // ---------------------------------------------------------------------------
@@ -507,4 +720,78 @@ func getCaller(depth int) string {
 	// name) and trim off the bracket that remains from
 	// splitting on a period.
 	return strings.TrimSuffix(parts[1], "[")
+}
+
+// ---------------------------------------------------------------------------
+// (de)serialize
+// ---------------------------------------------------------------------------
+
+// nodeCore contains the serializable set of data in a dataNode.
+type nodeCore struct {
+	Values   map[string]string `json:"values"`
+	Comments []comment         `json:"comments"`
+	Trace    map[string]string `json:"trace"`
+}
+
+// Bytes serializes the dataNode to a slice of bytes.
+// Only attributes and comments are maintained.  All
+// values are stringified in the process.
+//
+// Node hierarchy, clients (such as otel), agents, and
+// hooks (such as labelCounter) are all sliced from the
+// result.
+func (dn *dataNode) Bytes() ([]byte, error) {
+	if dn == nil {
+		return []byte{}, nil
+	}
+
+	core := nodeCore{
+		Values:   map[string]string{},
+		Comments: dn.Comments(),
+		Trace:    map[string]string{},
+	}
+
+	for k, v := range dn.Map() {
+		core.Values[k] = marshal(v, false)
+	}
+
+	// dn.passTrace(ctx, asTraceMapCarrier(core.Trace))
+
+	return json.Marshal(core)
+}
+
+// FromBytes deserializes the bytes to a new dataNode.
+// No clients, agents, or hooks are initialized in this process.
+func FromBytes(bs []byte) (*dataNode, error) {
+	core := nodeCore{}
+
+	err := json.Unmarshal(bs, &core)
+	if err != nil {
+		return nil, err
+	}
+
+	node := dataNode{
+		values: map[string]any{},
+		// FIXME: do something with the serialized commments.
+	}
+
+	for k, v := range core.Values {
+		node.values[k] = v
+	}
+
+	return &node, nil
+}
+
+// ---------------------------------------------------------------------------
+// label counter
+// ---------------------------------------------------------------------------
+
+func addLabelCounter(
+	dn *dataNode,
+	counter Adder,
+) *dataNode {
+	nn := dn.addValues(nil)
+	nn.labelCounter = counter
+
+	return nn
 }
