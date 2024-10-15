@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"reflect"
 	"runtime"
 	"strings"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
@@ -34,6 +36,13 @@ type Adder interface {
 // declared by an ancestor, the child's entry takes priority.
 type dataNode struct {
 	parent *dataNode
+
+	// otel contains the client instance for the in memory otel runtime.  It is only
+	// present if the end user calls the clues initialization step.
+	otel *otelClient
+
+	// span is the current otel Span.
+	span trace.Span
 
 	// ids are optional and are used primarily as tracing markers.
 	// if empty, the trace for that node will get skipped when building the
@@ -81,6 +90,7 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 
 	return &dataNode{
 		parent:       dn,
+		otel:         dn.otel,
 		labelCounter: dn.labelCounter,
 		agents:       agents,
 	}
@@ -90,69 +100,16 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 // setters
 // ---------------------------------------------------------------------------
 
-// normalize ensures that the variadic of key-value pairs is even in length,
-// and then transforms that slice of values into a map[string]any, where all
-// keys are transformed to string using the marshal() func.
-func normalize(kvs ...any) map[string]any {
-	norm := map[string]any{}
-
-	for i := 0; i < len(kvs); i += 2 {
-		key := marshal(kvs[i], true)
-
-		var value any
-		if i+1 < len(kvs) {
-			value = marshal(kvs[i+1], true)
-		}
-
-		norm[key] = value
-	}
-
-	return norm
-}
-
-// marshal is the central marshalling handler for the entire package.  All
-// stringification of values comes down to this function.  Priority for
-// stringification follows this order:
-// 1. nil -> ""
-// 2. conceal all concealer interfaces
-// 3. flat string values
-// 4. string all stringer interfaces
-// 5. fmt.sprintf the rest
-func marshal(a any, conceal bool) string {
-	if a == nil {
-		return ""
-	}
-
-	// protect against nil pointer values with value-receiver funcs
-	rvo := reflect.ValueOf(a)
-	if rvo.Kind() == reflect.Ptr && rvo.IsNil() {
-		return ""
-	}
-
-	if as, ok := a.(Concealer); conceal && ok {
-		return as.Conceal()
-	}
-
-	if as, ok := a.(string); ok {
-		return as
-	}
-
-	if as, ok := a.(fmt.Stringer); ok {
-		return as.String()
-	}
-
-	return fmt.Sprintf("%+v", a)
-}
-
 // addValues adds all entries in the map to the dataNode's values.
+// automatically propagates values onto the current span.
 func (dn *dataNode) addValues(m map[string]any) *dataNode {
 	if m == nil {
 		m = map[string]any{}
 	}
 
 	spawn := dn.spawnDescendant()
-	spawn.id = makeNodeID()
 	spawn.setValues(m)
+	spawn.addSpanAttributes(m)
 
 	return spawn
 }
@@ -263,6 +220,33 @@ func (dn *dataNode) Slice() []any {
 	}
 
 	return s
+}
+
+// ---------------------------------------------------------------------------
+// initialization
+// ---------------------------------------------------------------------------
+
+// init sets up persistent clients in the clues ecosystem such as otel.
+// Initialization is NOT required.  It is an optional step that end
+// users can take if and when they want those clients running in their
+// clues instance.
+//
+// Multiple initializations will no-op.
+func (dn *dataNode) init(ctx context.Context, name string) error {
+	if dn == nil {
+		return nil
+	}
+
+	// if any of these already exist, initialization was previously called.
+	if dn.otel != nil {
+		return nil
+	}
+
+	cli, err := newOTELClient(ctx, name)
+
+	dn.otel = cli
+
+	return Stack(err).OrNil()
 }
 
 // ---------------------------------------------------------------------------
@@ -438,6 +422,75 @@ func setNodeInCtx(
 	dn *dataNode,
 ) context.Context {
 	return context.WithValue(ctx, ctxKey(namespace), dn)
+}
+
+// ------------------------------------------------------------
+// span handling
+// ------------------------------------------------------------
+
+// addSpan adds a new otel span.  If the otel client is nil, no-ops.
+// Attrs can be added to the span with addSpanAttrs.  This span will
+// continue to be used for that purpose until replaced with another
+// span, which will appear in a separate context (and thus a separate,
+// dataNode).
+func (dn *dataNode) addSpan(
+	ctx context.Context,
+	name string,
+) (context.Context, *dataNode) {
+	if dn == nil || dn.otel == nil {
+		return ctx, dn.spawnDescendant()
+	}
+
+	ctx, span := dn.otel.tracer.Start(ctx, name)
+
+	spawn := dn.spawnDescendant()
+	spawn.span = span
+
+	return ctx, spawn
+}
+
+// closeSpan closes the otel span and removes it span from the data node.
+// If no span is present, no ops.
+func (dn *dataNode) closeSpan() *dataNode {
+	if dn == nil || dn.span == nil {
+		return dn.spawnDescendant()
+	}
+
+	dn.span.End()
+
+	spawn := dn.spawnDescendant()
+	spawn.span = nil
+
+	return spawn
+}
+
+// addSpanAttributes adds the values to the current span.  If the span
+// is nil (such as if otel wasn't initialized or no span has been generated),
+// this call no-ops.
+func (dn *dataNode) addSpanAttributes(
+	values map[string]any,
+) {
+	if dn == nil || dn.span == nil {
+		return
+	}
+
+	if len(values) == 0 {
+		return
+	}
+
+	for k, v := range values {
+		dn.span.SetAttributes(attribute.String(k, marshal(v, false)))
+	}
+}
+
+// OTELLogger gets the otel logger instance from the otel client.
+// Returns nil if otel wasn't initialized.
+func (dn *dataNode) OTELLogger() otellog.Logger {
+	if dn == nil || dn.otel == nil {
+		return nil
+	}
+
+	return dn.otel.logger
 }
 
 // ---------------------------------------------------------------------------

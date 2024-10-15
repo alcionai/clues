@@ -5,6 +5,32 @@ import (
 )
 
 // ---------------------------------------------------------------------------
+// persistent client initialization
+// ---------------------------------------------------------------------------
+
+// Initialize will spin up any persistent clients that are held by clues,
+// such as OTEL communication.  Clues will use these optimistically in the
+// background to provide additional telemetry hook-ins.
+//
+// --- NOTICE ----
+// This is an alpha feature, and may not yet work properly.
+//
+// If initialization has already been run, this func no-ops.
+//
+// Clues will operate as expected in the event of an error, or of initialization
+// is not called.  This is a purely optional step.
+func Initialize(ctx context.Context, serviceName string) (context.Context, error) {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+
+	err := nc.init(ctx, serviceName)
+	if err != nil {
+		return ctx, err
+	}
+
+	return setDefaultNodeInCtx(ctx, nc), nil
+}
+
+// ---------------------------------------------------------------------------
 // key-value metadata
 // ---------------------------------------------------------------------------
 
@@ -59,68 +85,83 @@ func AddMapTo[K comparable, V any](
 // traces
 // ---------------------------------------------------------------------------
 
-// AddTrace stacks a clues node onto this context.  Adding a node ensures
-// that this point in code is identified by an ID, which can later be
-// used to correlate and isolate logs to certain trace branches.
-// AddTrace is only needed for layers that don't otherwise call Add() or
-// similar functions, since those funcs already attach a new node.
-func AddTrace(
+// AddSpan stacks a clues node onto this context and uses the provided
+// name for the trace id, instead of a randomly generated hash. AddSpan
+// can be called without additional values if you only want to add a trace
+// marker.  The assumption is that an otel span is generated and attached
+// to the node.  Callers should always follow this addition with a closing
+// `defer clues.CloseSpan(ctx)`.
+//
+// --- NOTICE ----
+// This is an alpha feature, and may not yet work properly.
+func AddSpan(
 	ctx context.Context,
-	traceID string,
-) context.Context {
-	nc := nodeFromCtx(ctx, defaultNamespace)
-	return setDefaultNodeInCtx(ctx, nc.trace(traceID))
-}
-
-// AddTraceTo stacks a clues node onto this context within the specified
-// namespace.  Adding a node ensures that a point in code is identified
-// by an ID, which can later be used to correlate and isolate logs to
-// certain trace branches.  AddTraceTo is only needed for layers that don't
-// otherwise call AddTo() or similar functions, since those funcs already
-// attach a new node.
-func AddTraceTo(ctx context.Context, traceID, namespace string) context.Context {
-	nc := nodeFromCtx(ctx, ctxKey(namespace))
-	return setNodeInCtx(ctx, namespace, nc.trace(traceID))
-}
-
-// AddTraceWith stacks a clues node onto this context and uses the provided
-// name for the trace id, instead of a randomly generated hash. AddTraceWith
-// can be called without additional values if you only want to add a trace marker.
-func AddTraceWith(
-	ctx context.Context,
-	traceID string,
+	name string,
 	kvs ...any,
 ) context.Context {
 	nc := nodeFromCtx(ctx, defaultNamespace)
 
 	var node *dataNode
 	if len(kvs) > 0 {
-		node = nc.addValues(normalize(kvs...))
-		node.id = traceID
+		ctx, node = nc.addSpan(ctx, name)
+		node.id = name
+		node = node.addValues(normalize(kvs...))
 	} else {
-		node = nc.trace(traceID)
+		ctx, node = nc.addSpan(ctx, name)
+		node = node.trace(name)
 	}
 
 	return setDefaultNodeInCtx(ctx, node)
 }
 
-// AddTraceWithTo stacks a clues node onto this context and uses the provided
-// name for the trace id, instead of a randomly generated hash. AddTraceWithTo
-// can be called without additional values if you only want to add a trace marker.
-func AddTraceWithTo(
+// AddSpanTo stacks a clues node onto this context and uses the provided
+// name for the trace id, instead of a randomly generated hash. AddSpanTo
+// can be called without additional values if you only want to add a trace
+// marker.  The assumption is that an otel span is generated and attached
+// to the node.  Callers should always follow this addition with a closing
+// `defer clues.CloseSpan(ctx)`.
+//
+// --- NOTICE ----
+// This is an alpha feature, and may not yet work properly.
+func AddSpanTo(
 	ctx context.Context,
-	traceID, namespace string,
+	name, namespace string,
 	kvs ...any,
 ) context.Context {
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
 
 	var node *dataNode
 	if len(kvs) > 0 {
-		node = nc.addValues(normalize(kvs...))
-		node.id = traceID
+		ctx, node = nc.addSpan(ctx, name)
+		node.id = name
+		node = node.addValues(normalize(kvs...))
 	} else {
-		node = nc.trace(traceID)
+		ctx, node = nc.addSpan(ctx, name)
+		node = node.trace(name)
 	}
+
+	return setNodeInCtx(ctx, namespace, node)
+}
+
+// CloseSpan closes the current span in the clues node.  Should only be called
+// following a `clues.AddSpan()` call.
+func CloseSpan(ctx context.Context) context.Context {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+
+	node := nc.closeSpan()
+
+	return setDefaultNodeInCtx(ctx, node)
+}
+
+// CloseSpan closes the current span in the clues node.  Should only be called
+// following a `clues.AddSpan()` call.
+func CloseSpanTo(
+	ctx context.Context,
+	namespace string,
+) context.Context {
+	nc := nodeFromCtx(ctx, ctxKey(namespace))
+
+	node := nc.closeSpan()
 
 	return setNodeInCtx(ctx, namespace, node)
 }
