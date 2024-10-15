@@ -2,7 +2,7 @@ package clues
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -12,72 +12,123 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdkTrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type otelClient struct {
+	grpcConn      *grpc.ClientConn
 	traceProvider *sdkTrace.TracerProvider
 	tracer        trace.Tracer
 	logger        otellog.Logger
+}
+
+func (cli *otelClient) close(ctx context.Context) error {
+	if cli == nil {
+		return nil
+	}
+
+	if cli.traceProvider != nil {
+		err := cli.traceProvider.ForceFlush(ctx)
+		if err != nil {
+			fmt.Println("forcing trace provider flush:", err)
+		}
+
+		err = cli.traceProvider.Shutdown(ctx)
+		if err != nil {
+			return WrapWC(ctx, err, "shutting down otel trace provider")
+		}
+	}
+
+	if cli.grpcConn != nil {
+		err := cli.grpcConn.Close()
+		if err != nil {
+			return WrapWC(ctx, err, "closing grpc connection")
+		}
+	}
+
+	return nil
 }
 
 // ------------------------------------------------------------
 // initializers
 // ------------------------------------------------------------
 
+type OTELConfig struct {
+	// specify the endpoint location to use for grpc communication.
+	// If empty, no telemetry exporter will be generated.
+	// ex: localhost:4317
+	// ex: 0.0.0.0:4317
+	GRPCEndpoint string
+}
+
 // newOTELClient bootstraps the OpenTelemetry pipeline to run against a
 // local server instance. If it does not return an error, make sure
 // to call the client.Close() method for proper cleanup.
-func newOTELClient(ctx context.Context, serviceName string) (*otelClient, error) {
-	// the service name is used to display traces in backends
-	res, err := resource.New(ctx, resource.WithAttributes(semconv.ServiceName(serviceName)))
+// The service name is used to match traces across backends.
+func newOTELClient(
+	ctx context.Context,
+	serviceName string,
+	config OTELConfig,
+) (*otelClient, error) {
+	// -- Resource
+	resource, err := resource.New(ctx, resource.WithAttributes(
+		semconv.ServiceNameKey.String(serviceName)))
 	if err != nil {
 		return nil, WrapWC(ctx, err, "creating otel resource")
 	}
 
-	// If the OpenTelemetry Collector is running on a local cluster (minikube or
-	// microk8s), it should be accessible through the NodePort service at the
-	// `localhost:30080` endpoint. Otherwise, replace `localhost` with the
-	// endpoint of your cluster. If you run the app inside k8s, then you can
-	// probably connect directly to the service through dns.
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
+	// -- Exporter
 
-	conn, err := grpc.NewClient(serviceName,
+	conn, err := grpc.NewClient(
+		config.GRPCEndpoint,
 		// Note the use of insecure transport here. TLS is recommended in production.
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, WrapWC(ctx, err, "creating a gRPC connection to collector")
+		return nil, WrapWC(ctx, err, "creating new gRPC connection")
 	}
 
-	// Set up a trace exporter
-	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
 	if err != nil {
 		return nil, WrapWC(ctx, err, "creating a trace exporter")
 	}
 
+	// -- TracerProvider
+
 	// Register the trace exporter with a TracerProvider, using a batch
 	// span processor to aggregate spans before export.
-	bsp := sdkTrace.NewBatchSpanProcessor(traceExporter)
+	batchSpanProcessor := sdkTrace.NewBatchSpanProcessor(exporter)
 
 	tracerProvider := sdkTrace.NewTracerProvider(
+		sdkTrace.WithResource(resource),
 		sdkTrace.WithSampler(sdkTrace.AlwaysSample()),
-		sdkTrace.WithResource(res),
-		sdkTrace.WithSpanProcessor(bsp))
+		sdkTrace.WithSpanProcessor(batchSpanProcessor),
+		sdkTrace.WithRawSpanLimits(sdkTrace.SpanLimits{
+			AttributeValueLengthLimit:   -1,
+			AttributeCountLimit:         -1,
+			AttributePerEventCountLimit: -1,
+			AttributePerLinkCountLimit:  -1,
+			EventCountLimit:             -1,
+			LinkCountLimit:              -1,
+		}))
 
+	// set global propagator to traceContext (the default is no-op).
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 	otel.SetTracerProvider(tracerProvider)
 
-	// set global propagator to tracecontext (the default is no-op).
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	// -- Logger
 
+	// generate a logger provider
 	logProvider := global.GetLoggerProvider()
 
+	// -- Client
+
 	client := otelClient{
+		grpcConn:      conn,
 		traceProvider: tracerProvider,
-		tracer:        tracerProvider.Tracer(serviceName),
+		tracer:        tracerProvider.Tracer(serviceName + "/tracer"),
 		logger:        logProvider.Logger(serviceName),
 	}
 

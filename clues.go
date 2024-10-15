@@ -19,15 +19,34 @@ import (
 //
 // Clues will operate as expected in the event of an error, or of initialization
 // is not called.  This is a purely optional step.
-func Initialize(ctx context.Context, serviceName string) (context.Context, error) {
+func Initialize(
+	ctx context.Context,
+	serviceName string,
+	config OTELConfig,
+) (context.Context, error) {
 	nc := nodeFromCtx(ctx, defaultNamespace)
 
-	err := nc.init(ctx, serviceName)
+	err := nc.init(ctx, serviceName, config)
 	if err != nil {
 		return ctx, err
 	}
 
 	return setDefaultNodeInCtx(ctx, nc), nil
+}
+
+// Close will flush all buffered data waiting to be read.  If Initialize was not
+// called, this call is a no-op.  Should be called in a defer after initializing.
+func Close(ctx context.Context) error {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+
+	if nc.otel != nil {
+		err := nc.otel.close(ctx)
+		if err != nil {
+			return Wrap(err, "closing otel client")
+		}
+	}
+
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +121,7 @@ func AddSpan(
 	nc := nodeFromCtx(ctx, defaultNamespace)
 
 	var node *dataNode
+
 	if len(kvs) > 0 {
 		ctx, node = nc.addSpan(ctx, name)
 		node.id = name
@@ -131,6 +151,7 @@ func AddSpanTo(
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
 
 	var node *dataNode
+
 	if len(kvs) > 0 {
 		ctx, node = nc.addSpan(ctx, name)
 		node.id = name
@@ -148,7 +169,7 @@ func AddSpanTo(
 func CloseSpan(ctx context.Context) context.Context {
 	nc := nodeFromCtx(ctx, defaultNamespace)
 
-	node := nc.closeSpan()
+	node := nc.closeSpan(ctx)
 
 	return setDefaultNodeInCtx(ctx, node)
 }
@@ -161,7 +182,7 @@ func CloseSpanTo(
 ) context.Context {
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
 
-	node := nc.closeSpan()
+	node := nc.closeSpan(ctx)
 
 	return setNodeInCtx(ctx, namespace, node)
 }
