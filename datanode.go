@@ -91,6 +91,7 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 	return &dataNode{
 		parent:       dn,
 		otel:         dn.otel,
+		span:         dn.span,
 		labelCounter: dn.labelCounter,
 		agents:       agents,
 	}
@@ -232,7 +233,11 @@ func (dn *dataNode) Slice() []any {
 // clues instance.
 //
 // Multiple initializations will no-op.
-func (dn *dataNode) init(ctx context.Context, name string) error {
+func (dn *dataNode) init(
+	ctx context.Context,
+	name string,
+	config OTELConfig,
+) error {
 	if dn == nil {
 		return nil
 	}
@@ -242,7 +247,7 @@ func (dn *dataNode) init(ctx context.Context, name string) error {
 		return nil
 	}
 
-	cli, err := newOTELClient(ctx, name)
+	cli, err := newOTELClient(ctx, name, config)
 
 	dn.otel = cli
 
@@ -451,7 +456,7 @@ func (dn *dataNode) addSpan(
 
 // closeSpan closes the otel span and removes it span from the data node.
 // If no span is present, no ops.
-func (dn *dataNode) closeSpan() *dataNode {
+func (dn *dataNode) closeSpan(ctx context.Context) *dataNode {
 	if dn == nil || dn.span == nil {
 		return dn.spawnDescendant()
 	}

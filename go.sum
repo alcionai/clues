@@ -1,5 +1,3 @@
-github.com/alcionai/clog v0.0.0-20241003210206-d2df606931db h1:3R7sgMp7nSGITTqnIoEhJ7ONDcYNVCCW0pqdgPLeD6E=
-github.com/alcionai/clog v0.0.0-20241003210206-d2df606931db/go.mod h1:gqEhDbhC+IPaWw0lC6+QNM+kIZ5wOhQcfVaUxKumYOo=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
 github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=

@@ -267,11 +267,21 @@ func TestAddSpan(t *testing.T) {
 				ctx := context.Background()
 
 				if init {
-					ictx, err := clues.Initialize(ctx, test.name)
+					ictx, err := clues.Initialize(ctx, test.name, clues.OTELConfig{
+						GRPCEndpoint: "localhost:4317",
+					})
 					if err != nil {
-						fmt.Println("initialize failed: ", err)
+						t.Error("initializing clues", err)
 						return
 					}
+
+					defer func() {
+						err := clues.Close(ictx)
+						if err != nil {
+							t.Error("closing clues:", err)
+							return
+						}
+					}()
 
 					ctx = ictx
 				}

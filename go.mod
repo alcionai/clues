@@ -3,7 +3,6 @@ module github.com/alcionai/clues
 go 1.23.2
 
 require (
-	github.com/alcionai/clog v0.0.0-20241003210206-d2df606931db
 	github.com/google/uuid v1.6.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
