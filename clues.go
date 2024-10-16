@@ -72,8 +72,36 @@ func AddMap[K comparable, V any](
 }
 
 // ---------------------------------------------------------------------------
-// traces
+// spans and traces
 // ---------------------------------------------------------------------------
+
+// PassTrace adds the current trace details to the provided
+// headers.  If otel is not initialized, no-ops.
+//
+// The mapCarrier is mutated by this request.  The passed
+// reference is returned mostly as a quality-of-life step
+// so that callers don't need to declare the map outside of
+// this call.
+func PassTrace[C traceMapCarrierBase](
+	ctx context.Context,
+	mapCarrier C,
+) C {
+	nodeFromCtx(ctx).
+		passTrace(ctx, asTraceMapCarrier(mapCarrier))
+
+	return mapCarrier
+}
+
+// ReceiveTrace extracts the current trace details from the
+// headers and adds them to the context.  If otel is not
+// initialized, no-ops.
+func ReceiveTrace[C traceMapCarrierBase](
+	ctx context.Context,
+	mapCarrier C,
+) context.Context {
+	return nodeFromCtx(ctx).
+		receiveTrace(ctx, asTraceMapCarrier(mapCarrier))
+}
 
 // AddSpan stacks a clues node onto this context and uses the provided
 // name for the trace id, instead of a randomly generated hash. AddSpan
@@ -105,10 +133,8 @@ func AddSpan(
 // CloseSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
 func CloseSpan(ctx context.Context) context.Context {
-	nc := nodeFromCtx(ctx)
-	node := nc.closeSpan(ctx)
-
-	return setNodeInCtx(ctx, node)
+	nc := nodeFromCtx(ctx).closeSpan(ctx)
+	return setNodeInCtx(ctx, nc)
 }
 
 // ---------------------------------------------------------------------------
