@@ -3,13 +3,16 @@ package clues
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"path"
 	"runtime"
 	"strings"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -452,6 +455,37 @@ func (dn *dataNode) addSpan(
 	spawn.span = span
 
 	return ctx, spawn
+}
+
+// passTrace adds the current trace details to the provided
+// headers.  If otel is not initialized, no-ops.
+func (dn *dataNode) passTrace(
+	ctx context.Context,
+	headers http.Header,
+) {
+	if dn == nil || dn.otel == nil {
+		return
+	}
+
+	otel.GetTextMapPropagator().Inject(
+		ctx,
+		propagation.HeaderCarrier(headers))
+}
+
+// receiveTrace extracts the current trace details from the
+// headers and adds them to the context.  If otel is not
+// initialized, no-ops.
+func (dn *dataNode) receiveTrace(
+	ctx context.Context,
+	headers http.Header,
+) context.Context {
+	if dn == nil || dn.otel == nil {
+		return ctx
+	}
+
+	return otel.GetTextMapPropagator().Extract(
+		ctx,
+		propagation.HeaderCarrier(headers))
 }
 
 // closeSpan closes the otel span and removes it span from the data node.

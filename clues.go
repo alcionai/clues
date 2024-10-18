@@ -2,6 +2,7 @@ package clues
 
 import (
 	"context"
+	"net/http"
 )
 
 // ---------------------------------------------------------------------------
@@ -132,6 +133,27 @@ func AddSpan(
 	}
 
 	return setDefaultNodeInCtx(ctx, node)
+}
+
+// PassTrace adds the current trace details to the provided
+// headers.  If otel is not initialized, no-ops.
+func PassTrace(
+	ctx context.Context,
+	headers http.Header,
+) {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+	nc.passTrace(ctx, headers)
+}
+
+// ReceiveTrace extracts the current trace details from the
+// headers and adds them to the context.  If otel is not
+// initialized, no-ops.
+func ReceiveTrace(
+	ctx context.Context,
+	headers http.Header,
+) context.Context {
+	nc := nodeFromCtx(ctx, defaultNamespace)
+	return nc.receiveTrace(ctx, headers)
 }
 
 // AddSpanTo stacks a clues node onto this context and uses the provided
