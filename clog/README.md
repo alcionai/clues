@@ -20,7 +20,7 @@ Many times we build unintentional colloquialisms into our log vocabulary
 and try to filter on those when looking for info. Ex: logs that say
 "recoverable error" are "the important error logs". No, none of that.
 
-If you have a set of loging that you always want to include or exclude, put
+If you have a set of logging that you always want to include or exclude, put
 a label on it.
 "How was this run configured?" -> filter clabel like /clabel_configuration/
 "What caused the process to fail?" -> filter clabel like /clabel_error_origin/

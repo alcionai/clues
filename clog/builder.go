@@ -40,7 +40,14 @@ func newBuilder(ctx context.Context) *builder {
 	}
 }
 
-// log actually delivers the log to the underlying logger with the given
+// log emits the log message and all attributes using the underlying logger.
+//
+// If otel is configured in clues, a duplicate log will be delivered to the
+// otel receiver.  Is this redundant?  Yes.  Would it be better served by
+// having a set of log emitters that registered by an interface so that
+// we're not coupling usage?  Also yes.  These are known design issues that
+// we can chase later.  This is all still in the early/poc stage and needs
+// additional polish to shine.
 func (b builder) log(l logLevel, msg string) {
 	cv := clues.In(b.ctx).Map()
 	zsl := b.zsl
