@@ -148,12 +148,21 @@ func PassTrace(
 // ReceiveTrace extracts the current trace details from the
 // headers and adds them to the context.  If otel is not
 // initialized, no-ops.
+//
+// RootCtx is your handler's initialized context.  ReqCtx is
+// the request context.  The assumption is that the rootCtx
+// contains clues data and the reqCtx does not.  This call will
+// produce a unioned trace combining the otel data in the reqCtx
+// with the clues data in the rootCtx.
 func ReceiveTrace(
-	ctx context.Context,
+	rootCtx, reqCtx context.Context,
 	headers http.Header,
 ) context.Context {
-	nc := nodeFromCtx(ctx, defaultNamespace)
-	return nc.receiveTrace(ctx, headers)
+	nc := nodeFromCtx(rootCtx, defaultNamespace)
+
+	ctx := nc.receiveTrace(reqCtx, headers)
+
+	return setDefaultNodeInCtx(ctx, nc)
 }
 
 // AddSpanTo stacks a clues node onto this context and uses the provided
