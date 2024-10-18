@@ -1755,7 +1755,7 @@ func TestErrCore_String(t *testing.T) {
 				Core(),
 			expectS:          `{"message", [label], {key:value}}`,
 			expectVPlus:      `{msg:"message", labels:[label], values:{key:value}, comments:[]}`,
-			expectCluesTrace: true,
+			expectCluesTrace: false,
 		},
 		{
 			name: "message only",
@@ -1784,7 +1784,7 @@ func TestErrCore_String(t *testing.T) {
 				Core(),
 			expectS:          `{{key:value}}`,
 			expectVPlus:      `{msg:"", labels:[], values:{key:value}, comments:[]}`,
-			expectCluesTrace: true,
+			expectCluesTrace: false,
 		},
 	}
 	for _, test := range table {
