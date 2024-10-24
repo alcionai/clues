@@ -40,6 +40,11 @@ type Adder interface {
 // with the root having the lowest priority.  IE: if a child overwrites a key
 // declared by an ancestor, the child's entry takes priority.
 type dataNode struct {
+	// tempCtx is used to pass along a ctx into downstream setters which may extract
+	// data from the context.  It does not get preserved across spawns, and so the
+	// assumption should be that it only exists for the duration of setting values.
+	tempCtx context.Context
+
 	parent *dataNode
 
 	// otel contains the client instance for the in memory otel runtime.  It is only
@@ -102,11 +107,26 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 	}
 }
 
+// cleanup removes any temporary values from the node.
+// Normally this gets called when plugging a node back
+// into a ctx.  But may need to be called if the wrapper
+// doesn't re-insert the node.
+func (dn *dataNode) cleanup() {
+	if dn == nil {
+		return
+	}
+
+	dn.tempCtx = nil
+}
+
 // ---------------------------------------------------------------------------
 // setters
 // ---------------------------------------------------------------------------
 
-func add(dn *dataNode, kvs ...any) *dataNode {
+func add(
+	dn *dataNode,
+	kvs ...any,
+) *dataNode {
 	return dn.addValues(normalize(kvs...))
 }
 
@@ -131,7 +151,7 @@ func (dn *dataNode) addValues(m map[string]any) *dataNode {
 
 	spawn := dn.spawnDescendant()
 	spawn.setValues(m)
-	spawn.addSpanAttributes(m)
+	spawn = spawn.addSpanAttributes(dn.tempCtx, m)
 
 	return spawn
 }
@@ -264,18 +284,14 @@ func (dn *dataNode) init(
 	name string,
 	config OTELConfig,
 ) error {
-	if dn == nil {
+	// if any clients exist, initialization was previously called.
+	if ctx == nil || dn == nil || otelIsLive(dn.otel) {
 		return nil
 	}
 
-	// if any of these already exist, initialization was previously called.
-	if dn.otel != nil {
-		return nil
-	}
+	cCtx, isCtxCtx := ctx.(context.Context)
 
-	var cCtx context.Context = ctx.(context.Context)
-
-	if _, matches := ctx.(workflow.Context); matches {
+	if _, isWorkCtx := ctx.(workflow.Context); !isCtxCtx && isWorkCtx {
 		// FIXME: temporary hack for temporal setup.  I think the only thing we lose
 		// with a TODO here is deadline and Done() checks.  Since the context isn't
 		// propagated back up to us, we know it's not storing any references we'll
@@ -425,6 +441,8 @@ func relay(
 	agent string,
 	kvs ...any,
 ) {
+	defer dn.cleanup()
+
 	ag, ok := dn.agents[agent]
 
 	if !ok {
@@ -466,6 +484,15 @@ func nodeFromCtx(
 		return &dataNode{}
 	}
 
+	// if ctx is a context.Context, save a temporary reference to
+	// it in the dataNode.  This allows select collectors to retrieve
+	// context values inside that may be necessary for ensuring we
+	// identify all value propagation.  Specifically useful for otel
+	// in case we need to pull span data from the context.
+	if cCtx, ok := ctx.(context.Context); ok {
+		dn.tempCtx = cCtx
+	}
+
 	return dn
 }
 
@@ -475,6 +502,8 @@ func setDefaultNodeInCtx[CTX valuer](
 	ctx CTX,
 	dn *dataNode,
 ) CTX {
+	dn.cleanup()
+
 	// standard context.Context
 	if cCtx, ok := valuer(ctx).(context.Context); ok {
 		return context.WithValue(cCtx, defaultNamespace, dn).(CTX)
@@ -512,16 +541,22 @@ func setNodeInCtx[CTX valuer](
 // span handling
 // ------------------------------------------------------------
 
-func addSpanWith(
+// nameNodeWith sets the node's id to the provided name.  If
+// there are key-values in the variadic, it adds those as attributes
+// to the node and, if possible, the span.
+func nameNodeWith(
 	dn *dataNode,
 	name string,
 	kvs ...any,
 ) *dataNode {
+	if dn == nil {
+		return nil
+	}
+
+	dn = dn.trace(name)
+
 	if len(kvs) > 0 {
-		dn.id = name
 		dn = dn.addValues(normalize(kvs...))
-	} else {
-		dn = dn.trace(name)
 	}
 
 	return dn
@@ -536,11 +571,38 @@ func (dn *dataNode) addSpan(
 	ctx context.Context,
 	name string,
 ) (context.Context, *dataNode) {
-	if dn == nil || dn.otel == nil {
-		return ctx, dn.spawnDescendant()
+	if dn == nil {
+		return ctx, dn
 	}
 
-	ctx, span := dn.otel.tracer.Start(ctx, name)
+	var span trace.Span
+
+	// simplifies the below checks below
+	if dn.otel == nil {
+		dn.otel = &otelClient{}
+	}
+
+	// by checking the tracer we'll know whether we have an initialized
+	// otel client to work with, or whether we need to try and extract
+	// a tracer from the context span.
+	switch dn.otel.tracer {
+	case nil:
+		curr := getSpan(ctx, dn)
+
+		if curr != nil {
+			// FIXME: datanode serialization should pass along the service name
+			ctx, span = curr.TracerProvider().
+				Tracer(dn.otel.serviceName+"/tracer").
+				Start(ctx, name)
+		}
+	default:
+		ctx, span = dn.otel.tracer.Start(ctx, name)
+	}
+
+	// in case dn.otel is nil, and we were unable to fall back to the tempCtx span.
+	if span == nil {
+		return ctx, dn
+	}
 
 	spawn := dn.spawnDescendant()
 	spawn.span = span
@@ -576,9 +638,11 @@ func (dn *dataNode) passTrace(
 	ctx context.Context,
 	carrier propagation.TextMapCarrier,
 ) {
-	if dn == nil || dn.otel == nil {
+	if dn == nil {
 		return
 	}
+
+	defer dn.cleanup()
 
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 }
@@ -590,23 +654,35 @@ func (dn *dataNode) receiveTrace(
 	ctx context.Context,
 	carrier propagation.TextMapCarrier,
 ) context.Context {
-	if dn == nil || dn.otel == nil {
+	if dn == nil {
 		return ctx
 	}
+
+	defer dn.cleanup()
 
 	return otel.GetTextMapPropagator().Extract(ctx, carrier)
 }
 
-// currentSpan retrieves the span held in the node.
-// If no span is found, returns nil.
-func (dn *dataNode) currentSpan(
+// getSpan retrieves the span held in the node or in the ctx.
+// If no span is found, returns nil. Prefers dn.span.
+func getSpan(
 	ctx context.Context,
+	dn *dataNode,
 ) trace.Span {
 	if dn == nil {
 		return nil
 	}
 
-	return dn.span
+	// todo: do we need this here?
+	defer dn.cleanup()
+
+	if dn.span != nil {
+		return dn.span
+	}
+
+	// its possible that we're using a global exporter, and can extract the span
+	// from the context rather than the datanode.
+	return trace.SpanFromContext(ctx)
 }
 
 // closeSpan closes the otel span and removes it span from the data node.
@@ -627,26 +703,43 @@ func (dn *dataNode) closeSpan() *dataNode {
 // addSpanAttributes adds the values to the current span.  If the span
 // is nil (such as if otel wasn't initialized or no span has been generated),
 // this call no-ops.
+//
+// uses a passed-in ctx instead of dn.tempCtx in case the caller already
+// generated a spawn, which wouldn't contain the original tempCtx.
 func (dn *dataNode) addSpanAttributes(
+	ctx context.Context,
 	values map[string]any,
-) {
-	if dn == nil || dn.span == nil {
-		return
+) *dataNode {
+	if len(values) == 0 {
+		return dn
 	}
 
-	if len(values) == 0 {
-		return
+	if dn == nil {
+		return dn
 	}
+
+	// currentSpan() grabs the span from either dn or the ctx
+	dn.span = getSpan(ctx, dn)
+
+	// currentSpan doesn't guarantee that we found a span
+	if dn.span == nil {
+		return dn
+	}
+
+	spawn := dn.spawnDescendant()
 
 	for k, v := range values {
-		dn.span.SetAttributes(attribute.String(k, marshal(v, false)))
+		// FIXME: leniency for data type will be useful
+		spawn.span.SetAttributes(attribute.String(k, marshal(v, false)))
 	}
+
+	return spawn
 }
 
 // OTELLogger gets the otel logger instance from the otel client.
 // Returns nil if otel wasn't initialized.
 func (dn *dataNode) OTELLogger() otellog.Logger {
-	if dn == nil || dn.otel == nil {
+	if dn == nil || !otelIsLive(dn.otel) {
 		return nil
 	}
 
@@ -728,9 +821,11 @@ func getCaller(depth int) string {
 
 // nodeCore contains the serializable set of data in a dataNode.
 type nodeCore struct {
+	OTELServiceName string `json:"otelServiceName"`
+	// TODO: investigate if map[string]string is really the best structure here.
+	// maybe we can get away with a map[string]any, or a []byte slice?
 	Values   map[string]string `json:"values"`
 	Comments []comment         `json:"comments"`
-	Trace    map[string]string `json:"trace"`
 }
 
 // Bytes serializes the dataNode to a slice of bytes.
@@ -745,17 +840,21 @@ func (dn *dataNode) Bytes() ([]byte, error) {
 		return []byte{}, nil
 	}
 
+	var serviceName string
+
+	if dn.otel != nil {
+		serviceName = dn.otel.serviceName
+	}
+
 	core := nodeCore{
-		Values:   map[string]string{},
-		Comments: dn.Comments(),
-		Trace:    map[string]string{},
+		OTELServiceName: serviceName,
+		Values:          map[string]string{},
+		Comments:        dn.Comments(),
 	}
 
 	for k, v := range dn.Map() {
 		core.Values[k] = marshal(v, false)
 	}
-
-	// dn.passTrace(ctx, asTraceMapCarrier(core.Trace))
 
 	return json.Marshal(core)
 }
@@ -777,6 +876,10 @@ func FromBytes(bs []byte) (*dataNode, error) {
 
 	for k, v := range core.Values {
 		node.values[k] = v
+	}
+
+	node.otel = &otelClient{
+		serviceName: core.OTELServiceName,
 	}
 
 	return &node, nil

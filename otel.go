@@ -2,11 +2,12 @@ package clues
 
 import (
 	"context"
-	"fmt"
+	"log"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/log/global"
 	"go.opentelemetry.io/otel/propagation"
@@ -19,6 +20,10 @@ import (
 )
 
 type otelClient struct {
+	serviceName     string
+	exportsToStdOut bool
+
+	// standard connections
 	grpcConn      *grpc.ClientConn
 	traceProvider *sdkTrace.TracerProvider
 	tracer        trace.Tracer
@@ -32,8 +37,7 @@ func (cli *otelClient) close(
 		return nil
 	}
 
-	// FIXME: there's probably a better way to fix up temporal
-	// here.
+	// FIXME: there's probably a better way to fix up temporal here.
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -41,7 +45,7 @@ func (cli *otelClient) close(
 	if cli.traceProvider != nil {
 		err := cli.traceProvider.ForceFlush(ctx)
 		if err != nil {
-			fmt.Println("forcing trace provider flush:", err)
+			log.Println("forcing trace provider flush:", err)
 		}
 
 		err = cli.traceProvider.Shutdown(ctx)
@@ -60,6 +64,10 @@ func (cli *otelClient) close(
 	return nil
 }
 
+func otelIsLive(cli *otelClient) bool {
+	return cli != nil && cli.tracer != nil
+}
+
 // ------------------------------------------------------------
 // initializers
 // ------------------------------------------------------------
@@ -70,16 +78,36 @@ type OTELConfig struct {
 	// ex: localhost:4317
 	// ex: 0.0.0.0:4317
 	GRPCEndpoint string
+
+	// ExportToStdOut exports to stdout so that clients can
+	// consume traces with the stdout feed instead of having
+	// data relayed to a server.
+	ExportToStdOut bool
+
+	// AllowGlobalSpans tells clues that it may lose context of
+	// the otel client across ctx serialization boundaries (this
+	// happens in temporal).  If this is flagged, then clues will
+	// attempt to eagerly check for spans in the context as well
+	// as the data node.
+	AllowGlobalSpans bool
+
+	// UseTemporalTracer should be flagged anytime clues is working
+	// within a temporal instance.
+	UseTemporalTracer bool
 }
 
-// newOTELClient bootstraps the OpenTelemetry pipeline to run against a
-// local server instance. If it does not return an error, make sure
-// to call the client.Close() method for proper cleanup.
-// The service name is used to match traces across backends.
+// newOTELClient bootstraps the OpenTelemetry pipeline according to
+// the provided configuration.  If UseGlobalTrace == false, otel will
+// use a  local server instance; if true, it generates a global singleton.
+// Global singletons may be required for frameworks that serialize
+// context values, such as Temporal.
+//
+// If this does not return an error, make sure to call the
+// client.Close() method for proper cleanup.
 func newOTELClient(
 	ctx context.Context,
 	serviceName string,
-	config OTELConfig,
+	cfg OTELConfig,
 ) (*otelClient, error) {
 	// -- Resource
 	resource, err := resource.Merge(
@@ -91,33 +119,13 @@ func newOTELClient(
 		return nil, Wrap(err, "creating otel resource")
 	}
 
-	// -- Exporter
-
-	conn, err := grpc.NewClient(
-		config.GRPCEndpoint,
-		// Note the use of insecure transport here. TLS is recommended in production.
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, Wrap(err, "creating new gRPC connection")
-	}
-
-	exporter, err := otlptracegrpc.New(
-		ctx,
-		otlptracegrpc.WithGRPCConn(conn))
-	if err != nil {
-		return nil, Wrap(err, "creating a trace exporter")
-	}
-
 	// -- TracerProvider
 
-	// Register the trace exporter with a TracerProvider, using a batch
-	// span processor to aggregate spans before export.
-	batchSpanProcessor := sdkTrace.NewBatchSpanProcessor(exporter)
-
-	tracerProvider := sdkTrace.NewTracerProvider(
-		sdkTrace.WithResource(resource),
+	opts := []sdkTrace.TracerProviderOption{
 		sdkTrace.WithSampler(sdkTrace.AlwaysSample()),
-		sdkTrace.WithSpanProcessor(batchSpanProcessor),
+		sdkTrace.WithResource(resource),
+		// FIXME: prod will need configuration for this
+		sdkTrace.WithSampler(sdkTrace.AlwaysSample()),
 		sdkTrace.WithRawSpanLimits(sdkTrace.SpanLimits{
 			AttributeValueLengthLimit:   -1,
 			AttributeCountLimit:         -1,
@@ -125,10 +133,49 @@ func newOTELClient(
 			AttributePerLinkCountLimit:  -1,
 			EventCountLimit:             -1,
 			LinkCountLimit:              -1,
-		}))
+		}),
+	}
+
+	// -- Exporter
+	var grpcConn *grpc.ClientConn
+
+	if cfg.ExportToStdOut {
+		// Register a stdout trace exporter for cases that don't want
+		// to export to a batch span processor.
+		exp, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+		if err != nil {
+			return nil, Wrap(err, "generating stdOutTrace batcher")
+		}
+
+		opts = append(opts, sdkTrace.WithBatcher(exp))
+	} else {
+		// Register the trace exporter with a grps-bound batch
+		// span processor to aggregate spans before export.
+		grpcConn, err = grpc.NewClient(
+			cfg.GRPCEndpoint,
+			// Note the use of insecure transport here. TLS is recommended in production.
+			grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, Wrap(err, "creating new gRPC connection")
+		}
+
+		exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(grpcConn))
+		if err != nil {
+			return nil, Wrap(err, "creating a grpc trace exporter")
+		}
+
+		batchSpanProcessor := sdkTrace.NewBatchSpanProcessor(exporter)
+
+		opts = append(opts, sdkTrace.WithSpanProcessor(batchSpanProcessor))
+	}
+
+	tracerProvider := sdkTrace.NewTracerProvider(opts...)
 
 	// set global propagator to traceContext (the default is no-op).
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{}))
 	otel.SetTracerProvider(tracerProvider)
 
 	// -- Logger
@@ -139,10 +186,12 @@ func newOTELClient(
 	// -- Client
 
 	client := otelClient{
-		grpcConn:      conn,
-		traceProvider: tracerProvider,
-		tracer:        tracerProvider.Tracer(serviceName + "/tracer"),
-		logger:        logProvider.Logger(serviceName),
+		serviceName:     serviceName,
+		exportsToStdOut: cfg.ExportToStdOut,
+		grpcConn:        grpcConn,
+		traceProvider:   tracerProvider,
+		tracer:          tracerProvider.Tracer(serviceName + "/tracer"),
+		logger:          logProvider.Logger(serviceName),
 	}
 
 	// Shutdown will flush any remaining spans and shut down the exporter.
@@ -151,8 +200,6 @@ func newOTELClient(
 
 // ------------------------------------------------------------
 // annotations.  basically otel's version of With()
-// Not currently used; we're just mashing everything in as a
-// string right now, same as clues does.
 // ------------------------------------------------------------
 
 type annotation struct {

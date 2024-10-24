@@ -168,6 +168,17 @@ func Init[CTX valuer](
 	return plantLoggerInCtx(ctx, clogged)
 }
 
+// WithSingleton retrieves the singleton from memory and adds it
+// to the context.  This is generally unnecessary.  But for frameworks
+// which involve context serialization and  require you to extract a
+// logger between boundaries, this can be necessary to ensure functionality.
+func WithSingleton[CTX valuer](ctx CTX) CTX {
+	// empty settings since we should be retrieving the singleton, and
+	// any settings we pass in here _should_ get dropped.
+	clogged := singleton(Settings{})
+	return plantLoggerInCtx(ctx, clogged)
+}
+
 // PlantLogger allows users to embed their own zap.SugaredLogger within the context.
 // It's good for inheriting a logger instance that was generated elsewhere, in case
 // you have a downstream package that wants to clog the code with a different zsl.

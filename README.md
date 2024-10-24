@@ -7,6 +7,7 @@ A golang library for tracking runtime variables via ctx, passing them upstream w
 ## Aggregate runtime state in ctx
 
 Track runtime variables by adding them to the context.
+
 ```go
 func foo(ctx context.Context, someID string) error {
     ctx = clues.Add(ctx, "importantID", someID)
@@ -15,6 +16,7 @@ func foo(ctx context.Context, someID string) error {
 ```
 
 Keep error messages readable and augment your telemetry by packing errors with structured data.
+
 ```go
 func bar(ctx context.Context, someID string) error {
     ctx = clues.Add(ctx, "importantID", someID)
@@ -27,6 +29,7 @@ func bar(ctx context.Context, someID string) error {
 ```
 
 Retrive structured data from your errors for logging and other telemetry.
+
 ```go
 func main() {
     err := foo(context.Background(), "importantID")
@@ -41,7 +44,8 @@ func main() {
 
 ## Track individual process flows
 
-Each clues addition traces its additions with a tree of IDs, chaining those traces into the "clues_trace" value.  This lets you quickly and easily filter logs to a specific process tree.
+Each clues addition traces its additions with a tree of IDs, chaining those traces into the "clues_trace" value. This lets you quickly and easily filter logs to a specific process tree.
+
 ```go
 func iterateOver(ctx context.Context, users []string) {
     // automatically adds "clues_trace":"id_a"
@@ -61,6 +65,7 @@ func iterateOver(ctx context.Context, users []string) {
 
 Clues errors can be wrapped by pkg/errors without slicing out
 any stored data.
+
 ```go
 func getIt(someID string) error {
     return clues.New("oh no!").With("importantID", someID)
@@ -77,7 +82,7 @@ func getItWrapper(someID string) error {
 func main() {
     err := getItWrapper("id")
     if err != nil {
-        fmt.Println("error getting", err, "with vals", clues.InErr(err))
+        log.Println("error getting", err, "with vals", clues.InErr(err))
     }
 }
 ```
@@ -85,6 +90,7 @@ func main() {
 ## Stackable errors
 
 Error stacking lets you embed error sentinels without slicing out the current error's data or relying on err.Error() strings.
+
 ```go
 var ErrorCommonFailure = "a common failure condition"
 
@@ -92,7 +98,7 @@ func do() error {
     if err := dependency.Do(); err != nil {
         return clues.Stack(ErrorCommonFailure, err)
     }
-    
+
     return nil
 }
 
@@ -109,6 +115,7 @@ func main() {
 Rather than build an errors.As-compliant local error to annotate downstream errors, labels allow you to categorize errors with expected qualities.
 
 Augment downstream errors with labels
+
 ```go
 func foo(ctx context.Context, someID string) error {
     err := externalPkg.DoThing(ctx, someID)
@@ -120,6 +127,7 @@ func foo(ctx context.Context, someID string) error {
 ```
 
 Check your labels upstream.
+
 ```go
 func main() {
     err := foo(context.Background(), "importantID")
@@ -133,17 +141,20 @@ func main() {
 
 ## Design
 
-Clues is not the first of its kind: ctx-err-combo packages already exist.  Most other packages tend to couple the two notions, packing both into a single handler.  This is, in my opinion, an anti-pattern.  Errors are not context, and context are not errors.  Unifying the two can couple layers together, and your maintenance woes from handling that coupling are not worth the tradeoff in syntactical sugar.
+Clues is not the first of its kind: ctx-err-combo packages already exist. Most other packages tend to couple the two notions, packing both into a single handler. This is, in my opinion, an anti-pattern. Errors are not context, and context are not errors. Unifying the two can couple layers together, and your maintenance woes from handling that coupling are not worth the tradeoff in syntactical sugar.
 
-In turn, Clues maintains a clear separation between accumulating data into a context and passing data back in an error.  Both handlers operate independent of the other, so you can choose to only use the ctx (accumulate data into the context, but maybe log it instead of returning data in the err) or the err (only pack immedaite details into the error).
+In turn, Clues maintains a clear separation between accumulating data into a context and passing data back in an error. Both handlers operate independent of the other, so you can choose to only use the ctx (accumulate data into the context, but maybe log it instead of returning data in the err) or the err (only pack immedaite details into the error).
 
 ### References
-* [https://github.com/mvndaai/ctxerr](https://github.com/mvndaai/ctxerr)
-* [https://github.com/suzuki-shunsuke/go-errctx](https://github.com/suzuki-shunsuke/go-errctx)
+
+- [https://github.com/mvndaai/ctxerr](https://github.com/mvndaai/ctxerr)
+- [https://github.com/suzuki-shunsuke/go-errctx](https://github.com/suzuki-shunsuke/go-errctx)
 
 ## Similar Art
 
-Fault is most similar in design to this package, and also attempts to maintain separation between errors and contexts.  The differences are largely syntactical: Fault prefers a composable interface with decorator packages.  I like to keep error production as terse as possible, thus preferring a more populated interface of methods over the decorator design.
+Fault is most similar in design to this package, and also attempts to maintain separation between errors and contexts. The differences are largely syntactical: Fault prefers a composable interface with decorator packages. I like to keep error production as terse as possible, thus preferring a more populated interface of methods over the decorator design.
 
 ### References
-* [https://github.com/Southclaws/fault](https://github.com/Southclaws/fault)
+
+- [https://github.com/Southclaws/fault](https://github.com/Southclaws/fault)
+

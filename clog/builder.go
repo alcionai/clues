@@ -119,9 +119,9 @@ func (b builder[CTX]) log(l logLevel, msg string) {
 	// add otel logging if provided
 	otelLog := cluesNode.OTELLogger()
 	if otelLog != nil {
-		var cCtx context.Context = valuer(b.ctx).(context.Context)
+		cCtx, isCtxCtx := valuer(b.ctx).(context.Context)
 
-		if _, match := valuer(b.ctx).(workflow.Context); match {
+		if _, isWorkCtx := valuer(b.ctx).(workflow.Context); !isCtxCtx && isWorkCtx {
 			// FIXME: the use of context for Emit is opaque, since
 			// this call leads to an interface whose only in-scope
 			// usage of Emit is to recursively call Emit. The use of

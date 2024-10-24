@@ -44,14 +44,14 @@ func Close[CTX valuer](
 ) error {
 	nc := nodeFromCtx(ctx, defaultNamespace)
 
-	if nc.otel != nil {
-		var cCtx context.Context = valuer(ctx).(context.Context)
+	if otelIsLive(nc.otel) {
+		cCtx, isCtxCtx := valuer(ctx).(context.Context)
 
 		// FIXME: there's probably a better way to extract a context in case of temporal
 		// in case of temporal, extract the context from the workflow ctx.  Maybe the
 		// best thing to do is mock the Done status from the workflow channel, since it's
 		// not being used for anything other than that.
-		if _, match := valuer(ctx).(workflow.Context); match {
+		if _, isWorkCtx := valuer(ctx).(workflow.Context); !isCtxCtx && isWorkCtx {
 			// only effect here is that TODO won't hit the Done() channel select.
 			cCtx = context.TODO()
 		}
@@ -61,6 +61,8 @@ func Close[CTX valuer](
 			return Wrap(err, "closing otel client")
 		}
 	}
+
+	nc.cleanup()
 
 	return nil
 }
@@ -126,7 +128,7 @@ func AddSpan(
 	nc := nodeFromCtx(ctx, defaultNamespace)
 	ctx, nc = nc.addSpan(ctx, name)
 
-	return setDefaultNodeInCtx(ctx, addSpanWith(nc, name, kvs...))
+	return setDefaultNodeInCtx(ctx, nameNodeWith(nc, name, kvs...))
 }
 
 // PassTrace adds the current trace details to the provided
@@ -172,7 +174,7 @@ func AddSpanTo(
 	nc := nodeFromCtx(ctx, ctxKey(namespace))
 	ctx, nc = nc.addSpan(ctx, name)
 
-	return setNodeInCtx(ctx, namespace, addSpanWith(nc, name, kvs...))
+	return setNodeInCtx(ctx, namespace, nameNodeWith(nc, name, kvs...))
 }
 
 // CurrentSpan retrieves the current span context details
@@ -180,9 +182,8 @@ func AddSpanTo(
 func SpanContext(
 	ctx context.Context,
 ) trace.SpanContext {
-	return nodeFromCtx(ctx, defaultNamespace).
-		currentSpan(ctx).
-		SpanContext()
+	dn := nodeFromCtx(ctx, defaultNamespace)
+	return getSpan(ctx, dn).SpanContext()
 }
 
 // CloseSpan closes the current span in the clues node.  Should only be called
