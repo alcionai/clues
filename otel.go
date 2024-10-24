@@ -77,6 +77,13 @@ type OTELConfig struct {
 	// consume traces with the stdout feed instead of having
 	// data relayed to a server.
 	ExportToStdOut bool
+
+	// AllowGlobalSpans tells clues that it may lose context of
+	// the otel client across ctx serialization boundaries (this
+	// happens in temporal).  If this is flagged, then clues will
+	// attempt to eagerly check for spans in the context as well
+	// as the data node.
+	AllowGlobalSpans bool
 }
 
 // newOTELClient bootstraps the OpenTelemetry pipeline according to

@@ -62,6 +62,8 @@ func Close[CTX valuer](
 		}
 	}
 
+	nc.cleanup()
+
 	return nil
 }
 
@@ -181,7 +183,7 @@ func SpanContext(
 	ctx context.Context,
 ) trace.SpanContext {
 	return nodeFromCtx(ctx, defaultNamespace).
-		currentSpan(ctx).
+		currentSpan().
 		SpanContext()
 }
 

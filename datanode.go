@@ -107,6 +107,18 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 	}
 }
 
+// cleanup removes any temporary values from the node.
+// Normally this gets called when plugging a node back
+// into a ctx.  But may need to be called if the wrapper
+// doesn't re-insert the node.
+func (dn *dataNode) cleanup() {
+	if dn == nil {
+		return
+	}
+
+	dn.tempCtx = nil
+}
+
 // ---------------------------------------------------------------------------
 // setters
 // ---------------------------------------------------------------------------
@@ -139,7 +151,7 @@ func (dn *dataNode) addValues(m map[string]any) *dataNode {
 
 	spawn := dn.spawnDescendant()
 	spawn.setValues(m)
-	spawn.addSpanAttributes(m)
+	spawn = spawn.addSpanAttributes(dn.tempCtx, m)
 
 	return spawn
 }
@@ -433,6 +445,8 @@ func relay(
 	agent string,
 	kvs ...any,
 ) {
+	defer dn.cleanup()
+
 	ag, ok := dn.agents[agent]
 
 	if !ok {
@@ -492,9 +506,7 @@ func setDefaultNodeInCtx[CTX valuer](
 	ctx CTX,
 	dn *dataNode,
 ) CTX {
-	// zero out the temp context so that it doesn't persist beyond
-	// re-injection into the current context.
-	dn.tempCtx = nil
+	dn.cleanup()
 
 	// standard context.Context
 	if cCtx, ok := valuer(ctx).(context.Context); ok {
@@ -597,6 +609,8 @@ func (dn *dataNode) passTrace(
 	ctx context.Context,
 	carrier propagation.TextMapCarrier,
 ) {
+	defer dn.cleanup()
+
 	if dn == nil || dn.otel == nil {
 		return
 	}
@@ -611,6 +625,8 @@ func (dn *dataNode) receiveTrace(
 	ctx context.Context,
 	carrier propagation.TextMapCarrier,
 ) context.Context {
+	defer dn.cleanup()
+
 	if dn == nil || dn.otel == nil {
 		return ctx
 	}
@@ -620,11 +636,20 @@ func (dn *dataNode) receiveTrace(
 
 // currentSpan retrieves the span held in the node.
 // If no span is found, returns nil.
-func (dn *dataNode) currentSpan(
-	ctx context.Context,
-) trace.Span {
+func (dn *dataNode) currentSpan() trace.Span {
 	if dn == nil {
 		return nil
+	}
+
+	defer dn.cleanup()
+
+	defer dn.cleanup()
+
+	if dn.span == nil {
+		span := trace.SpanFromContext(dn.tempCtx)
+		if span != nil {
+			return span
+		}
 	}
 
 	return dn.span
@@ -648,29 +673,29 @@ func (dn *dataNode) closeSpan() *dataNode {
 // addSpanAttributes adds the values to the current span.  If the span
 // is nil (such as if otel wasn't initialized or no span has been generated),
 // this call no-ops.
+//
+// uses a passed-in ctx instead of dn.tempCtx in case the caller already
+// generated a spawn, which wouldn't contain the original tempCtx.
 func (dn *dataNode) addSpanAttributes(
+	ctx context.Context,
 	values map[string]any,
-) {
+) *dataNode {
 	if len(values) == 0 {
-		return
+		return dn
 	}
 
 	if dn == nil {
-		return
+		return dn
 	}
 
-	// if we're operating with exportsToStdOut, then this is probably using
-	// a global otel collector, which means we might be able to load the current
-	// span from the context.
-	if dn.span == nil &&
-		dn.tempCtx != nil &&
-		dn.otel != nil &&
-		dn.otel.exportsToStdOut {
+	// its possible that we're using a global exporter, and can extract the span
+	// from the context rather than the datanode.
+	if dn.span == nil && ctx != nil {
 		span := trace.SpanFromContext(dn.tempCtx)
 
 		// no span found in the context; treat this as not having been initialized.
 		if span == nil {
-			return
+			return dn
 		}
 
 		dn.span = span
@@ -678,12 +703,16 @@ func (dn *dataNode) addSpanAttributes(
 
 	// and if we skipped the above checks, ensure we actually have a span
 	if dn.span == nil {
-		return
+		return dn
 	}
 
+	spawn := dn.spawnDescendant()
+
 	for k, v := range values {
-		dn.span.SetAttributes(attribute.String(k, marshal(v, false)))
+		spawn.span.SetAttributes(attribute.String(k, marshal(v, false)))
 	}
+
+	return spawn
 }
 
 // OTELLogger gets the otel logger instance from the otel client.
@@ -773,9 +802,8 @@ func getCaller(depth int) string {
 type nodeCore struct {
 	// TODO: investigate if map[string]string is really the best structure here.
 	// maybe we can get away with a map[string]any, or a []byte slice?
-	Values              map[string]string `json:"values"`
-	Comments            []comment         `json:"comments"`
-	OtelExportsToStdOut bool              `json:"useGlobalOtel"`
+	Values   map[string]string `json:"values"`
+	Comments []comment         `json:"comments"`
 }
 
 // Bytes serializes the dataNode to a slice of bytes.
@@ -799,11 +827,6 @@ func (dn *dataNode) Bytes() ([]byte, error) {
 		core.Values[k] = marshal(v, false)
 	}
 
-	if dn.otel != nil {
-		// assume Temporal context if exporting to StdOut
-		core.OtelExportsToStdOut = dn.otel.exportsToStdOut
-	}
-
 	return json.Marshal(core)
 }
 
@@ -824,12 +847,6 @@ func FromBytes(bs []byte) (*dataNode, error) {
 
 	for k, v := range core.Values {
 		node.values[k] = v
-	}
-
-	if core.OtelExportsToStdOut {
-		node.otel = &otelClient{
-			exportsToStdOut: true,
-		}
 	}
 
 	return &node, nil
