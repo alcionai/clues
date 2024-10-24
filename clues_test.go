@@ -262,48 +262,53 @@ func TestAddSpan(t *testing.T) {
 		{"duplicates with kvs", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
 	}
 	for _, test := range table {
+		// whether or not to run init
 		for _, init := range []bool{true, false} {
-			t.Run(test.name, func(t *testing.T) {
-				ctx := context.Background()
+			// whether or not to init otel with stdout export
+			for _, exportToStdOut := range []bool{true, false} {
+				t.Run(test.name, func(t *testing.T) {
+					ctx := context.Background()
 
-				if init {
-					ictx, err := clues.Initialize(ctx, test.name, clues.OTELConfig{
-						GRPCEndpoint: "localhost:4317",
-					})
-					if err != nil {
-						t.Error("initializing clues", err)
-						return
-					}
-
-					defer func() {
-						err := clues.Close(ictx)
+					if init {
+						ictx, err := clues.Initialize(ctx, test.name, clues.OTELConfig{
+							GRPCEndpoint:   "localhost:4317",
+							ExportToStdOut: exportToStdOut,
+						})
 						if err != nil {
-							t.Error("closing clues:", err)
+							t.Error("initializing clues", err)
 							return
 						}
-					}()
 
-					ctx = ictx
-				}
+						defer func() {
+							err := clues.Close(ictx)
+							if err != nil {
+								t.Error("closing clues:", err)
+								return
+							}
+						}()
 
-				ctx = context.WithValue(ctx, testCtx{}, "instance")
-				mustEquals(t, msa{}, clues.In(ctx).Map(), false)
+						ctx = ictx
+					}
 
-				for _, name := range test.names {
-					ctx = clues.AddSpan(ctx, name, test.kvs...)
-					defer clues.CloseSpan(ctx)
-				}
+					ctx = context.WithValue(ctx, testCtx{}, "instance")
+					mustEquals(t, msa{}, clues.In(ctx).Map(), false)
 
-				assert(
-					t, ctx, "",
-					test.expectM, msa{},
-					test.expectS, sa{})
+					for _, name := range test.names {
+						ctx = clues.AddSpan(ctx, name, test.kvs...)
+						defer clues.CloseSpan(ctx)
+					}
 
-				c := clues.In(ctx).Map()
-				if c["clues_trace"] != test.expectTrace {
-					t.Errorf("expected clues_trace to equal %q, got %q", test.expectTrace, c["clues_trace"])
-				}
-			})
+					assert(
+						t, ctx, "",
+						test.expectM, msa{},
+						test.expectS, sa{})
+
+					c := clues.In(ctx).Map()
+					if c["clues_trace"] != test.expectTrace {
+						t.Errorf("expected clues_trace to equal %q, got %q", test.expectTrace, c["clues_trace"])
+					}
+				})
+			}
 		}
 	}
 }

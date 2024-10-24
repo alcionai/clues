@@ -40,6 +40,11 @@ type Adder interface {
 // with the root having the lowest priority.  IE: if a child overwrites a key
 // declared by an ancestor, the child's entry takes priority.
 type dataNode struct {
+	// tempCtx is used to pass along a ctx into downstream setters which may extract
+	// data from the context.  It does not get preserved across spawns, and so the
+	// assumption should be that it only exists for the duration of setting values.
+	tempCtx context.Context
+
 	parent *dataNode
 
 	// otel contains the client instance for the in memory otel runtime.  It is only
@@ -106,7 +111,10 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 // setters
 // ---------------------------------------------------------------------------
 
-func add(dn *dataNode, kvs ...any) *dataNode {
+func add(
+	dn *dataNode,
+	kvs ...any,
+) *dataNode {
 	return dn.addValues(normalize(kvs...))
 }
 
@@ -466,6 +474,15 @@ func nodeFromCtx(
 		return &dataNode{}
 	}
 
+	// if ctx is a context.Context, save a temporary reference to
+	// it in the dataNode.  This allows select collectors to retrieve
+	// context values inside that may be necessary for ensuring we
+	// identify all value propagation.  Specifically useful for otel
+	// in case we need to pull span data from the context.
+	if cCtx, ok := ctx.(context.Context); ok {
+		dn.tempCtx = cCtx
+	}
+
 	return dn
 }
 
@@ -475,6 +492,10 @@ func setDefaultNodeInCtx[CTX valuer](
 	ctx CTX,
 	dn *dataNode,
 ) CTX {
+	// zero out the temp context so that it doesn't persist beyond
+	// re-injection into the current context.
+	dn.tempCtx = nil
+
 	// standard context.Context
 	if cCtx, ok := valuer(ctx).(context.Context); ok {
 		return context.WithValue(cCtx, defaultNamespace, dn).(CTX)
@@ -630,11 +651,33 @@ func (dn *dataNode) closeSpan() *dataNode {
 func (dn *dataNode) addSpanAttributes(
 	values map[string]any,
 ) {
-	if dn == nil || dn.span == nil {
+	if len(values) == 0 {
 		return
 	}
 
-	if len(values) == 0 {
+	if dn == nil {
+		return
+	}
+
+	// if we're operating with exportsToStdOut, then this is probably using
+	// a global otel collector, which means we might be able to load the current
+	// span from the context.
+	if dn.span == nil &&
+		dn.tempCtx != nil &&
+		dn.otel != nil &&
+		dn.otel.exportsToStdOut {
+		span := trace.SpanFromContext(dn.tempCtx)
+
+		// no span found in the context; treat this as not having been initialized.
+		if span == nil {
+			return
+		}
+
+		dn.span = span
+	}
+
+	// and if we skipped the above checks, ensure we actually have a span
+	if dn.span == nil {
 		return
 	}
 
@@ -728,9 +771,11 @@ func getCaller(depth int) string {
 
 // nodeCore contains the serializable set of data in a dataNode.
 type nodeCore struct {
-	Values   map[string]string `json:"values"`
-	Comments []comment         `json:"comments"`
-	Trace    map[string]string `json:"trace"`
+	// TODO: investigate if map[string]string is really the best structure here.
+	// maybe we can get away with a map[string]any, or a []byte slice?
+	Values              map[string]string `json:"values"`
+	Comments            []comment         `json:"comments"`
+	OtelExportsToStdOut bool              `json:"useGlobalOtel"`
 }
 
 // Bytes serializes the dataNode to a slice of bytes.
@@ -748,14 +793,16 @@ func (dn *dataNode) Bytes() ([]byte, error) {
 	core := nodeCore{
 		Values:   map[string]string{},
 		Comments: dn.Comments(),
-		Trace:    map[string]string{},
 	}
 
 	for k, v := range dn.Map() {
 		core.Values[k] = marshal(v, false)
 	}
 
-	// dn.passTrace(ctx, asTraceMapCarrier(core.Trace))
+	if dn.otel != nil {
+		// assume Temporal context if exporting to StdOut
+		core.OtelExportsToStdOut = dn.otel.exportsToStdOut
+	}
 
 	return json.Marshal(core)
 }
@@ -777,6 +824,12 @@ func FromBytes(bs []byte) (*dataNode, error) {
 
 	for k, v := range core.Values {
 		node.values[k] = v
+	}
+
+	if core.OtelExportsToStdOut {
+		node.otel = &otelClient{
+			exportsToStdOut: true,
+		}
 	}
 
 	return &node, nil

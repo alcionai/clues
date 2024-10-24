@@ -14,14 +14,12 @@ type Crypto interface {
 }
 
 type dataNodePropagator struct {
-	key  string
-	node *dataNode
+	key string
 }
 
-func NewDataNodePropagator(ctx context.Context) workflow.ContextPropagator {
+func NewDataNodePropagator() workflow.ContextPropagator {
 	return &dataNodePropagator{
-		key:  "clues_data_node_core",
-		node: nodeFromCtx(ctx, defaultNamespace),
+		key: "clues_data_node_core",
 	}
 }
 
@@ -30,8 +28,10 @@ func (s *dataNodePropagator) Inject(
 	ctx context.Context,
 	writer workflow.HeaderWriter,
 ) error {
-	if s != nil && s.node != nil && len(s.key) > 0 {
-		return writeNode(s.key, s.node, writer)
+	node := nodeFromCtx(ctx, defaultNamespace)
+
+	if s != nil && node != nil && len(s.key) > 0 {
+		return writeNode(s.key, node, writer)
 	}
 
 	return nil
@@ -42,7 +42,13 @@ func (s *dataNodePropagator) InjectFromWorkflow(
 	ctx workflow.Context,
 	writer workflow.HeaderWriter,
 ) error {
-	return writeNode(s.key, s.node, writer)
+	node := nodeFromCtx(ctx, defaultNamespace)
+
+	if s != nil && node != nil && len(s.key) > 0 {
+		return writeNode(s.key, node, writer)
+	}
+
+	return nil
 }
 
 func writeNode(
