@@ -52,15 +52,6 @@ type dataNode struct {
 	// ancestor to the current node to produce the comment history.
 	comment comment
 
-	// labelCounter is a func hook that allows a caller to automatically count the
-	// number of times a label appears.  DataNodes themselves have no labels, so
-	// in this case the presence of a labelCounter will be used to count the labels
-	// appearing in errors which attach this data node to the error.
-	//
-	// Errors will only utilize the first labelCounter they find.  The tree is searched
-	// from leaf to root when looking for populated labelCounters.
-	labelCounter Adder
-
 	// agents act as proxy dataNodes that can relay specific, intentional data
 	// additions.  They're namespaced so that additions to the agents don't accidentally
 	// clobber other values in the dataNode. This also allows agents to protect
@@ -80,9 +71,8 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 	}
 
 	return &dataNode{
-		parent:       dn,
-		labelCounter: dn.labelCounter,
-		agents:       agents,
+		parent: dn,
+		agents: agents,
 	}
 }
 

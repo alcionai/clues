@@ -309,19 +309,7 @@ func (err *Err) Label(labels ...string) *Err {
 		err.labels = map[string]struct{}{}
 	}
 
-	lc := getLabelCounter(err)
-	els := err.Labels()
-
 	for _, label := range labels {
-		if lc != nil {
-			_, inPrior := els[label]
-			_, inCurrent := err.labels[label]
-			if !inPrior && !inCurrent {
-				lc.Add(label, 1)
-			}
-		}
-		// don't duplicate counts
-
 		err.labels[label] = struct{}{}
 	}
 
@@ -866,7 +854,6 @@ func (err *Err) WithClues(ctx context.Context) *Err {
 
 	dn := In(ctx)
 	e := err.WithMap(dn.Map())
-	e.data.labelCounter = dn.labelCounter
 
 	return e
 }
@@ -1076,41 +1063,6 @@ func Comment(err error, msg string, vs ...any) *Err {
 // ------------------------------------------------------------
 // helpers
 // ------------------------------------------------------------
-
-// getLabelCounter retrieves the a labelCounter from the provided
-// error.  The algorithm works from the current error up the
-// hierarchy, looking into each dataNode tree along the way, and
-// eagerly takes the first available counter.
-func getLabelCounter(e error) Adder {
-	if e == nil {
-		return nil
-	}
-
-	ce, ok := e.(*Err)
-	if !ok {
-		return nil
-	}
-
-	for i := len(ce.stack) - 1; i >= 0; i-- {
-		lc := getLabelCounter(ce.stack[i])
-		if lc != nil {
-			return lc
-		}
-	}
-
-	if ce.e != nil {
-		lc := getLabelCounter(ce.e)
-		if lc != nil {
-			return lc
-		}
-	}
-
-	if ce.data != nil && ce.data.labelCounter != nil {
-		return ce.data.labelCounter
-	}
-
-	return nil
-}
 
 // returns true if the error is nil, or if it is a non-nil interface
 // containing a nil value.
