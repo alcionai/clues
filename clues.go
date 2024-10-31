@@ -2,6 +2,8 @@ package clues
 
 import (
 	"context"
+
+	"github.com/alcionai/clues/internal/stringify"
 )
 
 // ---------------------------------------------------------------------------
@@ -11,7 +13,7 @@ import (
 // Add adds all key-value pairs to the clues.
 func Add(ctx context.Context, kvs ...any) context.Context {
 	nc := nodeFromCtx(ctx)
-	return setNodeInCtx(ctx, nc.addValues(normalize(kvs...)))
+	return setNodeInCtx(ctx, nc.addValues(stringify.Normalize(kvs...)))
 }
 
 // AddMap adds a shallow clone of the map to a namespaced set of clues.
@@ -26,7 +28,7 @@ func AddMap[K comparable, V any](
 		kvs = append(kvs, k, v)
 	}
 
-	return setNodeInCtx(ctx, nc.addValues(normalize(kvs...)))
+	return setNodeInCtx(ctx, nc.addValues(stringify.Normalize(kvs...)))
 }
 
 // ---------------------------------------------------------------------------
@@ -58,7 +60,7 @@ func AddTraceWith(
 
 	var node *dataNode
 	if len(kvs) > 0 {
-		node = nc.addValues(normalize(kvs...))
+		node = nc.addValues(stringify.Normalize(kvs...))
 		node.id = traceID
 	} else {
 		node = nc.trace(traceID)
@@ -146,5 +148,5 @@ func Relay(
 	}
 
 	// set values, not add.  We don't want agents to own a full clues tree.
-	ag.data.setValues(normalize(vs...))
+	ag.data.setValues(stringify.Normalize(vs...))
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alcionai/clues/internal/stringify"
 	"golang.org/x/exp/maps"
 )
 
@@ -72,7 +73,7 @@ func (ec *ErrCore) stringer(fancy bool) string {
 
 	vsl := []string{}
 	for k, v := range ec.Values {
-		vsl = append(vsl, k+":"+marshal(v, true))
+		vsl = append(vsl, k+":"+stringify.Marshal(v, true))
 	}
 
 	vs := strings.Join(vsl, sep)

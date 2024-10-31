@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"github.com/alcionai/clues"
+	"github.com/alcionai/clues/cecrets"
 )
 
 // ---------------------------------------------------
@@ -163,10 +163,10 @@ func GetLogFileOrDefault(useThisFile string) string {
 func setCluesSecretsHash(alg sensitiveInfoHandlingAlgo) {
 	switch alg {
 	case HashSensitiveInfo:
-		clues.SetHasher(clues.DefaultHash())
+		cecrets.SetHasher(cecrets.DefaultHash())
 	case MaskSensitiveInfo:
-		clues.SetHasher(clues.HashCfg{HashAlg: clues.Flatmask})
+		cecrets.SetHasher(cecrets.HashCfg{HashAlg: cecrets.Flatmask})
 	case ShowSensitiveInfoInPlainText:
-		clues.SetHasher(clues.NoHash())
+		cecrets.SetHasher(cecrets.NoHash())
 	}
 }
