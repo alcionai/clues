@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/alcionai/clues/internal/stringify"
 	"golang.org/x/exp/maps"
 )
 
@@ -889,7 +890,7 @@ func (err *Err) With(kvs ...any) *Err {
 	}
 
 	if len(kvs) > 0 {
-		err.data = err.data.addValues(normalize(kvs...))
+		err.data = err.data.addValues(stringify.Normalize(kvs...))
 	}
 
 	return err

@@ -1,4 +1,4 @@
-package clues
+package cecrets
 
 import (
 	"crypto/hmac"
@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/alcionai/clues/internal/stringify"
 )
 
 const hashTruncateLen = 16
@@ -32,8 +34,7 @@ type HashCfg struct {
 }
 
 // SetHasher sets the hashing configuration used in
-// all clues concealer structs, and clues.Conceal()
-// and clues.Hash() calls.
+// all concealer structs, and Conceal() and Hash() calls.
 func SetHasher(sc HashCfg) {
 	config = sc
 }
@@ -66,12 +67,12 @@ func makeDefaultHash() HashCfg {
 // ---------------------------------------------------------------------------
 
 type Concealer interface {
+	// Conceal produces an obfuscated representation of the value.
 	Conceal() string
-	// Concealers also need to comply with Format
-	// It's a bit overbearing, but complying with Concealer
-	// doesn't provide guarantees that the variable won't
-	// pass into fmt.Printf("%v") and skip the whole hash.
-	// This is for your protection, too.
+	// Concealers also need to comply with Format.
+	// Complying with Conceal() alone doesn't guarantee that
+	// the variable won't pass into fmt.Printf("%v") and skip
+	// the whole conceal process.
 	Format(fs fmt.State, verb rune)
 	// PlainStringer is the opposite of conceal.
 	// Useful for if you want to retrieve the raw value of a secret.
@@ -113,7 +114,7 @@ func Hide(a any) secret {
 
 	return secret{
 		hashText:  Conceal(a),
-		plainText: marshal(a, false),
+		plainText: stringify.Fmt(a)[0],
 		value:     a,
 	}
 }
@@ -135,7 +136,7 @@ func HideAll(a ...any) []secret {
 func Mask(a any) secret {
 	return secret{
 		hashText:  "***",
-		plainText: marshal(a, false),
+		plainText: stringify.Fmt(a)[0],
 		value:     a,
 	}
 }
@@ -145,7 +146,7 @@ func Mask(a any) secret {
 func Conceal(a any) string {
 	// marshal with false or else we hit a double hash (at best)
 	// or an infinite loop (at worst).
-	return ConcealWith(config.HashAlg, marshal(a, false))
+	return ConcealWith(config.HashAlg, stringify.Fmt(a)[0])
 }
 
 // Conceal runs one of clues' hashing algorithms on

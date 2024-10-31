@@ -1,4 +1,4 @@
-package clues
+package cecrets
 
 import (
 	"fmt"

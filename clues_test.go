@@ -9,8 +9,16 @@ import (
 	"testing"
 
 	"github.com/alcionai/clues"
+	"github.com/alcionai/clues/cecrets"
 	"golang.org/x/exp/slices"
 )
+
+func init() {
+	cecrets.SetHasher(cecrets.HashCfg{
+		HashAlg: cecrets.HMAC_SHA256,
+		HMACKey: []byte("gobbledeygook-believe-it-or-not-this-is-randomly-generated"),
+	})
+}
 
 func mapEquals(
 	t *testing.T,
@@ -342,7 +350,7 @@ func TestImmutableCtx(t *testing.T) {
 	mustEquals(t, msa{"foo": "bar", "beaux": "regard"}, clues.In(lr).Map(), true)
 }
 
-var _ clues.Concealer = &safe{}
+var _ cecrets.Concealer = &safe{}
 
 type safe struct {
 	v any
@@ -360,7 +368,7 @@ func (s safe) Conceal() string {
 	return string(bs)
 }
 
-var _ clues.Concealer = &custom{}
+var _ cecrets.Concealer = &custom{}
 
 type custom struct {
 	a, b string
@@ -370,11 +378,11 @@ func (c custom) PlainString() string            { return c.a + " - " + c.b }
 func (c custom) Format(fs fmt.State, verb rune) { io.WriteString(fs, c.Conceal()) }
 
 func (c custom) Conceal() string {
-	return c.a + " - " + clues.ConcealWith(clues.SHA256, c.b)
+	return c.a + " - " + cecrets.ConcealWith(cecrets.SHA256, c.b)
 }
 
 func concealed(a any) string {
-	c, ok := a.(clues.Concealer)
+	c, ok := a.(cecrets.Concealer)
 	if !ok {
 		return "NOT CONCEALER"
 	}
@@ -391,13 +399,13 @@ func TestAdd_concealed(t *testing.T) {
 	}{
 		{
 			name:       "all hidden",
-			concealers: [][]any{{clues.Hide("k"), clues.Hide("v")}, {clues.Hide("not_k"), clues.Hide("not_v")}},
-			expectM:    msa{"cc69e8e6a3b991d5": "f669b3b5927161b2", "ba3acd7f61e405ca": "509bf4fb69f55ca3"},
-			expectS:    sa{"cc69e8e6a3b991d5", "f669b3b5927161b2", "ba3acd7f61e405ca", "509bf4fb69f55ca3"},
+			concealers: [][]any{{cecrets.Hide("k"), cecrets.Hide("v")}, {cecrets.Hide("not_k"), cecrets.Hide("not_v")}},
+			expectM:    msa{"ba3acd7f61e405ca": "509bf4fb69f55ca3", "cc69e8e6a3b991d5": "f669b3b5927161b2"},
+			expectS:    sa{"ba3acd7f61e405ca", "509bf4fb69f55ca3", "cc69e8e6a3b991d5", "f669b3b5927161b2"},
 		},
 		{
 			name:       "partially hidden",
-			concealers: [][]any{{clues.Hide("a"), safe{1}}, {clues.Hide(2), safe{"b"}}},
+			concealers: [][]any{{cecrets.Hide("a"), safe{1}}, {cecrets.Hide(2), safe{"b"}}},
 			expectM:    msa{"7d2ded59f6a549d7": "1", "cbdd96fab83ece85": `"b"`},
 			expectS:    sa{"7d2ded59f6a549d7", "1", "cbdd96fab83ece85", `"b"`},
 		},
