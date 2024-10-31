@@ -148,19 +148,3 @@ func Relay(
 	// set values, not add.  We don't want agents to own a full clues tree.
 	ag.data.setValues(normalize(vs...))
 }
-
-// ---------------------------------------------------------------------------
-// error label counter
-// ---------------------------------------------------------------------------
-
-// AddLabelCounter embeds an Adder interface into this context. Any already
-// embedded Adder will get replaced.  When adding Labels to a clues.Err the
-// LabelCounter will use the label as the key for the Add call, and increment
-// the count of that label by one.
-func AddLabelCounter(ctx context.Context, counter Adder) context.Context {
-	nc := nodeFromCtx(ctx)
-	nn := nc.addValues(nil)
-	nn.labelCounter = counter
-
-	return setNodeInCtx(ctx, nn)
-}
