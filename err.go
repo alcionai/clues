@@ -629,35 +629,25 @@ func Unwrap(err error) error {
 // constructors
 // ------------------------------------------------------------
 
-// New creates an *Err with the provided Msg.
-//
-// If you have a `ctx` containing other clues data, it is recommended
-// that you call `NewWC(ctx, msg)` to ensure that data gets added to
-// the error.
+// New creates an *Err with the provided Msg.  Ctx can be nil.
 //
 // The returned *Err is an error-compliant builder that can aggregate
 // additional data using funcs like With(...) or Label(...).
-func New(msg string) *Err {
-	return newErr(nil, msg, nil, 1)
+func New(ctx context.Context, msg string) *Err {
+	return newErr(nil, msg, nil, 1).WithClues(ctx)
 }
 
-// NewWC creates an *Err with the provided Msg, and additionally
-// extracts all of the clues data in the context into the error.
-//
-// NewWC is equivalent to clues.New("msg").WithClues(ctx).
-//
-// The returned *Err is an error-compliant builder that can aggregate
-// additional data using funcs like With(...) or Label(...).
-func NewWC(ctx context.Context, msg string) *Err {
-	return newErr(nil, msg, nil, 1).WithClues(ctx)
+// Sentinel creates an *Err with the provided Msg.  This func is a
+// shorthand for clues.New(nil, "msg").NoTrace().  It is purely a QoL
+// helper for globally declared error variables, in case you want to
+// minimize the extra chaff in your declarations.
+func Sentinel(msg string) *Err {
+	return newErr(nil, msg, nil, 1)
 }
 
 // Wrap extends an error with the provided message.  It is a replacement
 // for `errors.Wrap`, and complies with all golang unwrapping behavior.
-//
-// If you have a `ctx` containing other clues data, it is recommended
-// that you call `WrapWC(ctx, err, msg)` to ensure that data gets added to
-// the error.
+// Ctx can be nil.
 //
 // The returned *Err is an error-compliant builder that can aggregate
 // additional data using funcs like With(...) or Label(...).  There is
@@ -668,33 +658,7 @@ func NewWC(ctx context.Context, msg string) *Err {
 // To avoid golang footguns when returning nil structs as interfaces
 // (such as error), callers should always return Wrap().OrNil() in cases
 // where the input error could be nil.
-func Wrap(err error, msg string) *Err {
-	if isNilErrIface(err) {
-		return nil
-	}
-
-	return newErr(err, msg, nil, 1)
-}
-
-// WrapWC extends an error with the provided message.  It is a replacement
-// for `errors.Wrap`, and complies with all golang unwrapping behavior.
-//
-// WrapWC is equivalent to clues.Wrap(err, "msg").WithClues(ctx).
-//
-// If you have a `ctx` containing other clues data, it is recommended
-// that you call `WrapWC(ctx, err, msg)` to ensure that data gets added to
-// the error.
-//
-// The returned *Err is an error-compliant builder that can aggregate
-// additional data using funcs like With(...) or Label(...).  There is
-// no WrapWCf func in clues; we prefer that callers use WrapWC().With()
-// instead.
-//
-// Wrap can be given a `nil` error value, and will return a nil *Err.
-// To avoid golang footguns when returning nil structs as interfaces
-// (such as error), callers should always return WrapWC().OrNil() in cases
-// where the input error could be nil.
-func WrapWC(ctx context.Context, err error, msg string) *Err {
+func Wrap(ctx context.Context, err error, msg string) *Err {
 	if isNilErrIface(err) {
 		return nil
 	}
@@ -705,7 +669,7 @@ func WrapWC(ctx context.Context, err error, msg string) *Err {
 // Stack composes a stack of one or more errors.  The first message in the
 // parameters is considered the "most recent".  Ex: a construction like
 // clues.Stack(errFoo, io.EOF, errSmarf), the resulting Error message would
-// be "foo: end-of-file: smarf".
+// be "foo: end-of-file: smarf".  Ctx can be nil.
 //
 // Unwrapping a Stack follows the same order.  This allows callers to inject
 // sentinel errors into error chains (ex: clues.Stack(io.EOF, myErr))  without
@@ -726,37 +690,7 @@ func WrapWC(ctx context.Context, err error, msg string) *Err {
 // footguns when returning nil structs as interfaces (such as error), callers
 // should always return Stack().OrNil() in cases where the input error could
 // be nil.
-func Stack(errs ...error) *Err {
-	return makeStack(1, errs...)
-}
-
-// StackWC composes a stack of one or more errors.  The first message in the
-// parameters is considered the "most recent".  Ex: a construction like
-// clues.StackWC(errFoo, io.EOF, errSmarf), the resulting Error message would
-// be "foo: end-of-file: smarf".
-//
-// Unwrapping a Stack follows the same order.  This allows callers to inject
-// sentinel errors into error chains (ex: clues.StackWC(io.EOF, myErr))  without
-// losing errors.Is or errors.As checks on lower errors.
-//
-// If given a single error, Stack acts as a thin wrapper around the error to
-// provide an *Err, giving the caller access to all the builder funcs and error
-// tracing.  It is always recommended that callers `return clues.StackWC(err)`
-// instead of the plain `return err`.
-//
-// StackWC is equivalent to clues.Stack(errs...).WithClues(ctx)
-//
-// The returned *Err is an error-compliant builder that can aggregate
-// additional data using funcs like With(...) or Label(...).
-//
-// Stack can be given one or more `nil` error values.  Nil errors will be
-// automatically filtered from the retained stack of errors.  Ex:
-// clues.StackWC(ctx, errFoo, nil, errSmarf) == clues.StackWC(ctx, errFoo, errSmarf).
-// If all input errors are nil, stack will return nil.  To avoid golang
-// footguns when returning nil structs as interfaces (such as error), callers
-// should always return StackWC().OrNil() in cases where the input error could
-// be nil.
-func StackWC(ctx context.Context, errs ...error) *Err {
+func Stack(ctx context.Context, errs ...error) *Err {
 	err := makeStack(1, errs...)
 
 	if isNilErrIface(err) {
@@ -768,7 +702,7 @@ func StackWC(ctx context.Context, errs ...error) *Err {
 
 // StackWrap is a quality-of-life shorthand for a common usage of clues errors:
 // clues.Stack(sentinel, clues.Wrap(myErr, "my message")).  The result follows
-// all standard behavior of stacked and wrapped errors.
+// all standard behavior of stacked and wrapped errors.  Ctx can be nil.
 //
 // The returned *Err is an error-compliant builder that can aggregate
 // additional data using funcs like With(...) or Label(...).
@@ -780,25 +714,7 @@ func StackWC(ctx context.Context, errs ...error) *Err {
 // footguns when returning nil structs as interfaces (such as error), callers
 // should always return StackWrap().OrNil() in cases where the input errors
 // could be nil.
-func StackWrap(sentinel, wrapped error, msg string) *Err {
-	return makeStackWrap(1, sentinel, wrapped, msg)
-}
-
-// StackWrapWC is a quality-of-life shorthand for a common usage of clues errors:
-// clues.Stack(sentinel, clues.Wrap(myErr, "my message")).WithClues(ctx).
-// The result follows all standard behavior of stacked and wrapped errors.
-//
-// The returned *Err is an error-compliant builder that can aggregate
-// additional data using funcs like With(...) or Label(...).
-//
-// StackWrapWC can be given one or more `nil` error values.  Nil errors will be
-// automatically filtered from the retained stack of errors.  Ex:
-// clues.StackWrapWC(ctx, errFoo, nil, "msg") == clues.WrapWC(ctx, errFoo, "msg").
-// If both input errors are nil, StackWrap will return nil.  To avoid golang
-// footguns when returning nil structs as interfaces (such as error), callers
-// should always return StackWrap().OrNil() in cases where the input errors
-// could be nil.
-func StackWrapWC(
+func StackWrap(
 	ctx context.Context,
 	sentinel, wrapped error,
 	msg string,
@@ -817,6 +733,9 @@ func StackWrapWC(
 // to ensure the error value to produce is properly nil whenever
 // your wrapped or stacked error values could also possibly be
 // nil.
+//
+// It's also often used for QoL removal of boilerplate error
+// checks at the end of a function.
 //
 // ie:
 // ```
@@ -850,6 +769,10 @@ func (err *Err) OrNil() error {
 func (err *Err) WithClues(ctx context.Context) *Err {
 	if isNilErrIface(err) {
 		return nil
+	}
+
+	if ctx == nil {
+		return err
 	}
 
 	dn := In(ctx)
