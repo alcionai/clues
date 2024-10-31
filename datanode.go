@@ -204,14 +204,7 @@ func (dn *dataNode) lineage(fn func(id string, vs map[string]any)) {
 // TODO: turn return an interface instead of a dataNode, have dataNodes
 // and errors both comply with that wrapper.
 func In(ctx context.Context) *dataNode {
-	return nodeFromCtx(ctx, defaultNamespace)
-}
-
-// InNamespace returns the map of values in the given namespace.
-// TODO: turn return an interface instead of a dataNode, have dataNodes
-// and errors both comply with that wrapper.
-func InNamespace(ctx context.Context, namespace string) *dataNode {
-	return nodeFromCtx(ctx, ctxKey(namespace))
+	return nodeFromCtx(ctx)
 }
 
 // Map flattens the tree of dataNode.values into a map.  Descendant nodes
@@ -401,18 +394,15 @@ func (dn *dataNode) addAgent(name string) *dataNode {
 
 type cluesCtxKey string
 
-const defaultNamespace cluesCtxKey = "default_clues_namespace_key"
+const defaultCtxKey cluesCtxKey = "default_clues_ctx_key"
 
 func ctxKey(namespace string) cluesCtxKey {
 	return cluesCtxKey(namespace)
 }
 
 // nodeFromCtx pulls the datanode within a given namespace out of the context.
-func nodeFromCtx(
-	ctx context.Context,
-	namespace cluesCtxKey,
-) *dataNode {
-	dn := ctx.Value(namespace)
+func nodeFromCtx(ctx context.Context) *dataNode {
+	dn := ctx.Value(defaultCtxKey)
 
 	if dn == nil {
 		return &dataNode{}
@@ -421,23 +411,9 @@ func nodeFromCtx(
 	return dn.(*dataNode)
 }
 
-// setDefaultNodeInCtx adds the context to the dataNode within the given
-// namespace and returns the updated context.
-func setDefaultNodeInCtx(
-	ctx context.Context,
-	dn *dataNode,
-) context.Context {
-	return context.WithValue(ctx, defaultNamespace, dn)
-}
-
-// setNodeInCtx adds the context to the dataNode within the given namespace
-// and returns the updated context.
-func setNodeInCtx(
-	ctx context.Context,
-	namespace string,
-	dn *dataNode,
-) context.Context {
-	return context.WithValue(ctx, ctxKey(namespace), dn)
+// setNodeInCtx embeds the dataNode in the context, and returns the updated context.
+func setNodeInCtx(ctx context.Context, dn *dataNode) context.Context {
+	return context.WithValue(ctx, defaultCtxKey, dn)
 }
 
 // ---------------------------------------------------------------------------
