@@ -6,6 +6,9 @@ import (
 	"reflect"
 
 	"github.com/alcionai/clues"
+	"github.com/alcionai/clues/internal/stringify"
+	"go.opentelemetry.io/otel/log"
+	otellog "go.opentelemetry.io/otel/log"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 )
@@ -21,6 +24,7 @@ import (
 type builder struct {
 	ctx             context.Context
 	err             error
+	otel            otellog.Logger
 	zsl             *zap.SugaredLogger
 	with            map[any]any
 	labels          map[string]struct{}
@@ -33,6 +37,7 @@ func newBuilder(ctx context.Context) *builder {
 
 	return &builder{
 		ctx:      ctx,
+		otel:     clgr.otel,
 		zsl:      clgr.zsl,
 		with:     map[any]any{},
 		labels:   map[string]struct{}{},
@@ -49,34 +54,49 @@ func newBuilder(ctx context.Context) *builder {
 // we can chase later.  This is all still in the early/poc stage and needs
 // additional polish to shine.
 func (b builder) log(l logLevel, msg string) {
-	cv := clues.In(b.ctx).Map()
-	zsl := b.zsl
+	var (
+		cluesNode = clues.In(b.ctx)
+		cv        = cluesNode.Map()
+		zsl       = b.zsl
+	)
+
+	// set up an otel logging record
+	// if otelLog is nil, this will eventually no-op
+	record := log.Record{}
+	record.SetBody(log.StringValue(msg))
+	record.SetSeverity(convertLevel(l))
 
 	if b.err != nil {
 		// error values should override context values.
 		maps.Copy(cv, clues.InErr(b.err).Map())
 
 		// attach the error and its labels
-		zsl = zsl.
-			With("error", b.err).
-			With("error_labels", clues.Labels(b.err))
+		cv["error"] = b.err
+		cv["error_labels"] = clues.Labels(b.err)
 	}
 
+	// finally, make sure we attach the labels and comments
+	cv["clog_labels"] = maps.Keys(b.labels)
+	cv["clog_comments"] = maps.Keys(b.comments)
+
+	if b.skipCallerJumps > 0 {
+		zsl = zsl.WithOptions(zap.AddCallerSkip(b.skipCallerJumps))
+	}
+
+	// add all values collected in the map
 	for k, v := range cv {
 		zsl = zsl.With(k, v)
+
+		attr := clues.NewAttribute(k, v)
+		record.AddAttributes(attr.KV())
 	}
 
 	// plus any values added using builder.With()
 	for k, v := range b.with {
-		zsl = zsl.With(k, v)
-	}
+		zsl.With(k, v)
 
-	// finally, make sure we attach the labels and comments
-	zsl = zsl.With("clog_labels", maps.Keys(b.labels))
-	zsl = zsl.With("clog_comments", maps.Keys(b.comments))
-
-	if b.skipCallerJumps > 0 {
-		zsl = zsl.WithOptions(zap.AddCallerSkip(b.skipCallerJumps))
+		attr := clues.NewAttribute(stringify.Fmt(k)[0], v)
+		record.AddAttributes(attr.KV())
 	}
 
 	// then write everything to the logger
@@ -100,6 +120,17 @@ func (b builder) log(l logLevel, msg string) {
 		zsl.Info(msg)
 	case LevelError:
 		zsl.Error(msg)
+	}
+
+	// add otel logging if provided
+	otelLog := b.otel
+
+	if otelLog == nil {
+		otelLog = cluesNode.OTELLogger()
+	}
+
+	if otelLog != nil {
+		otelLog.Emit(b.ctx, record)
 	}
 }
 
