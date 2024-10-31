@@ -1734,11 +1734,10 @@ func TestComment(t *testing.T) {
 
 func TestErrCore_String(t *testing.T) {
 	table := []struct {
-		name             string
-		core             *clues.ErrCore
-		expectS          string
-		expectVPlus      string
-		expectCluesTrace bool
+		name        string
+		core        *clues.ErrCore
+		expectS     string
+		expectVPlus string
 	}{
 		{
 			name:        "nil",
@@ -1753,18 +1752,16 @@ func TestErrCore_String(t *testing.T) {
 				With("key", "value").
 				Label("label").
 				Core(),
-			expectS:          `{"message", [label], {key:value}}`,
-			expectVPlus:      `{msg:"message", labels:[label], values:{key:value}, comments:[]}`,
-			expectCluesTrace: true,
+			expectS:     `{"message", [label], {key:value}}`,
+			expectVPlus: `{msg:"message", labels:[label], values:{key:value}, comments:[]}`,
 		},
 		{
 			name: "message only",
 			core: clues.
 				New("message").
 				Core(),
-			expectS:          `{"message"}`,
-			expectVPlus:      `{msg:"message", labels:[], values:{}, comments:[]}`,
-			expectCluesTrace: false,
+			expectS:     `{"message"}`,
+			expectVPlus: `{msg:"message", labels:[], values:{}, comments:[]}`,
 		},
 		{
 			name: "labels only",
@@ -1772,9 +1769,8 @@ func TestErrCore_String(t *testing.T) {
 				New("").
 				Label("label").
 				Core(),
-			expectS:          `{[label]}`,
-			expectVPlus:      `{msg:"", labels:[label], values:{}, comments:[]}`,
-			expectCluesTrace: false,
+			expectS:     `{[label]}`,
+			expectVPlus: `{msg:"", labels:[label], values:{}, comments:[]}`,
 		},
 		{
 			name: "values only",
@@ -1782,18 +1778,17 @@ func TestErrCore_String(t *testing.T) {
 				New("").
 				With("key", "value").
 				Core(),
-			expectS:          `{{key:value}}`,
-			expectVPlus:      `{msg:"", labels:[], values:{key:value}, comments:[]}`,
-			expectCluesTrace: true,
+			expectS:     `{{key:value}}`,
+			expectVPlus: `{msg:"", labels:[], values:{key:value}, comments:[]}`,
 		},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			tc := test.core
 			if tc != nil {
-				if _, ok := tc.Values["clues_trace"]; ok != test.expectCluesTrace {
+				if _, ok := tc.Values["clues_trace"]; ok {
 					t.Errorf(
-						"expected core values to contain key [clues_trace]\ngot: %+v",
+						"did not expect core values to contain key [clues_trace]\ngot: %+v",
 						tc.Values)
 				}
 				delete(tc.Values, "clues_trace")
