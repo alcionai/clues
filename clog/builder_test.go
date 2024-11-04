@@ -6,18 +6,9 @@ import (
 
 	"github.com/alcionai/clues"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
 )
 
-type BuilderUnitSuite struct {
-	suite.Suite
-}
-
-func TestBuilderUnitSuite(t *testing.T) {
-	suite.Run(t, new(BuilderUnitSuite))
-}
-
-func (suite *BuilderUnitSuite) TestBuilder() {
+func TestBuilder(t *testing.T) {
 	table := []struct {
 		name string
 		init func(ctx context.Context) context.Context
@@ -37,63 +28,66 @@ func (suite *BuilderUnitSuite) TestBuilder() {
 	}
 
 	for _, test := range table {
-		var (
-			t   = suite.T()
-			ctx = test.init(context.Background())
-			bld = test.bldr(ctx)
-		)
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				ctx = test.init(context.Background())
+				bld = test.bldr(ctx)
+			)
 
-		// standard builder checks
-		bld.With("foo", "bar", "baz", 1)
-		assert.Contains(t, bld.with, "foo")
-		assert.Equal(t, bld.with["foo"].(string), "bar")
-		assert.Contains(t, bld.with, "baz")
-		assert.Equal(t, bld.with["baz"].(int), 1)
+			// standard builder checks
+			bld.With("foo", "bar", "baz", 1)
+			assert.Contains(t, bld.with, "foo")
+			assert.Equal(t, bld.with["foo"].(string), "bar")
+			assert.Contains(t, bld.with, "baz")
+			assert.Equal(t, bld.with["baz"].(int), 1)
 
-		bld.Label("l1", "l2", "l1")
-		assert.Contains(t, bld.labels, "l1")
-		assert.Contains(t, bld.labels, "l2")
+			bld.Label("l1", "l2", "l1")
+			assert.Contains(t, bld.labels, "l1")
+			assert.Contains(t, bld.labels, "l2")
 
-		bld.Comment("a comment")
-		bld.Comment("another comment")
-		bld.Comment("a comment")
-		assert.Contains(t, bld.comments, "a comment")
-		assert.Contains(t, bld.comments, "another comment")
+			bld.Comment("a comment")
+			bld.Comment("another comment")
+			bld.Comment("a comment")
+			assert.Contains(t, bld.comments, "a comment")
+			assert.Contains(t, bld.comments, "another comment")
 
-		bld.SkipCaller(1)
+			bld.SkipCaller(1)
 
-		// ensure no collision between separate builders
-		// using the same ctx.
-		err := clues.New("an error").
-			With("fnords", "i have seen them").
-			Label("errLabel")
+			// ensure no collision between separate builders
+			// using the same ctx.
+			err := clues.New("an error").
+				With("fnords", "i have seen them").
+				Label("errLabel")
 
-		other := CtxErr(ctx, err)
-		assert.Empty(t, other.with)
-		assert.Empty(t, other.labels)
-		assert.Empty(t, other.comments)
-		assert.ErrorIs(t, other.err, err, clues.ToCore(err))
+			other := CtxErr(ctx, err)
+			assert.Empty(t, other.with)
+			assert.Empty(t, other.labels)
+			assert.Empty(t, other.comments)
+			assert.ErrorIs(t, other.err, err, clues.ToCore(err))
 
-		other.With("foo", "smarf")
-		assert.Contains(t, other.with, "foo")
-		assert.Equal(t, bld.with["foo"].(string), "bar")
+			other.With("foo", "smarf")
+			assert.Contains(t, other.with, "foo")
+			assert.Equal(t, bld.with["foo"].(string), "bar")
 
-		other.Label("l3")
-		assert.Contains(t, other.labels, "l3")
-		assert.NotContains(t, bld.labels, "l3")
+			other.Label("l3")
+			assert.Contains(t, other.labels, "l3")
+			assert.NotContains(t, bld.labels, "l3")
 
-		other.Comment("comment a")
-		assert.Contains(t, other.comments, "comment a")
-		assert.NotContains(t, bld.comments, "comment a")
+			other.Comment("comment a")
+			assert.Contains(t, other.comments, "comment a")
+			assert.NotContains(t, bld.comments, "comment a")
 
-		// ensure no panics when logging
-		suite.testDebugLogs(bld)
-		suite.testInfoLogs(bld)
-		suite.testErrorLogs(bld)
+			// ensure no panics when logging
+			runDebugLogs(bld)
+			runInfoLogs(bld)
+			runErrorLogs(bld)
+		})
 	}
 }
 
-func (suite *BuilderUnitSuite) testDebugLogs(bld *builder) {
+func runDebugLogs(
+	bld *builder,
+) {
 	bld.Debug("a", "log")
 	bld.Debugf("a %s", "log")
 	bld.Debugw("a log", "with key")
@@ -104,7 +98,9 @@ func (suite *BuilderUnitSuite) testDebugLogs(bld *builder) {
 		Debugw("a log", "with key", "and value")
 }
 
-func (suite *BuilderUnitSuite) testInfoLogs(bld *builder) {
+func runInfoLogs(
+	bld *builder,
+) {
 	bld.Info("a", "log")
 	bld.Infof("a %s", "log")
 	bld.Infow("a log", "with key")
@@ -115,7 +111,9 @@ func (suite *BuilderUnitSuite) testInfoLogs(bld *builder) {
 		Infow("a log", "with key", "and value")
 }
 
-func (suite *BuilderUnitSuite) testErrorLogs(bld *builder) {
+func runErrorLogs(
+	bld *builder,
+) {
 	bld.Error("a", "log")
 	bld.Errorf("a %s", "log")
 	bld.Errorw("a log", "with key")
@@ -126,7 +124,13 @@ func (suite *BuilderUnitSuite) testErrorLogs(bld *builder) {
 		Errorw("a log", "with key", "and value")
 }
 
-func (suite *BuilderUnitSuite) TestGetValue() {
+func TestGetValue(t *testing.T) {
+	var (
+		p1 int    = 1
+		ps string = "ptr"
+		pn any
+	)
+
 	table := []struct {
 		name     string
 		value    any
@@ -138,9 +142,37 @@ func (suite *BuilderUnitSuite) TestGetValue() {
 			expected: 1,
 		},
 		{
+			name:     "integer value pointer",
+			value:    &p1,
+			expected: p1,
+		},
+		{
+			name:     "integer value",
+			value:    p1,
+			expected: p1,
+		},
+		{
+			name: "pointer to integer",
+			value: func() *int {
+				i := 8
+				return &i
+			}(),
+			expected: 8,
+		},
+		{
 			name:     "string",
 			value:    "foo",
 			expected: "foo",
+		},
+		{
+			name:     "string value pointer",
+			value:    &ps,
+			expected: ps,
+		},
+		{
+			name:     "string value",
+			value:    ps,
+			expected: ps,
 		},
 		{
 			name: "pointer to string",
@@ -156,6 +188,16 @@ func (suite *BuilderUnitSuite) TestGetValue() {
 			expected: nil,
 		},
 		{
+			name:     "nil value pointer",
+			value:    &pn,
+			expected: nil,
+		},
+		{
+			name:     "nil value",
+			value:    pn,
+			expected: nil,
+		},
+		{
 			name: "nil pointer",
 			value: func() *string {
 				return nil
@@ -164,9 +206,9 @@ func (suite *BuilderUnitSuite) TestGetValue() {
 		},
 	}
 
-	for _, tt := range table {
-		suite.T().Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, getValue(tt.value))
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, getValue(test.value))
 		})
 	}
 }

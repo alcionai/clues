@@ -146,7 +146,7 @@ func (b *builder) Err(err error) *builder {
 	return b
 }
 
-// Label adds all of the appended labels to the error.
+// Label adds all of the appended labels to the log.
 // Adding labels is a great way to categorize your logs into broad scale
 // concepts like "configuration", "process kickoff", or "process conclusion".
 // they're also a great way to set up various granularities of debugging
@@ -190,10 +190,11 @@ func (b *builder) SkipCaller(nSkips int) *builder {
 	return b
 }
 
-// getValue will return the value if not pointer, or the dereferenced
+// getValue will return the value if not a pointer, or the dereferenced
 // value if it is a pointer.
 func getValue(v any) any {
 	rv := reflect.ValueOf(v)
+
 	if rv.Kind() == reflect.Ptr {
 		if rv.IsNil() {
 			return nil
@@ -201,6 +202,7 @@ func getValue(v any) any {
 
 		return rv.Elem().Interface()
 	}
+
 	return v
 }
 
