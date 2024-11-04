@@ -652,7 +652,6 @@ func FromBytes(bs []byte) (*dataNode, error) {
 	}
 
 	node := dataNode{
-		values: map[string]any{},
 		// FIXME: do something with the serialized commments.
 		// I'm punting on this for now because I want to figure
 		// out the best middle ground between avoiding a slice of
@@ -663,12 +662,18 @@ func FromBytes(bs []byte) (*dataNode, error) {
 		// need to introduce a delimiter.
 	}
 
+	if len(core.Values) > 0 {
+		node.values = map[string]any{}
+	}
+
 	for k, v := range core.Values {
 		node.values[k] = v
 	}
 
-	node.otel = &otelClient{
-		serviceName: core.OTELServiceName,
+	if len(core.OTELServiceName) > 0 {
+		node.otel = &otelClient{
+			serviceName: core.OTELServiceName,
+		}
 	}
 
 	return &node, nil
