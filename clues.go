@@ -3,6 +3,7 @@ package clues
 import (
 	"context"
 
+	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
 
@@ -19,25 +20,25 @@ import (
 func Initialize(
 	ctx context.Context,
 	serviceName string,
-	config OTELConfig,
+	config node.OTELConfig,
 ) (context.Context, error) {
-	nc := nodeFromCtx(ctx)
+	nc := node.FromCtx(ctx)
 
-	err := nc.init(ctx, serviceName, config)
+	err := nc.Init(ctx, serviceName, config)
 	if err != nil {
 		return ctx, err
 	}
 
-	return setNodeInCtx(ctx, nc), nil
+	return node.EmbedInCtx(ctx, nc), nil
 }
 
 // Close will flush all buffered data waiting to be read.  If Initialize was not
 // called, this call is a no-op.  Should be called in a defer after initializing.
 func Close(ctx context.Context) error {
-	nc := nodeFromCtx(ctx)
+	nc := node.FromCtx(ctx)
 
-	if nc.otel != nil {
-		err := nc.otel.close(ctx)
+	if nc.OTEL != nil {
+		err := nc.OTEL.Close(ctx)
 		if err != nil {
 			return Wrap(err, "closing otel client")
 		}
@@ -47,13 +48,24 @@ func Close(ctx context.Context) error {
 }
 
 // ---------------------------------------------------------------------------
+// data access
+// ---------------------------------------------------------------------------
+
+// In retrieves the clues structured data from the context.
+// TODO: turn return an interface instead of a node, have nodes
+// and errors both comply with that wrapper.
+func In(ctx context.Context) *node.Node {
+	return node.FromCtx(ctx)
+}
+
+// ---------------------------------------------------------------------------
 // key-value metadata
 // ---------------------------------------------------------------------------
 
 // Add adds all key-value pairs to the clues.
 func Add(ctx context.Context, kvs ...any) context.Context {
-	nc := nodeFromCtx(ctx)
-	return setNodeInCtx(ctx, nc.addValues(stringify.Normalize(kvs...)))
+	nc := node.FromCtx(ctx)
+	return node.EmbedInCtx(ctx, nc.AddValues(stringify.Normalize(kvs...)))
 }
 
 // AddMap adds a shallow clone of the map to a namespaced set of clues.
@@ -61,14 +73,14 @@ func AddMap[K comparable, V any](
 	ctx context.Context,
 	m map[K]V,
 ) context.Context {
-	nc := nodeFromCtx(ctx)
+	nc := node.FromCtx(ctx)
 
 	kvs := make([]any, 0, len(m)*2)
 	for k, v := range m {
 		kvs = append(kvs, k, v)
 	}
 
-	return setNodeInCtx(ctx, nc.addValues(stringify.Normalize(kvs...)))
+	return node.EmbedInCtx(ctx, nc.AddValues(stringify.Normalize(kvs...)))
 }
 
 // ---------------------------------------------------------------------------
@@ -86,29 +98,28 @@ func AddSpan(
 	name string,
 	kvs ...any,
 ) context.Context {
-	nc := nodeFromCtx(ctx)
+	nc := node.FromCtx(ctx)
 
-	var node *dataNode
+	var spanned *node.Node
 
 	if len(kvs) > 0 {
-		ctx, node = nc.addSpan(ctx, name)
-		node.id = name
-		node = node.addValues(stringify.Normalize(kvs...))
+		ctx, spanned = nc.AddSpan(ctx, name)
+		spanned.ID = name
+		spanned = spanned.AddValues(stringify.Normalize(kvs...))
 	} else {
-		ctx, node = nc.addSpan(ctx, name)
-		node = node.trace(name)
+		ctx, spanned = nc.AddSpan(ctx, name)
+		spanned = spanned.AppendToTree(name)
 	}
 
-	return setNodeInCtx(ctx, node)
+	return node.EmbedInCtx(ctx, spanned)
 }
 
 // CloseSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
 func CloseSpan(ctx context.Context) context.Context {
-	nc := nodeFromCtx(ctx)
-	node := nc.closeSpan(ctx)
-
-	return setNodeInCtx(ctx, node)
+	return node.EmbedInCtx(
+		ctx,
+		node.FromCtx(ctx).CloseSpan(ctx))
 }
 
 // ---------------------------------------------------------------------------
@@ -141,10 +152,10 @@ func AddComment(
 	msg string,
 	vs ...any,
 ) context.Context {
-	nc := nodeFromCtx(ctx)
-	nn := nc.addComment(1, msg, vs...)
+	nc := node.FromCtx(ctx)
+	nn := nc.AddComment(1, msg, vs...)
 
-	return setNodeInCtx(ctx, nn)
+	return node.EmbedInCtx(ctx, nn)
 }
 
 // ---------------------------------------------------------------------------
@@ -168,27 +179,27 @@ func AddAgent(
 	ctx context.Context,
 	name string,
 ) context.Context {
-	nc := nodeFromCtx(ctx)
-	nn := nc.addAgent(name)
+	nc := node.FromCtx(ctx)
+	nn := nc.AddAgent(name)
 
-	return setNodeInCtx(ctx, nn)
+	return node.EmbedInCtx(ctx, nn)
 }
 
 // Relay adds all key-value pairs to the provided agent.  The agent will
-// record those values to the dataNode in which it was created.  All relayed
+// record those values to the node in which it was created.  All relayed
 // values are namespaced to the owning agent.
 func Relay(
 	ctx context.Context,
 	agent string,
 	vs ...any,
 ) {
-	nc := nodeFromCtx(ctx)
-	ag, ok := nc.agents[agent]
+	nc := node.FromCtx(ctx)
+	ag, ok := nc.Agents[agent]
 
 	if !ok {
 		return
 	}
 
 	// set values, not add.  We don't want agents to own a full clues tree.
-	ag.data.setValues(stringify.Normalize(vs...))
+	ag.Data.SetValues(stringify.Normalize(vs...))
 }

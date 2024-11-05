@@ -10,6 +10,7 @@ import (
 
 	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cecrets"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
 )
 
@@ -269,9 +270,10 @@ func TestAddSpan(t *testing.T) {
 				ctx := context.Background()
 
 				if init {
-					ictx, err := clues.Initialize(ctx, test.name, clues.OTELConfig{
-						GRPCEndpoint: "localhost:4317",
-					})
+					ocfg, err := clues.ConfigOTEL("localhost:4317")
+					require.NoError(t, err, clues.ToCore(err))
+
+					ictx, err := clues.Initialize(ctx, test.name, ocfg)
 					if err != nil {
 						t.Error("initializing clues", err)
 						return

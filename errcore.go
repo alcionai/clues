@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 	"golang.org/x/exp/maps"
 )
@@ -17,7 +18,7 @@ type ErrCore struct {
 	Msg      string              `json:"msg"`
 	Labels   map[string]struct{} `json:"labels"`
 	Values   map[string]any      `json:"values"`
-	Comments comments            `json:"comments"`
+	Comments node.CommentHistory `json:"comments"`
 }
 
 // Core transforms the error into an ErrCore.
