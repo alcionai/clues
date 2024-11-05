@@ -7,7 +7,6 @@ import (
 
 	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/internal/stringify"
-	"go.opentelemetry.io/otel/log"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
@@ -62,8 +61,8 @@ func (b builder) log(l logLevel, msg string) {
 
 	// set up an otel logging record
 	// if otelLog is nil, this will eventually no-op
-	record := log.Record{}
-	record.SetBody(log.StringValue(msg))
+	record := otellog.Record{}
+	record.SetBody(otellog.StringValue(msg))
 	record.SetSeverity(convertLevel(l))
 
 	if b.err != nil {
@@ -123,14 +122,14 @@ func (b builder) log(l logLevel, msg string) {
 	}
 
 	// add otel logging if provided
-	otelLog := b.otel
+	otelLogger := b.otel
 
-	if otelLog == nil {
-		otelLog = cluesNode.OTELLogger()
+	if otelLogger == nil {
+		otelLogger = cluesNode.OTELLogger()
 	}
 
-	if otelLog != nil {
-		otelLog.Emit(b.ctx, record)
+	if otelLogger != nil {
+		otelLogger.Emit(b.ctx, record)
 	}
 }
 
