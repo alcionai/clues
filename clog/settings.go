@@ -14,8 +14,6 @@ import (
 // consts
 // ---------------------------------------------------
 
-const clogLogFileEnv = "CLOG_LOG_FILE"
-
 type logLevel string
 
 const (

@@ -5,7 +5,6 @@ import (
 	stderr "errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -36,12 +35,6 @@ type checkFmt struct {
 	tmpl     string
 	expect   string
 	reExpect *regexp.Regexp
-}
-
-func prettyStack(s string) string {
-	s = strings.ReplaceAll(s, "\n", string('\n'))
-	s = strings.ReplaceAll(s, "\t", "    ")
-	return s
 }
 
 func (c checkFmt) check(t *testing.T, err error) {
@@ -85,10 +78,10 @@ func makeOnion(base error, mid, top func(error) error) error {
 func self(err error) error { return err }
 
 var (
-	errStd  = stderr.New("an error")
-	errErrs = errors.New("an error")
-	fmtErrf = fmt.Errorf("an error")
-	cluErr  = clues.New("an error")
+	errStd     = stderr.New("an error")
+	errErrs    = errors.New("an error")
+	errFMTErrf = fmt.Errorf("an error")
+	cluErr     = clues.New("an error")
 
 	cluesWrap       = func(err error) error { return clues.Wrap(err, "clues wrap") }
 	cluesPlainStack = func(err error) error { return clues.Stack(err) }
@@ -167,7 +160,7 @@ func TestFmt(t *testing.T) {
 		},
 		{
 			name: "litmus wrap fmt.Errorf",
-			onion: makeOnion(fmtErrf,
+			onion: makeOnion(errFMTErrf,
 				func(err error) error { return errors.Wrap(err, "errors wrap") },
 				self),
 			expect: expect{
@@ -247,7 +240,7 @@ func TestFmt(t *testing.T) {
 		},
 		{
 			name:  "fmt.Errorf",
-			onion: makeOnion(fmtErrf, self, self),
+			onion: makeOnion(errFMTErrf, self, self),
 			expect: expect{
 				v:    "an error",
 				hash: `&errors.errorString{s:"an error"}`,
@@ -309,7 +302,7 @@ func TestFmt(t *testing.T) {
 		},
 		{
 			name:  "clues.Wrap fmt.Errorf",
-			onion: makeOnion(fmtErrf, cluesWrap, self),
+			onion: makeOnion(errFMTErrf, cluesWrap, self),
 			expect: expect{
 				v:    "clues wrap: an error",
 				hash: "clues wrap: an error",
@@ -372,7 +365,7 @@ func TestFmt(t *testing.T) {
 		},
 		{
 			name:  "clues.PlainStack fmt.Errorf",
-			onion: makeOnion(fmtErrf, cluesPlainStack, self),
+			onion: makeOnion(errFMTErrf, cluesPlainStack, self),
 			expect: expect{
 				v:    "an error",
 				hash: "an error",
@@ -447,7 +440,7 @@ func TestFmt(t *testing.T) {
 		},
 		{
 			name:  "clues.Stack fmt.Errorf",
-			onion: makeOnion(fmtErrf, cluesStack, self),
+			onion: makeOnion(errFMTErrf, cluesStack, self),
 			expect: expect{
 				v:    "sentinel: an error",
 				hash: "sentinel: an error",
@@ -537,7 +530,7 @@ func TestFmt(t *testing.T) {
 		},
 		{
 			name:  "clues.Wrap clues.Stack fmt.Errorf",
-			onion: makeOnion(fmtErrf, cluesStack, cluesWrap),
+			onion: makeOnion(errFMTErrf, cluesStack, cluesWrap),
 			expect: expect{
 				v:    "clues wrap: sentinel: an error",
 				hash: "clues wrap: sentinel: an error",
@@ -629,7 +622,7 @@ func TestFmt(t *testing.T) {
 		},
 		{
 			name:  "clues.Stack clues.Wrap fmt.Errorf",
-			onion: makeOnion(fmtErrf, cluesWrap, cluesStack),
+			onion: makeOnion(errFMTErrf, cluesWrap, cluesStack),
 			expect: expect{
 				v:    "sentinel: clues wrap: an error",
 				hash: "sentinel: clues wrap: an error",
@@ -1081,7 +1074,7 @@ func TestFmt_nestedFuncs(t *testing.T) {
 		{
 			name:   "clues.Wrap fmt.Errorf",
 			fn:     topWrap,
-			source: fmtErrf,
+			source: errFMTErrf,
 			expect: expect{
 				v:    "top wrap: mid wrap: bottom wrap: an error",
 				hash: "top wrap: mid wrap: bottom wrap: an error",
@@ -1157,7 +1150,7 @@ func TestFmt_nestedFuncs(t *testing.T) {
 		{
 			name:   "clues.PlainStack fmt.Errorf",
 			fn:     topPlainStack,
-			source: fmtErrf,
+			source: errFMTErrf,
 			expect: expect{
 				v:    "an error",
 				hash: "an error",
@@ -1240,7 +1233,7 @@ func TestFmt_nestedFuncs(t *testing.T) {
 		{
 			name:   "clues.Stack fmt.Errorf",
 			fn:     topStack,
-			source: fmtErrf,
+			source: errFMTErrf,
 			expect: expect{
 				v:    "top: mid: bottom: an error",
 				hash: "top: mid: bottom: an error",

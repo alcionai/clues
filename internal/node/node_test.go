@@ -1,4 +1,4 @@
-package clues
+package node
 
 import (
 	"context"
@@ -12,15 +12,15 @@ import (
 // tests
 // ---------------------------------------------------------------------------
 
-func TestDataNode_Init(t *testing.T) {
+func TestNode_Init(t *testing.T) {
 	table := []struct {
 		name string
-		node *dataNode
+		node *Node
 		ctx  context.Context
 	}{
 		{
 			name: "nil ctx",
-			node: &dataNode{},
+			node: &Node{},
 			ctx:  nil,
 		},
 		{
@@ -30,14 +30,14 @@ func TestDataNode_Init(t *testing.T) {
 		},
 		{
 			name: "context.Context",
-			node: &dataNode{},
+			node: &Node{},
 			ctx:  context.Background(),
 		},
 	}
 
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			err := test.node.init(test.ctx, test.name, OTELConfig{})
+			err := test.node.Init(test.ctx, test.name, OTELConfig{})
 			require.NoError(t, err)
 		})
 	}
@@ -46,14 +46,14 @@ func TestDataNode_Init(t *testing.T) {
 func TestBytes(t *testing.T) {
 	table := []struct {
 		name                 string
-		node                 func() *dataNode
+		node                 func() *Node
 		expectSerialized     []byte
-		expectDeserialized   *dataNode
+		expectDeserialized   *Node
 		expectDeserializeErr require.ErrorAssertionFunc
 	}{
 		{
 			name: "nil",
-			node: func() *dataNode {
+			node: func() *Node {
 				return nil
 			},
 			expectSerialized:     []byte{},
@@ -62,25 +62,25 @@ func TestBytes(t *testing.T) {
 		},
 		{
 			name: "empty",
-			node: func() *dataNode {
-				return &dataNode{}
+			node: func() *Node {
+				return &Node{}
 			},
 			expectSerialized:     []byte(`{"otelServiceName":"","values":{},"comments":[]}`),
-			expectDeserialized:   &dataNode{},
+			expectDeserialized:   &Node{},
 			expectDeserializeErr: require.NoError,
 		},
 		{
 			name: "with values",
-			node: func() *dataNode {
-				return &dataNode{
-					otel: &otelClient{
+			node: func() *Node {
+				return &Node{
+					OTEL: &OTELClient{
 						serviceName: "serviceName",
 					},
-					values: map[string]any{
+					Values: map[string]any{
 						"fisher":  "flannigan",
 						"fitzbog": nil,
 					},
-					comment: comment{
+					Comment: Comment{
 						Caller:  "i am caller",
 						File:    "i am file",
 						Message: "i am message",
@@ -90,11 +90,11 @@ func TestBytes(t *testing.T) {
 			expectSerialized: []byte(`{"otelServiceName":"serviceName",` +
 				`"values":{"fisher":"flannigan","fitzbog":""},` +
 				`"comments":[{"Caller":"i am caller","File":"i am file","Message":"i am message"}]}`),
-			expectDeserialized: &dataNode{
-				otel: &otelClient{
+			expectDeserialized: &Node{
+				OTEL: &OTELClient{
 					serviceName: "serviceName",
 				},
-				values: map[string]any{
+				Values: map[string]any{
 					"fisher":  "flannigan",
 					"fitzbog": "",
 				},
