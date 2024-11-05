@@ -86,7 +86,6 @@ func (dn *dataNode) addValues(m map[string]any) *dataNode {
 	}
 
 	spawn := dn.spawnDescendant()
-	spawn.id = makeNodeID()
 	spawn.setValues(m)
 
 	return spawn
