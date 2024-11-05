@@ -14,7 +14,7 @@ import (
 // such as OTEL communication.  Clues will use these optimistically in the
 // background to provide additional telemetry hook-ins.
 //
-// Clues will operate as expected in the event of an error, or of initialization
+// Clues will operate as expected in the event of an error, or if initialization
 // is not called.  This is a purely optional step.
 func Initialize(
 	ctx context.Context,

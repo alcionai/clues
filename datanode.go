@@ -413,7 +413,7 @@ func (dn *dataNode) addSpan(
 	name string,
 ) (context.Context, *dataNode) {
 	if dn == nil || dn.otel == nil {
-		return ctx, dn.spawnDescendant()
+		return ctx, dn
 	}
 
 	ctx, span := dn.otel.tracer.Start(ctx, name)
@@ -428,7 +428,7 @@ func (dn *dataNode) addSpan(
 // If no span is present, no ops.
 func (dn *dataNode) closeSpan(ctx context.Context) *dataNode {
 	if dn == nil || dn.span == nil {
-		return dn.spawnDescendant()
+		return dn
 	}
 
 	dn.span.End()
@@ -446,10 +446,6 @@ func (dn *dataNode) addSpanAttributes(
 	values map[string]any,
 ) {
 	if dn == nil || dn.span == nil {
-		return
-	}
-
-	if len(values) == 0 {
 		return
 	}
 

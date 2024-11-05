@@ -75,7 +75,7 @@ func newOTELClient(
 	config OTELConfig,
 ) (*otelClient, error) {
 	// -- Resource
-	resource, err := resource.New(ctx, resource.WithAttributes(
+	srvResource, err := resource.New(ctx, resource.WithAttributes(
 		semconv.ServiceNameKey.String(serviceName)))
 	if err != nil {
 		return nil, WrapWC(ctx, err, "creating otel resource")
@@ -88,7 +88,7 @@ func newOTELClient(
 		// Note the use of insecure transport here. TLS is recommended in production.
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, WrapWC(ctx, err, "creating new gRPC connection")
+		return nil, WrapWC(ctx, err, "creating new grpc connection")
 	}
 
 	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
@@ -103,7 +103,7 @@ func newOTELClient(
 	batchSpanProcessor := sdkTrace.NewBatchSpanProcessor(exporter)
 
 	tracerProvider := sdkTrace.NewTracerProvider(
-		sdkTrace.WithResource(resource),
+		sdkTrace.WithResource(srvResource),
 		sdkTrace.WithSampler(sdkTrace.AlwaysSample()),
 		sdkTrace.WithSpanProcessor(batchSpanProcessor),
 		sdkTrace.WithRawSpanLimits(sdkTrace.SpanLimits{
