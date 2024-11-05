@@ -1,4 +1,4 @@
-package clues
+package cluerr
 
 import (
 	"fmt"

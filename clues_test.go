@@ -10,7 +10,7 @@ import (
 
 	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cecrets"
-	"golang.org/x/exp/slices"
+	"github.com/alcionai/clues/internal/tester"
 )
 
 func init() {
@@ -20,195 +20,34 @@ func init() {
 	})
 }
 
-func mapEquals(
-	t *testing.T,
-	ctx context.Context,
-	expect msa,
-	expectCluesTrace bool,
-) {
-	mustEquals(
-		t,
-		expect,
-		clues.In(ctx).Map(),
-		expectCluesTrace)
-}
-
-func mustEquals[K comparable, V any](
-	t *testing.T,
-	expect, got map[K]V,
-	hasCluesTrace bool,
-) {
-	e, g := toMSS(expect), toMSS(got)
-
-	if len(g) > 0 {
-		if _, ok := g["clues_trace"]; hasCluesTrace && !ok {
-			t.Errorf(
-				"expected map to contain key [clues_trace]\ngot: %+v",
-				g)
-		}
-		delete(g, "clues_trace")
-	}
-
-	if len(e) != len(g) {
-		t.Errorf(
-			"expected map of len [%d], received len [%d]\n%s",
-			len(e), len(g), expectedReceived(expect, got),
-		)
-	}
-
-	for k, v := range e {
-		if g[k] != v {
-			t.Errorf(
-				"expected map to contain key:value [%s: %s]\n%s",
-				k, v, expectedReceived(expect, got),
-			)
-		}
-	}
-
-	for k, v := range g {
-		if e[k] != v {
-			t.Errorf(
-				"map contains unexpected key:value [%s: %s]\n%s",
-				k, v, expectedReceived(expect, got),
-			)
-		}
-	}
-}
-
-func expectedReceived[K comparable, V any](e, r map[K]V) string {
-	return fmt.Sprintf(
-		"expected: %#v\nreceived: %#v\n\n",
-		e, r)
-}
-
-type mss map[string]string
-
-func toMSS[K comparable, V any](m map[K]V) mss {
-	r := mss{}
-
-	for k, v := range m {
-		ks := fmt.Sprintf("%v", k)
-		vs := fmt.Sprintf("%v", v)
-		r[ks] = vs
-	}
-
-	return r
-}
-
-type msa map[string]any
-
-func toMSA[T any](m map[string]T) msa {
-	to := make(msa, len(m))
-	for k, v := range m {
-		to[k] = v
-	}
-
-	return to
-}
-
-type sa []any
-
-func (s sa) stringWith(other []any) string {
-	return fmt.Sprintf(
-		"\nexpected: %+v\nreceived: %+v\n",
-		s, other,
-	)
-}
-
-func (s sa) equals(t *testing.T, other []any) {
-	idx := slices.Index(other, "clues_trace")
-	if idx >= 0 {
-		other = append(other[:idx], other[idx+2:]...)
-	}
-
-	if len(s) != len(other) {
-		t.Errorf(
-			"expected slice of len [%d], received len [%d]\n%s",
-			len(s), len(other), s.stringWith(other),
-		)
-	}
-
-	for _, v := range s {
-		var found bool
-		for _, o := range other {
-			if v == o {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("expected slice to contain [%v]\n%s", v, s.stringWith(other))
-		}
-	}
-
-	for _, o := range other {
-		var found bool
-		for _, v := range s {
-			if v == o {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("did not expect slice to contain [%v]\n%s", o, s.stringWith(other))
-		}
-	}
-}
-
-func assert(
-	t *testing.T,
-	ctx context.Context,
-	ns string,
-	eM, eMns msa,
-	eS, eSns sa,
-) {
-	vs := clues.In(ctx)
-	mustEquals(t, eM, vs.Map(), false)
-	eS.equals(t, vs.Slice())
-}
-
-func assertMSA(
-	t *testing.T,
-	ctx context.Context,
-	ns string,
-	eM, eMns msa,
-	eS, eSns sa,
-) {
-	vs := clues.In(ctx)
-	mustEquals(t, eM, toMSA(vs.Map()), false)
-	eS.equals(t, vs.Slice())
-}
-
-type testCtx struct{}
-
 func TestAdd(t *testing.T) {
 	table := []struct {
 		name    string
 		kvs     [][]string
-		expectM msa
-		expectS sa
+		expectM tester.MSA
+		expectS tester.SA
 	}{
-		{"single", [][]string{{"k", "v"}}, msa{"k": "v"}, sa{"k", "v"}},
-		{"multiple", [][]string{{"a", "1"}, {"b", "2"}}, msa{"a": "1", "b": "2"}, sa{"a", "1", "b", "2"}},
-		{"duplicates", [][]string{{"a", "1"}, {"a", "2"}}, msa{"a": "2"}, sa{"a", "2"}},
-		{"none", [][]string{}, msa{}, sa{}},
+		{"single", [][]string{{"k", "v"}}, tester.MSA{"k": "v"}, tester.SA{"k", "v"}},
+		{"multiple", [][]string{{"a", "1"}, {"b", "2"}}, tester.MSA{"a": "1", "b": "2"}, tester.SA{"a", "1", "b", "2"}},
+		{"duplicates", [][]string{{"a", "1"}, {"a", "2"}}, tester.MSA{"a": "2"}, tester.SA{"a", "2"}},
+		{"none", [][]string{}, tester.MSA{}, tester.SA{}},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-			check := msa{}
-			mustEquals(t, check, clues.In(ctx).Map(), false)
+			ctx := context.WithValue(context.Background(), tester.StubCtx{}, "instance")
+			check := tester.MSA{}
+			tester.MustEquals(t, check, clues.In(ctx).Map(), false)
 
 			for _, kv := range test.kvs {
 				ctx = clues.Add(ctx, kv[0], kv[1])
 				check[kv[0]] = kv[1]
-				mustEquals(t, check, clues.In(ctx).Map(), false)
+				tester.MustEquals(t, check, clues.In(ctx).Map(), false)
 			}
 
-			assert(
+			tester.AssertEq(
 				t, ctx, "",
-				test.expectM, msa{},
-				test.expectS, sa{})
+				test.expectM, tester.MSA{},
+				test.expectS, tester.SA{})
 		})
 	}
 }
@@ -216,33 +55,33 @@ func TestAdd(t *testing.T) {
 func TestAddMap(t *testing.T) {
 	table := []struct {
 		name    string
-		ms      []msa
-		expectM msa
-		expectS sa
+		ms      []tester.MSA
+		expectM tester.MSA
+		expectS tester.SA
 	}{
-		{"single", []msa{{"k": "v"}}, msa{"k": "v"}, sa{"k", "v"}},
-		{"multiple", []msa{{"a": "1"}, {"b": "2"}}, msa{"a": "1", "b": "2"}, sa{"a", "1", "b", "2"}},
-		{"duplicate", []msa{{"a": "1"}, {"a": "2"}}, msa{"a": "2"}, sa{"a", "2"}},
-		{"none", []msa{}, msa{}, sa{}},
+		{"single", []tester.MSA{{"k": "v"}}, tester.MSA{"k": "v"}, tester.SA{"k", "v"}},
+		{"multiple", []tester.MSA{{"a": "1"}, {"b": "2"}}, tester.MSA{"a": "1", "b": "2"}, tester.SA{"a", "1", "b", "2"}},
+		{"duplicate", []tester.MSA{{"a": "1"}, {"a": "2"}}, tester.MSA{"a": "2"}, tester.SA{"a", "2"}},
+		{"none", []tester.MSA{}, tester.MSA{}, tester.SA{}},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-			check := msa{}
-			mustEquals(t, check, clues.In(ctx).Map(), false)
+			ctx := context.WithValue(context.Background(), tester.StubCtx{}, "instance")
+			check := tester.MSA{}
+			tester.MustEquals(t, check, clues.In(ctx).Map(), false)
 
 			for _, m := range test.ms {
 				ctx = clues.AddMap(ctx, m)
 				for k, v := range m {
 					check[k] = v
 				}
-				mustEquals(t, check, clues.In(ctx).Map(), false)
+				tester.MustEquals(t, check, clues.In(ctx).Map(), false)
 			}
 
-			assert(
+			tester.AssertEq(
 				t, ctx, "",
-				test.expectM, msa{},
-				test.expectS, sa{})
+				test.expectM, tester.MSA{},
+				test.expectS, tester.SA{})
 		})
 	}
 }
@@ -252,16 +91,16 @@ func TestAddSpan(t *testing.T) {
 		name        string
 		names       []string
 		expectTrace string
-		kvs         sa
-		expectM     msa
-		expectS     sa
+		kvs         tester.SA
+		expectM     tester.MSA
+		expectS     tester.SA
 	}{
-		{"single", []string{"single"}, "single", nil, msa{}, sa{}},
-		{"multiple", []string{"single", "multiple"}, "single,multiple", nil, msa{}, sa{}},
-		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", nil, msa{}, sa{}},
-		{"single with kvs", []string{"single"}, "single", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
-		{"multiple with kvs", []string{"single", "multiple"}, "single,multiple", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
-		{"duplicates with kvs", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
+		{"single", []string{"single"}, "single", nil, tester.MSA{}, tester.SA{}},
+		{"multiple", []string{"single", "multiple"}, "single,multiple", nil, tester.MSA{}, tester.SA{}},
+		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", nil, tester.MSA{}, tester.SA{}},
+		{"single with kvs", []string{"single"}, "single", tester.SA{"k", "v"}, tester.MSA{"k": "v"}, tester.SA{"k", "v"}},
+		{"multiple with kvs", []string{"single", "multiple"}, "single,multiple", tester.SA{"k", "v"}, tester.MSA{"k": "v"}, tester.SA{"k", "v"}},
+		{"duplicates with kvs", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", tester.SA{"k", "v"}, tester.MSA{"k": "v"}, tester.SA{"k", "v"}},
 	}
 	for _, test := range table {
 		for _, init := range []bool{true, false} {
@@ -288,18 +127,18 @@ func TestAddSpan(t *testing.T) {
 					ctx = ictx
 				}
 
-				ctx = context.WithValue(ctx, testCtx{}, "instance")
-				mustEquals(t, msa{}, clues.In(ctx).Map(), false)
+				ctx = context.WithValue(ctx, tester.StubCtx{}, "instance")
+				tester.MustEquals(t, tester.MSA{}, clues.In(ctx).Map(), false)
 
 				for _, name := range test.names {
 					ctx = clues.AddSpan(ctx, name, test.kvs...)
 					defer clues.CloseSpan(ctx)
 				}
 
-				assert(
+				tester.AssertEq(
 					t, ctx, "",
-					test.expectM, msa{},
-					test.expectS, sa{})
+					test.expectM, tester.MSA{},
+					test.expectS, tester.SA{})
 
 				c := clues.In(ctx).Map()
 				if c["clues_trace"] != test.expectTrace {
@@ -313,12 +152,12 @@ func TestAddSpan(t *testing.T) {
 func TestImmutableCtx(t *testing.T) {
 	var (
 		ctx     = context.Background()
-		testCtx = context.WithValue(ctx, testCtx{}, "instance")
-		check   = msa{}
+		testCtx = context.WithValue(ctx, tester.StubCtx{}, "instance")
+		check   = tester.MSA{}
 		pre     = clues.In(testCtx)
 		preMap  = pre.Map()
 	)
-	mustEquals(t, check, preMap, false)
+	tester.MustEquals(t, check, preMap, false)
 
 	ctx2 := clues.Add(testCtx, "k", "v")
 	if _, ok := preMap["k"]; ok {
@@ -342,11 +181,11 @@ func TestImmutableCtx(t *testing.T) {
 		lr = clues.Add(l, "beaux", "regard")
 	)
 
-	mustEquals(t, msa{}, clues.In(ctx).Map(), false)
-	mustEquals(t, msa{"foo": "bar"}, clues.In(l).Map(), false)
-	mustEquals(t, msa{"baz": "qux"}, clues.In(r).Map(), false)
-	mustEquals(t, msa{"foo": "bar", "fnords": "smarf"}, clues.In(ll).Map(), false)
-	mustEquals(t, msa{"foo": "bar", "beaux": "regard"}, clues.In(lr).Map(), false)
+	tester.MustEquals(t, tester.MSA{}, clues.In(ctx).Map(), false)
+	tester.MustEquals(t, tester.MSA{"foo": "bar"}, clues.In(l).Map(), false)
+	tester.MustEquals(t, tester.MSA{"baz": "qux"}, clues.In(r).Map(), false)
+	tester.MustEquals(t, tester.MSA{"foo": "bar", "fnords": "smarf"}, clues.In(ll).Map(), false)
+	tester.MustEquals(t, tester.MSA{"foo": "bar", "beaux": "regard"}, clues.In(lr).Map(), false)
 }
 
 var _ cecrets.Concealer = &safe{}
@@ -393,52 +232,52 @@ func TestAdd_concealed(t *testing.T) {
 	table := []struct {
 		name       string
 		concealers [][]any
-		expectM    msa
-		expectS    sa
+		expectM    tester.MSA
+		expectS    tester.SA
 	}{
 		{
 			name:       "all hidden",
 			concealers: [][]any{{cecrets.Hide("k"), cecrets.Hide("v")}, {cecrets.Hide("not_k"), cecrets.Hide("not_v")}},
-			expectM:    msa{"ba3acd7f61e405ca": "509bf4fb69f55ca3", "cc69e8e6a3b991d5": "f669b3b5927161b2"},
-			expectS:    sa{"ba3acd7f61e405ca", "509bf4fb69f55ca3", "cc69e8e6a3b991d5", "f669b3b5927161b2"},
+			expectM:    tester.MSA{"ba3acd7f61e405ca": "509bf4fb69f55ca3", "cc69e8e6a3b991d5": "f669b3b5927161b2"},
+			expectS:    tester.SA{"ba3acd7f61e405ca", "509bf4fb69f55ca3", "cc69e8e6a3b991d5", "f669b3b5927161b2"},
 		},
 		{
 			name:       "partially hidden",
 			concealers: [][]any{{cecrets.Hide("a"), safe{1}}, {cecrets.Hide(2), safe{"b"}}},
-			expectM:    msa{"7d2ded59f6a549d7": "1", "cbdd96fab83ece85": `"b"`},
-			expectS:    sa{"7d2ded59f6a549d7", "1", "cbdd96fab83ece85", `"b"`},
+			expectM:    tester.MSA{"7d2ded59f6a549d7": "1", "cbdd96fab83ece85": `"b"`},
+			expectS:    tester.SA{"7d2ded59f6a549d7", "1", "cbdd96fab83ece85", `"b"`},
 		},
 		{
 			name: "custom concealer",
 			concealers: [][]any{
 				{custom{"foo", "bar"}, custom{"baz", "qux"}},
 				{custom{"fnords", "smarf"}, custom{"beau", "regard"}}},
-			expectM: msa{"foo - fcde2b2edba56bf4": "baz - 21f58d27f827d295", "fnords - dd738d92a334bb85": "beau - fe099a0620ce9759"},
-			expectS: sa{"foo - fcde2b2edba56bf4", "baz - 21f58d27f827d295", "fnords - dd738d92a334bb85", "beau - fe099a0620ce9759"},
+			expectM: tester.MSA{"foo - fcde2b2edba56bf4": "baz - 21f58d27f827d295", "fnords - dd738d92a334bb85": "beau - fe099a0620ce9759"},
+			expectS: tester.SA{"foo - fcde2b2edba56bf4", "baz - 21f58d27f827d295", "fnords - dd738d92a334bb85", "beau - fe099a0620ce9759"},
 		},
 		{
 			name:       "none",
 			concealers: [][]any{},
-			expectM:    msa{},
-			expectS:    sa{},
+			expectM:    tester.MSA{},
+			expectS:    tester.SA{},
 		},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
-			check := msa{}
-			mustEquals(t, check, toMSA(clues.In(ctx).Map()), false)
+			ctx := context.WithValue(context.Background(), tester.StubCtx{}, "instance")
+			check := tester.MSA{}
+			tester.MustEquals(t, check, tester.ToMSA(clues.In(ctx).Map()), false)
 
 			for _, cs := range test.concealers {
 				ctx = clues.Add(ctx, cs...)
 				check[concealed(cs[0])] = concealed(cs[1])
-				mustEquals(t, check, toMSA(clues.In(ctx).Map()), false)
+				tester.MustEquals(t, check, tester.ToMSA(clues.In(ctx).Map()), false)
 			}
 
-			assertMSA(
+			tester.AssertMSA(
 				t, ctx, "",
-				test.expectM, msa{},
-				test.expectS, sa{})
+				test.expectM, tester.MSA{},
+				test.expectS, tester.SA{})
 		})
 	}
 }
@@ -574,7 +413,7 @@ func TestAddAgent(t *testing.T) {
 	ctx := context.Background()
 	ctx = clues.Add(ctx, "one", 1)
 
-	mapEquals(t, ctx, msa{
+	tester.MapEquals(t, ctx, tester.MSA{
 		"one": 1,
 	}, false)
 
@@ -582,11 +421,11 @@ func TestAddAgent(t *testing.T) {
 	clues.Relay(ctx, "wit", "zero", 0)
 	clues.Relay(ctxWithWit, "wit", "two", 2)
 
-	mapEquals(t, ctx, msa{
+	tester.MapEquals(t, ctx, tester.MSA{
 		"one": 1,
 	}, false)
 
-	mapEquals(t, ctxWithWit, msa{
+	tester.MapEquals(t, ctxWithWit, tester.MSA{
 		"one": 1,
 		"agents": map[string]map[string]any{
 			"wit": {
@@ -598,11 +437,11 @@ func TestAddAgent(t *testing.T) {
 	ctxWithTim := clues.AddAgent(ctxWithWit, "tim")
 	clues.Relay(ctxWithTim, "tim", "three", 3)
 
-	mapEquals(t, ctx, msa{
+	tester.MapEquals(t, ctx, tester.MSA{
 		"one": 1,
 	}, false)
 
-	mapEquals(t, ctxWithTim, msa{
+	tester.MapEquals(t, ctxWithTim, tester.MSA{
 		"one": 1,
 		"agents": map[string]map[string]any{
 			"wit": {
@@ -617,12 +456,12 @@ func TestAddAgent(t *testing.T) {
 	ctxWithBob := clues.AddAgent(ctx, "bob")
 	clues.Relay(ctxWithBob, "bob", "four", 4)
 
-	mapEquals(t, ctx, msa{
+	tester.MapEquals(t, ctx, tester.MSA{
 		"one": 1,
 	}, false)
 
 	// should not have changed since its first usage
-	mapEquals(t, ctxWithWit, msa{
+	tester.MapEquals(t, ctxWithWit, tester.MSA{
 		"one": 1,
 		"agents": map[string]map[string]any{
 			"wit": {
@@ -632,7 +471,7 @@ func TestAddAgent(t *testing.T) {
 	}, false)
 
 	// should not have changed since its first usage
-	mapEquals(t, ctxWithTim, msa{
+	tester.MapEquals(t, ctxWithTim, tester.MSA{
 		"one": 1,
 		"agents": map[string]map[string]any{
 			"wit": {
@@ -644,7 +483,7 @@ func TestAddAgent(t *testing.T) {
 		},
 	}, false)
 
-	mapEquals(t, ctxWithBob, msa{
+	tester.MapEquals(t, ctxWithBob, tester.MSA{
 		"one": 1,
 		"agents": map[string]map[string]any{
 			"bob": {

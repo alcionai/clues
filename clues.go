@@ -2,6 +2,7 @@ package clues
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
@@ -40,7 +41,7 @@ func Close(ctx context.Context) error {
 	if nc.OTEL != nil {
 		err := nc.OTEL.Close(ctx)
 		if err != nil {
-			return Wrap(err, "closing otel client")
+			return fmt.Errorf("closing otel client: %w", err)
 		}
 	}
 
@@ -52,8 +53,6 @@ func Close(ctx context.Context) error {
 // ---------------------------------------------------------------------------
 
 // In retrieves the clues structured data from the context.
-// TODO: turn return an interface instead of a node, have nodes
-// and errors both comply with that wrapper.
 func In(ctx context.Context) *node.Node {
 	return node.FromCtx(ctx)
 }
