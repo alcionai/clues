@@ -44,6 +44,15 @@ type Err struct {
 	data *node.Node
 }
 
+// Node retrieves the node values from the error.
+func (err *Err) Node() *node.Node {
+	if isNilErrIface(err) {
+		return &node.Node{}
+	}
+
+	return err.Values()
+}
+
 // ------------------------------------------------------------
 // tree operations
 // ------------------------------------------------------------
