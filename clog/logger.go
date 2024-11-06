@@ -6,9 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alcionai/clues"
+	otellog "go.opentelemetry.io/otel/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/alcionai/clues"
 )
 
 // Yes, we just hijack zap for our logging needs here.
@@ -20,8 +22,9 @@ var (
 )
 
 type clogger struct {
-	zsl *zap.SugaredLogger
-	set Settings
+	otel otellog.Logger
+	zsl  *zap.SugaredLogger
+	set  Settings
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +125,7 @@ func setLevel(cfg zap.Config, level logLevel) zap.Config {
 
 // singleton is the constructor and getter in one. Since we manage a global
 // singleton for each instance, we only ever want one alive at any given time.
-func singleton(set Settings) *clogger {
+func singleton(ctx context.Context, set Settings) *clogger {
 	singleMu.Lock()
 	defer singleMu.Unlock()
 
@@ -135,9 +138,12 @@ func singleton(set Settings) *clogger {
 
 	zsl := genLogger(set)
 
+	otelLogger := clues.In(ctx).OTELLogger()
+
 	cloggerton = &clogger{
-		zsl: zsl,
-		set: set,
+		otel: otelLogger,
+		zsl:  zsl,
+		set:  set,
 	}
 
 	return cloggerton
@@ -158,7 +164,7 @@ const ctxKey loggingKey = "clog_logger"
 // with the default values.  If you need to configure your logs,
 // make sure to embed this first.
 func Init(ctx context.Context, set Settings) context.Context {
-	clogged := singleton(set)
+	clogged := singleton(ctx, set)
 	clogged.zsl.Debugw("seeding logger", "logger_settings", set)
 
 	return plantLoggerInCtx(ctx, clogged)
@@ -190,7 +196,7 @@ func fromCtx(ctx context.Context) *clogger {
 	l := ctx.Value(ctxKey)
 	// if l is still nil, we need to grab the global singleton or construct a singleton.
 	if l == nil {
-		l = singleton(Settings{}.EnsureDefaults())
+		l = singleton(ctx, Settings{}.EnsureDefaults())
 	}
 
 	return l.(*clogger)
