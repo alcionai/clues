@@ -6,6 +6,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cecrets"
 )
 
