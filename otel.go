@@ -20,6 +20,8 @@ import (
 )
 
 type otelClient struct {
+	serviceName string
+
 	grpcConn      *grpc.ClientConn
 	traceProvider *sdkTrace.TracerProvider
 	tracer        trace.Tracer
@@ -127,6 +129,7 @@ func newOTELClient(
 	// -- Client
 
 	client := otelClient{
+		serviceName:   serviceName,
 		grpcConn:      conn,
 		traceProvider: tracerProvider,
 		tracer:        tracerProvider.Tracer(serviceName + "/tracer"),

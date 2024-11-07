@@ -2,6 +2,7 @@ package clues
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"path"
@@ -594,4 +595,86 @@ func getCaller(depth int) string {
 	// name) and trim off the bracket that remains from
 	// splitting on a period.
 	return strings.TrimSuffix(parts[1], "[")
+}
+
+// ---------------------------------------------------------------------------
+// serialization
+// ---------------------------------------------------------------------------
+
+// nodeCore contains the serializable set of data in a dataNode.
+type nodeCore struct {
+	OTELServiceName string `json:"otelServiceName"`
+	// TODO: investigate if map[string]string is really the best structure here.
+	// maybe we can get away with a map[string]any, or a []byte slice?
+	Values   map[string]string `json:"values"`
+	Comments []comment         `json:"comments"`
+}
+
+// Bytes serializes the dataNode to a slice of bytes.
+// Only attributes and comments are maintained.  All
+// values are stringified in the process.
+//
+// Node hierarchy, clients (such as otel), agents, and
+// hooks (such as labelCounter) are all sliced from the
+// result.
+func (dn *dataNode) Bytes() ([]byte, error) {
+	if dn == nil {
+		return []byte{}, nil
+	}
+
+	var serviceName string
+
+	if dn.otel != nil {
+		serviceName = dn.otel.serviceName
+	}
+
+	core := nodeCore{
+		OTELServiceName: serviceName,
+		Values:          map[string]string{},
+		Comments:        dn.Comments(),
+	}
+
+	for k, v := range dn.Map() {
+		core.Values[k] = stringify.Marshal(v, false)
+	}
+
+	return json.Marshal(core)
+}
+
+// FromBytes deserializes the bytes to a new dataNode.
+// No clients, agents, or hooks are initialized in this process.
+func FromBytes(bs []byte) (*dataNode, error) {
+	core := nodeCore{}
+
+	err := json.Unmarshal(bs, &core)
+	if err != nil {
+		return nil, err
+	}
+
+	node := dataNode{
+		// FIXME: do something with the serialized commments.
+		// I'm punting on this for now because I want to figure
+		// out the best middle ground between avoiding a slice of
+		// comments in each node for serialization sake (they
+		// are supposed to be one-comment-per-node to use the tree
+		// for ordering instead of the parameter), and keeping
+		// the full comment history available.  Probably just
+		// need to introduce a delimiter.
+	}
+
+	if len(core.Values) > 0 {
+		node.values = map[string]any{}
+	}
+
+	for k, v := range core.Values {
+		node.values[k] = v
+	}
+
+	if len(core.OTELServiceName) > 0 {
+		node.otel = &otelClient{
+			serviceName: core.OTELServiceName,
+		}
+	}
+
+	return &node, nil
 }
