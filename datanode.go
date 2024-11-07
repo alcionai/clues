@@ -3,14 +3,17 @@ package clues
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"path"
 	"runtime"
 	"strings"
 
 	"github.com/alcionai/clues/internal/stringify"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -402,6 +405,66 @@ func setNodeInCtx(ctx context.Context, dn *dataNode) context.Context {
 // ------------------------------------------------------------
 // span handling
 // ------------------------------------------------------------
+
+// traceMapCarrierBase defines the structures that support
+// otel traceMapCarrier behavior.  A traceMapCarrier is used
+// to pass and receive traces using message delivery headers
+// and other metadata.
+type traceMapCarrierBase interface {
+	map[string]string | http.Header
+}
+
+// asTraceMapCarrier converts a traceMapCarrier interface to
+// its propagation package implementation for that structure.
+// ie: map becomes a MapCarrier, headers become HeaderCarriers.
+func asTraceMapCarrier[C traceMapCarrierBase](
+	carrier C,
+) propagation.TextMapCarrier {
+	if carrier == nil {
+		return propagation.MapCarrier{}
+	}
+
+	if mss, ok := any(carrier).(map[string]string); ok {
+		return propagation.MapCarrier(mss)
+	}
+
+	if hh, ok := any(carrier).(http.Header); ok {
+		return propagation.HeaderCarrier(hh)
+	}
+
+	return propagation.MapCarrier{}
+}
+
+// injectTrace adds the current trace details to the provided
+// carrier.  If otel is not initialized, no-ops.
+//
+// The carrier data is mutated by this call.
+func (dn *dataNode) injectTrace(
+	ctx context.Context,
+	carrier propagation.TextMapCarrier,
+) {
+	if dn == nil {
+		return
+	}
+
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+}
+
+// receiveTrace extracts the current trace details from the
+// carrier and adds them to the context.  If otel is not
+// initialized, no-ops.
+//
+// The carrier data is mutated by this call.
+func (dn *dataNode) receiveTrace(
+	ctx context.Context,
+	carrier propagation.TextMapCarrier,
+) context.Context {
+	if dn == nil {
+		return ctx
+	}
+
+	return otel.GetTextMapPropagator().Extract(ctx, carrier)
+}
 
 // addSpan adds a new otel span.  If the otel client is nil, no-ops.
 // Attrs can be added to the span with addSpanAttrs.  This span will
