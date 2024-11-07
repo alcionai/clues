@@ -52,11 +52,18 @@ func genLogger(set Settings) *zap.SugaredLogger {
 		}
 	)
 
+	// set the file handling
+	toFile := Stderr
+
+	if len(set.fileOverride) > 0 {
+		toFile = set.fileOverride
+	}
+
 	switch set.Format {
 	// JSON means each row should appear as a single json object.
 	case FormatToJSON:
 		zcfg = setLevel(zap.NewProductionConfig(), set.Level)
-		zcfg.OutputPaths = []string{set.File}
+		zcfg.OutputPaths = []string{toFile}
 		// by default we'll use the columnar non-json format, which uses tab
 		// separated values within each line, and may contain multiple json objs.
 	default:
@@ -65,12 +72,12 @@ func genLogger(set Settings) *zap.SugaredLogger {
 		zcfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.StampMilli)
 
 		// when printing to stdout/stderr, colorize things!
-		if set.File == Stderr || set.File == Stdout {
+		if toFile == Stderr || toFile == Stdout {
 			zcfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 		}
 	}
 
-	zcfg.OutputPaths = []string{set.File}
+	zcfg.OutputPaths = []string{toFile}
 
 	zlog, err := zcfg.Build(zopts...)
 	if err != nil {
