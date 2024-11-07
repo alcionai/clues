@@ -435,11 +435,11 @@ func asTraceMapCarrier[C traceMapCarrierBase](
 	return propagation.MapCarrier{}
 }
 
-// passTrace adds the current trace details to the provided
+// injectTrace adds the current trace details to the provided
 // carrier.  If otel is not initialized, no-ops.
 //
 // The carrier data is mutated by this call.
-func (dn *dataNode) passTrace(
+func (dn *dataNode) injectTrace(
 	ctx context.Context,
 	carrier propagation.TextMapCarrier,
 ) {

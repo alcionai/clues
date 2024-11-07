@@ -75,19 +75,19 @@ func AddMap[K comparable, V any](
 // spans and traces
 // ---------------------------------------------------------------------------
 
-// PassTrace adds the current trace details to the provided
+// InjectTrace adds the current trace details to the provided
 // headers.  If otel is not initialized, no-ops.
 //
 // The mapCarrier is mutated by this request.  The passed
 // reference is returned mostly as a quality-of-life step
 // so that callers don't need to declare the map outside of
 // this call.
-func PassTrace[C traceMapCarrierBase](
+func InjectTrace[C traceMapCarrierBase](
 	ctx context.Context,
 	mapCarrier C,
 ) C {
 	nodeFromCtx(ctx).
-		passTrace(ctx, asTraceMapCarrier(mapCarrier))
+		injectTrace(ctx, asTraceMapCarrier(mapCarrier))
 
 	return mapCarrier
 }
