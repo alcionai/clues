@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -23,7 +23,7 @@ var (
 )
 
 type clogger struct {
-	otel otellog.Logger
+	otel log.Logger
 	zsl  *zap.SugaredLogger
 	set  Settings
 }
@@ -146,12 +146,15 @@ func singleton(ctx context.Context, set Settings) *clogger {
 
 	zsl := genLogger(set)
 
-	otelLogger := clues.In(ctx).OTELLogger()
-
 	cloggerton = &clogger{
-		otel: otelLogger,
-		zsl:  zsl,
-		set:  set,
+		zsl: zsl,
+		set: set,
+	}
+
+	node := clues.In(ctx)
+
+	if node.OTEL != nil && node.OTEL.Logger != nil {
+		cloggerton.otel = node.OTEL.Logger
 	}
 
 	return cloggerton

@@ -126,8 +126,10 @@ func (b builder) log(l logLevel, msg string) {
 	// add otel logging if provided
 	otelLogger := b.otel
 
-	if otelLogger == nil {
-		otelLogger = cluesNode.OTELLogger()
+	if otelLogger == nil &&
+		cluesNode.OTEL != nil &&
+		cluesNode.OTEL.Logger != nil {
+		otelLogger = cluesNode.OTEL.Logger
 	}
 
 	if otelLogger != nil {

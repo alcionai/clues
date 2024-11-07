@@ -4,14 +4,21 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/alcionai/clues/internal/stringify"
+	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/log/global"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	sdkLog "go.opentelemetry.io/otel/sdk/log"
+	sdkMetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdkTrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
@@ -25,11 +32,17 @@ import (
 // ------------------------------------------------------------
 
 type OTELClient struct {
-	grpcConn      *grpc.ClientConn
-	traceProvider *sdkTrace.TracerProvider
-	tracer        trace.Tracer
-	logger        otellog.Logger
-	serviceName   string
+	serviceName string
+	grpcConn    *grpc.ClientConn
+
+	LoggerProvider *sdkLog.LoggerProvider
+	Logger         log.Logger
+
+	MeterProvider *sdkMetric.MeterProvider
+	Meter         metric.Meter
+
+	TracerProvider *sdkTrace.TracerProvider
+	Tracer         trace.Tracer
 }
 
 func (cli *OTELClient) Close(ctx context.Context) error {
@@ -37,13 +50,37 @@ func (cli *OTELClient) Close(ctx context.Context) error {
 		return nil
 	}
 
-	if cli.traceProvider != nil {
-		err := cli.traceProvider.ForceFlush(ctx)
+	if cli.MeterProvider != nil {
+		err := cli.MeterProvider.ForceFlush(ctx)
+		if err != nil {
+			fmt.Println("forcing meter provider flush:", err)
+		}
+
+		err = cli.MeterProvider.Shutdown(ctx)
+		if err != nil {
+			return fmt.Errorf("shutting down otel meterprovider: %w", err)
+		}
+	}
+
+	if cli.LoggerProvider != nil {
+		err := cli.LoggerProvider.ForceFlush(ctx)
 		if err != nil {
 			fmt.Println("forcing trace provider flush:", err)
 		}
 
-		err = cli.traceProvider.Shutdown(ctx)
+		cli.LoggerProvider.Shutdown(ctx)
+		if err != nil {
+			return fmt.Errorf("shutting down otel logger provider: %w", err)
+		}
+	}
+
+	if cli.TracerProvider != nil {
+		err := cli.TracerProvider.ForceFlush(ctx)
+		if err != nil {
+			fmt.Println("forcing trace provider flush:", err)
+		}
+
+		err = cli.TracerProvider.Shutdown(ctx)
 		if err != nil {
 			return fmt.Errorf("shutting down otel trace provider: %w", err)
 		}
@@ -85,35 +122,106 @@ func NewOTELClient(
 	config OTELConfig,
 ) (*OTELClient, error) {
 	// -- Resource
-	srvResource, err := resource.New(ctx, resource.WithAttributes(
+	server, err := resource.New(ctx, resource.WithAttributes(
 		semconv.ServiceNameKey.String(serviceName)))
 	if err != nil {
-		return nil, fmt.Errorf("creating otel resource: %w", err)
+		return nil, errors.Wrap(err, "creating otel server resource")
 	}
 
-	// -- Exporter
+	// -- Client
 
-	conn, err := grpc.NewClient(
-		config.GRPCEndpoint,
-		// Note the use of insecure transport here. TLS is recommended in production.
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	client := OTELClient{}
+
+	// just a qol wrapper for shutting down on errors in this constructor.
+	closeClient := func() {
+		err := client.Close(ctx)
+		if err != nil {
+			fmt.Println("err closing client: %w", err)
+		}
+	}
+
+	// -- grpc client
+
+	// Note the use of insecure transport here. TLS is recommended in production.
+	creds := grpc.WithTransportCredentials(insecure.NewCredentials())
+
+	client.grpcConn, err = grpc.NewClient(config.GRPCEndpoint, creds)
 	if err != nil {
 		return nil, fmt.Errorf("creating new grpc connection: %w", err)
 	}
 
-	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+	// -- Tracing
+
+	client.TracerProvider, err = newTracerProvider(ctx, client.grpcConn, server)
 	if err != nil {
-		return nil, fmt.Errorf("creating a trace exporter: %w", err)
+		closeClient()
+		return nil, errors.Wrap(err, "generating a tracerProvider")
 	}
 
-	// -- TracerProvider
+	// set propagation to include traceContext and baggage (the default is no-op).
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{}))
+	otel.SetTracerProvider(client.TracerProvider)
+	client.Tracer = client.TracerProvider.Tracer(serviceName + "/tracer")
+
+	// -- Logging
+
+	// generate a logger provider
+	// LoggerProvider := global.GetLoggerProvider()
+	client.LoggerProvider, err = newLoggerProvider(ctx, client.grpcConn, server)
+	if err != nil {
+		closeClient()
+		return nil, errors.Wrap(err, "generating a tracerProvider")
+	}
+
+	global.SetLoggerProvider(client.LoggerProvider)
+	client.Logger = client.LoggerProvider.Logger(serviceName)
+
+	// -- Metrics
+
+	client.MeterProvider, err = newMeterProvider(ctx, client.grpcConn, server)
+	if err != nil {
+		closeClient()
+		return nil, errors.Wrap(err, "generating a tracerProvider")
+	}
+
+	otel.SetMeterProvider(client.MeterProvider)
+	client.Meter = client.MeterProvider.Meter(serviceName)
+
+	// Shutdown will flush any remaining spans and shut down the exporter.
+	return &client, nil
+}
+
+// newTracerProvider constructs a new tracer that manages batch exports
+// of tracing values.
+func newTracerProvider(
+	ctx context.Context,
+	conn *grpc.ClientConn,
+	server *resource.Resource,
+) (*sdkTrace.TracerProvider, error) {
+	if ctx != nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+	}
+
+	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing a tracer exporter")
+	}
 
 	// Register the trace exporter with a TracerProvider, using a batch
 	// span processor to aggregate spans before export.
 	batchSpanProcessor := sdkTrace.NewBatchSpanProcessor(exporter)
 
 	tracerProvider := sdkTrace.NewTracerProvider(
-		sdkTrace.WithResource(srvResource),
+		sdkTrace.WithResource(server),
+		// FIXME: need to investigate other options...
+		// * case handling for parent-not-sampled
+		// * blocking on full queue
+		// * max queue size
+		// FIXME: need to refine trace sampling.
 		sdkTrace.WithSampler(sdkTrace.AlwaysSample()),
 		sdkTrace.WithSpanProcessor(batchSpanProcessor),
 		sdkTrace.WithRawSpanLimits(sdkTrace.SpanLimits{
@@ -125,32 +233,78 @@ func NewOTELClient(
 			LinkCountLimit:              -1,
 		}))
 
-	// set global propagator to traceContext (the default is no-op).
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-	otel.SetTracerProvider(tracerProvider)
+	return tracerProvider, nil
+}
 
-	// -- Logger
-
-	// generate a logger provider
-	logProvider := global.GetLoggerProvider()
-
-	// -- Client
-
-	client := OTELClient{
-		grpcConn:      conn,
-		traceProvider: tracerProvider,
-		tracer:        tracerProvider.Tracer(serviceName + "/tracer"),
-		logger:        logProvider.Logger(serviceName),
+// newMeterProvider constructs a new meter that manages batch exports
+// of metrics.
+func newMeterProvider(
+	ctx context.Context,
+	conn *grpc.ClientConn,
+	server *resource.Resource,
+) (*sdkMetric.MeterProvider, error) {
+	if ctx != nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 	}
 
-	// Shutdown will flush any remaining spans and shut down the exporter.
-	return &client, nil
+	exporter, err := otlpmetricgrpc.New(
+		ctx,
+		otlpmetricgrpc.WithGRPCConn(conn),
+		otlpmetricgrpc.WithCompressor("gzip"))
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing a meter exporter")
+	}
+
+	periodicReader := sdkMetric.NewPeriodicReader(
+		exporter,
+		sdkMetric.WithInterval(1*time.Minute))
+
+	meterProvider := sdkMetric.NewMeterProvider(
+		sdkMetric.WithResource(server),
+		// FIXME: need to investigate other options...
+		// * view
+		// * interval
+		// * aggregation
+		// * temporality
+		sdkMetric.WithReader(periodicReader))
+
+	return meterProvider, nil
+}
+
+// newLoggerProvider constructs a new logger that manages batch exports
+// of logs.
+func newLoggerProvider(
+	ctx context.Context,
+	conn *grpc.ClientConn,
+	server *resource.Resource,
+) (*sdkLog.LoggerProvider, error) {
+	if ctx != nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+	}
+
+	exporter, err := otlploggrpc.New(ctx, otlploggrpc.WithGRPCConn(conn))
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing a logger exporter")
+	}
+
+	loggerProvider := sdkLog.NewLoggerProvider(
+		sdkLog.WithResource(server),
+		// FIXME: need to investigate other options...
+		// * interval
+		// * buffer size
+		// * count limit
+		// * value length limit
+		sdkLog.WithProcessor(sdkLog.NewBatchProcessor(exporter)))
+
+	return loggerProvider, nil
 }
 
 // ------------------------------------------------------------
 // annotations.  basically otel's version of With()
-// Not currently used; we're just mashing everything in as a
-// string right now, same as clues does.
 // ------------------------------------------------------------
 
 type Annotation struct {
@@ -171,23 +325,23 @@ func (a Annotation) IsAttribute() bool {
 	return a.kind == "attribute"
 }
 
-func (a Annotation) KV() otellog.KeyValue {
+func (a Annotation) KV() log.KeyValue {
 	if a.kind != "attribute" {
-		return otellog.KeyValue{}
+		return log.KeyValue{}
 	}
 
 	// FIXME: needs extensive type support
 	switch a.v.(type) {
 	case int:
-		return otellog.Int(a.k, a.v.(int))
+		return log.Int(a.k, a.v.(int))
 	case int64:
-		return otellog.Int64(a.k, a.v.(int64))
+		return log.Int64(a.k, a.v.(int64))
 	case string:
-		return otellog.String(a.k, a.v.(string))
+		return log.String(a.k, a.v.(string))
 	case bool:
-		return otellog.Bool(a.k, a.v.(bool))
+		return log.Bool(a.k, a.v.(bool))
 	default: // everything else gets stringified
-		return otellog.String(a.k, stringify.Marshal(a.v, false))
+		return log.String(a.k, stringify.Marshal(a.v, false))
 	}
 }
 
@@ -273,7 +427,7 @@ func (dn *Node) AddSpan(
 		return ctx, dn
 	}
 
-	ctx, span := dn.OTEL.tracer.Start(ctx, name)
+	ctx, span := dn.OTEL.Tracer.Start(ctx, name)
 
 	spawn := dn.SpawnDescendant()
 	spawn.Span = span
@@ -309,14 +463,4 @@ func (dn *Node) AddSpanAttributes(
 	for k, v := range values {
 		dn.Span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
 	}
-}
-
-// OTELLogger gets the otel logger instance from the otel client.
-// Returns nil if otel wasn't initialized.
-func (dn *Node) OTELLogger() otellog.Logger {
-	if dn == nil || dn.OTEL == nil {
-		return nil
-	}
-
-	return dn.OTEL.logger
 }
