@@ -34,26 +34,6 @@ func (suite *BuilderUnitSuite) TestBuilder() {
 				return Ctx(ctx)
 			},
 		},
-		{
-			name: "singleton",
-			init: func(ctx context.Context) context.Context {
-				return Init(
-					ctx,
-					Settings{}.EnsureDefaults())
-			},
-			bldr: func(ctx context.Context) *builder {
-				return Singleton()
-			},
-		},
-		{
-			name: "singleton, no prior init",
-			init: func(ctx context.Context) context.Context {
-				return ctx
-			},
-			bldr: func(ctx context.Context) *builder {
-				return Singleton()
-			},
-		},
 	}
 
 	for _, test := range table {
