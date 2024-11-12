@@ -470,3 +470,23 @@ func (dn *Node) AddSpanAttributes(
 		dn.Span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
 	}
 }
+
+// logger gets the otel logger instance from the otel client.
+// Returns nil if otel wasn't initialized.
+func (dn *Node) OTELLogger() log.Logger {
+	if dn == nil || dn.OTEL == nil {
+		return nil
+	}
+
+	return dn.OTEL.Logger
+}
+
+// OTELMeter gets the otel logger instance from the otel client.
+// Returns nil if otel wasn't initialized.
+func (dn *Node) OTELMeter() metric.Meter {
+	if dn == nil || dn.OTEL == nil {
+		return nil
+	}
+
+	return dn.OTEL.Meter
+}
