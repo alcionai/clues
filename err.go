@@ -44,6 +44,16 @@ type Err struct {
 	data *dataNode
 }
 
+// getOrAddNode either returns the existing node in the error,
+// or it generates a new node to pass in.
+func (e *Err) getOrAddNode() *dataNode {
+	if e.data == nil {
+		e.data = &dataNode{}
+	}
+
+	return e.data
+}
+
 // ---------------------------------------------------------------------------
 // constructors
 // ---------------------------------------------------------------------------
@@ -58,14 +68,18 @@ func newErr(
 ) *Err {
 	_, _, file := getDirAndFile(traceDepth + 1)
 
-	return &Err{
+	err := &Err{
 		e:      e,
 		file:   file,
 		caller: getCaller(traceDepth + 1),
 		msg:    msg,
-		// no ID needed for err data nodes
-		data: &dataNode{values: m},
 	}
+
+	if len(m) > 0 {
+		err.data = &dataNode{values: m}
+	}
+
+	return err
 }
 
 // tryExtendErr checks if err is an *Err. If it is, it extends the Err
@@ -104,8 +118,6 @@ func toStack(
 		file:   file,
 		caller: getCaller(traceDepth + 1),
 		stack:  stack,
-		// no ID needed for err dataNodes
-		data: &dataNode{},
 	}
 }
 
@@ -890,7 +902,7 @@ func (err *Err) With(kvs ...any) *Err {
 	}
 
 	if len(kvs) > 0 {
-		err.data = err.data.addValues(stringify.Normalize(kvs...))
+		err.data = err.getOrAddNode().extendValues(stringify.Normalize(kvs...))
 	}
 
 	return err
@@ -911,7 +923,7 @@ func (err *Err) WithMap(m map[string]any) *Err {
 	}
 
 	if len(m) > 0 {
-		err.data = err.data.addValues(m)
+		err.data = err.getOrAddNode().extendValues(m)
 	}
 
 	return err

@@ -113,6 +113,18 @@ func (dn *dataNode) addValues(m map[string]any) *dataNode {
 	return spawn
 }
 
+// extendValues adds all entries in the map to the dataNode's values.
+// automatically propagates values onto the current span.
+func (dn *dataNode) extendValues(m map[string]any) *dataNode {
+	if m == nil {
+		m = map[string]any{}
+	}
+
+	dn.setValues(m)
+
+	return dn
+}
+
 // setValues is a helper called by addValues.
 func (dn *dataNode) setValues(m map[string]any) {
 	if len(m) == 0 {
@@ -166,6 +178,10 @@ func In(ctx context.Context) *dataNode {
 // Map flattens the tree of dataNode.values into a map.  Descendant nodes
 // take priority over ancestors in cases of collision.
 func (dn *dataNode) Map() map[string]any {
+	if dn == nil {
+		return map[string]any{}
+	}
+
 	var (
 		m       = map[string]any{}
 		nodeIDs = []string{}
@@ -205,10 +221,13 @@ func (dn *dataNode) Map() map[string]any {
 // nodes take priority over ancestors in cases of collision.
 func (dn *dataNode) Slice() []any {
 	m := dn.Map()
-	s := make([]any, 0, 2*len(m))
+	s := make([]any, 2*len(m))
+	i := 0
 
 	for k, v := range m {
-		s = append(s, k, v)
+		s[i] = k
+		s[i+1] = v
+		i += 2
 	}
 
 	return s
@@ -325,6 +344,10 @@ func (cs comments) String() string {
 // The return value is ordered from the first added comment (closest to
 // the root) to the most recent one (closest to the leaf).
 func (dn *dataNode) Comments() comments {
+	if dn == nil {
+		return comments{}
+	}
+
 	result := comments{}
 
 	if !dn.comment.isEmpty() {
@@ -547,6 +570,8 @@ func makeNodeID() string {
 // dir `absolute/os/path/to/parent/folder`
 // fileAndLine `<file>:<line>`
 // parentAndFileAndLine `<parent>/<file>:<line>`
+//
+// TODO: This is alloc heavy and needs to be lightened
 func getDirAndFile(
 	depth int,
 ) (dir, fileAndLine, parentAndFileAndLine string) {
@@ -567,6 +592,8 @@ func getDirAndFile(
 // getCaller retrieves the func name of the caller. Depth is the  skip-caller
 // count.  Clues funcs that call this one should provide either `1` (if they
 // do not already have a depth value), or `depth+1` otherwise.`
+//
+// TODO: This is alloc heavy and needs to be lightened
 func getCaller(depth int) string {
 	pc, _, _, ok := runtime.Caller(depth + 1)
 	if !ok {
