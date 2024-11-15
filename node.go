@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/maps"
@@ -119,13 +120,21 @@ func nodeFromCtx(ctx context.Context) regNode {
 	}
 }
 
+func (rn regNode) node() dataNode {
+	if !rn.ok {
+		return dataNode{}
+	}
+
+	return rn.reg.nodes[rn.id]
+}
+
 // ---------------------------------------------------------------------------
 // setters
 // ---------------------------------------------------------------------------
 
-// addValues adds all entries in the map to the dataNode's values.
+// newNodeWithValuesAndAttributes adds all entries in the map to the dataNode's values.
 // automatically propagates values onto the current span.
-func (rn regNode) addValuesAndAttributes(
+func (rn regNode) newNodeWithValuesAndAttributes(
 	m map[string]any,
 ) (dataNode, bool) {
 	if !rn.ok {
@@ -133,15 +142,14 @@ func (rn regNode) addValuesAndAttributes(
 	}
 
 	dn := rn.reg.spawnDescendant(rn.id)
-	rn.setValues(dn.id, m)
+	rn.addValues(dn.id, m)
 	rn.addSpanAttributes(dn.id, m)
 
 	return dn, true
 }
 
-// setValues is a helper called by addValues.
-// TODO: rename to addValues
-func (rn regNode) setValues(
+// addValues adds the values to the specified node.
+func (rn regNode) addValues(
 	nodeID int32,
 	m map[string]any,
 ) {
@@ -310,6 +318,35 @@ func (rn regNode) addAgent(name string) (dataNode, bool) {
 	return dn, true
 }
 
+func (ag agent) addValues(
+	m map[string]any,
+) {
+	if len(m) == 0 {
+		return
+	}
+
+	if len(ag.data.values) == 0 {
+		ag.data.values = map[string]any{}
+	}
+
+	maps.Copy(ag.data.values, m)
+}
+
+// ---------------------------------------------------------------------------
+// otel
+// ---------------------------------------------------------------------------
+
+// OTELLogger gets the otel logger instance from the otel client.
+// Returns nil if otel wasn't initialized.
+func (rn regNode) OTELLogger() otellog.Logger {
+	// TODO: can I pull this out of the ctx?
+	if !rn.ok || rn.reg.otel == nil {
+		return nil
+	}
+
+	return rn.reg.otel.logger
+}
+
 // ------------------------------------------------------------
 // span handling
 // ------------------------------------------------------------
@@ -347,11 +384,11 @@ func asTraceMapCarrier[C traceMapCarrierBase](
 // carrier.  If otel is not initialized, no-ops.
 //
 // The carrier data is mutated by this call.
-func (dn *dataNode) injectTrace(
+func (rn regNode) injectTrace(
 	ctx context.Context,
 	carrier propagation.TextMapCarrier,
 ) {
-	if dn == nil {
+	if !rn.ok {
 		return
 	}
 
@@ -363,48 +400,54 @@ func (dn *dataNode) injectTrace(
 // initialized, no-ops.
 //
 // The carrier data is mutated by this call.
-func (dn *dataNode) receiveTrace(
+func (rn regNode) receiveTrace(
 	ctx context.Context,
 	carrier propagation.TextMapCarrier,
 ) context.Context {
-	if dn == nil {
+	if !rn.ok {
 		return ctx
 	}
 
 	return otel.GetTextMapPropagator().Extract(ctx, carrier)
 }
 
-// addSpan adds a new otel span.  If the otel client is nil, no-ops.
+// newNodeWithSpan adds a new otel span.  If the otel client is nil, no-ops.
 // Attrs can be added to the span with addSpanAttrs.  This span will
 // continue to be used for that purpose until replaced with another
 // span, which will appear in a separate context (and thus a separate,
 // dataNode).
-func (rn regNode) addSpan(
+func (rn regNode) newNodeWithSpan(
 	ctx context.Context,
 	name string,
 ) (context.Context, dataNode, bool) {
-	if !rn.ok || rn.reg.otel == nil {
+	if !rn.ok {
 		return ctx, dataNode{}, false
 	}
 
-	ctx, span := rn.reg.otel.tracer.Start(ctx, name)
-
 	dn := rn.reg.spawnDescendant(rn.id)
+	dn.name = name
+
+	if rn.reg.otel == nil {
+		rn.reg.nodes[dn.id] = dn
+		return ctx, dn, true
+	}
+
+	ctx, span := rn.reg.otel.tracer.Start(ctx, name)
 	dn.span = span
+
+	rn.reg.nodes[dn.id] = dn
 
 	return ctx, dn, true
 }
 
 // closeSpan closes the otel span and removes it span from the data node.
 // If no span is present, no ops.
-func (rn regNode) closeSpan(
-	ctx context.Context,
-) {
+func (rn regNode) closeSpan() {
 	if !rn.ok {
 		return
 	}
 
-	dn := rn.reg.nodes[rn.id]
+	dn := rn.node()
 	dn.span.End()
 
 	return

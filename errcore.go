@@ -34,7 +34,7 @@ func (err *Err) Core() *ErrCore {
 	return &ErrCore{
 		Msg:      err.Error(),
 		Labels:   err.Labels(),
-		Values:   err.values(),
+		Values:   Values(err),
 		Comments: err.Comments(),
 	}
 }

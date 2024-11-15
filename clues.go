@@ -21,23 +21,29 @@ func Initialize(
 	serviceName string,
 	config OTELConfig,
 ) (context.Context, error) {
-	nc := nodeIDFromCtx(ctx)
+	nc := nodeFromCtx(ctx)
 
-	err := nc.init(ctx, serviceName, config)
+	// haven't initialized the registry yet.
+	if !nc.ok {
+		nc.reg, nc.id = newRegistry()
+		nc.ok = true
+	}
+
+	err := nc.reg.init(ctx, serviceName, config)
 	if err != nil {
 		return ctx, err
 	}
 
-	return setNodeIDInCtx(ctx, nc), nil
+	return setNodeIDInCtx(ctx, nc.id), nil
 }
 
 // Close will flush all buffered data waiting to be read.  If Initialize was not
 // called, this call is a no-op.  Should be called in a defer after initializing.
 func Close(ctx context.Context) error {
-	nc := nodeIDFromCtx(ctx)
+	nc := nodeFromCtx(ctx)
 
-	if nc.otel != nil {
-		err := nc.otel.close(ctx)
+	if nc.reg.otel != nil {
+		err := nc.reg.otel.close(ctx)
 		if err != nil {
 			return Wrap(err, "closing otel client")
 		}
@@ -52,8 +58,14 @@ func Close(ctx context.Context) error {
 
 // Add adds all key-value pairs to the clues.
 func Add(ctx context.Context, kvs ...any) context.Context {
-	nc := nodeIDFromCtx(ctx)
-	return setNodeIDInCtx(ctx, nc.addValues(stringify.Normalize(kvs...)))
+	nc := nodeFromCtx(ctx)
+
+	dn, ok := nc.newNodeWithValuesAndAttributes(stringify.Normalize(kvs...))
+	if !ok {
+		return ctx
+	}
+
+	return setNodeIDInCtx(ctx, dn.id)
 }
 
 // AddMap adds a shallow clone of the map to a namespaced set of clues.
@@ -61,14 +73,19 @@ func AddMap[K comparable, V any](
 	ctx context.Context,
 	m map[K]V,
 ) context.Context {
-	nc := nodeIDFromCtx(ctx)
+	nc := nodeFromCtx(ctx)
 
 	kvs := make([]any, 0, len(m)*2)
 	for k, v := range m {
 		kvs = append(kvs, k, v)
 	}
 
-	return setNodeIDInCtx(ctx, nc.addValues(stringify.Normalize(kvs...)))
+	dn, ok := nc.newNodeWithValuesAndAttributes(stringify.Normalize(kvs...))
+	if !ok {
+		return ctx
+	}
+
+	return setNodeIDInCtx(ctx, dn.id)
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +103,7 @@ func InjectTrace[C traceMapCarrierBase](
 	ctx context.Context,
 	mapCarrier C,
 ) C {
-	nodeIDFromCtx(ctx).
+	nodeFromCtx(ctx).
 		injectTrace(ctx, asTraceMapCarrier(mapCarrier))
 
 	return mapCarrier
@@ -99,7 +116,7 @@ func ReceiveTrace[C traceMapCarrierBase](
 	ctx context.Context,
 	mapCarrier C,
 ) context.Context {
-	return nodeIDFromCtx(ctx).
+	return nodeFromCtx(ctx).
 		receiveTrace(ctx, asTraceMapCarrier(mapCarrier))
 }
 
@@ -114,27 +131,26 @@ func AddSpan(
 	name string,
 	kvs ...any,
 ) context.Context {
-	nc := nodeIDFromCtx(ctx)
+	nc := nodeFromCtx(ctx)
 
-	var node *dataNode
-
-	if len(kvs) > 0 {
-		ctx, node = nc.addSpan(ctx, name)
-		node.name = name
-		node = node.addValues(stringify.Normalize(kvs...))
-	} else {
-		ctx, node = nc.addSpan(ctx, name)
-		node = node.trace(name)
+	ctx, node, ok := nc.newNodeWithSpan(ctx, name)
+	if !ok {
+		return ctx
 	}
 
-	return setNodeIDInCtx(ctx, node)
+	m := stringify.Normalize(kvs...)
+
+	nc.addValues(node.id, m)
+	nc.addSpanAttributes(node.id, m)
+
+	return setNodeIDInCtx(ctx, node.id)
 }
 
 // CloseSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
 func CloseSpan(ctx context.Context) context.Context {
-	nc := nodeIDFromCtx(ctx).closeSpan(ctx)
-	return setNodeIDInCtx(ctx, nc)
+	nodeFromCtx(ctx).closeSpan()
+	return ctx
 }
 
 // ---------------------------------------------------------------------------
@@ -167,10 +183,14 @@ func AddComment(
 	msg string,
 	vs ...any,
 ) context.Context {
-	nc := nodeIDFromCtx(ctx)
-	nn := nc.addComment(1, msg, vs...)
+	nc := nodeFromCtx(ctx)
 
-	return setNodeIDInCtx(ctx, nn)
+	dn, ok := nc.addComment(1, msg, vs...)
+	if !ok {
+		return ctx
+	}
+
+	return setNodeIDInCtx(ctx, dn.id)
 }
 
 // ---------------------------------------------------------------------------
@@ -194,10 +214,14 @@ func AddAgent(
 	ctx context.Context,
 	name string,
 ) context.Context {
-	nc := nodeIDFromCtx(ctx)
-	nn := nc.addAgent(name)
+	nc := nodeFromCtx(ctx)
 
-	return setNodeIDInCtx(ctx, nn)
+	dn, ok := nc.addAgent(name)
+	if !ok {
+		return ctx
+	}
+
+	return setNodeIDInCtx(ctx, dn.id)
 }
 
 // Relay adds all key-value pairs to the provided agent.  The agent will
@@ -208,13 +232,23 @@ func Relay(
 	agent string,
 	vs ...any,
 ) {
-	nc := nodeIDFromCtx(ctx)
-	ag, ok := nc.agents[agent]
+	nc := nodeFromCtx(ctx)
+	ag, ok := nc.node().agents[agent]
 
 	if !ok {
 		return
 	}
 
 	// set values, not add.  We don't want agents to own a full clues tree.
-	ag.data.setValues(stringify.Normalize(vs...))
+	ag.addValues(stringify.Normalize(vs...))
 }
+
+// ---------------------------------------------------------------------------
+// Data access
+// ---------------------------------------------------------------------------
+
+func In(ctx context.Context) regNode {
+	return nodeFromCtx(ctx)
+}
+
+// Add adds all key-value pairs to the clues.

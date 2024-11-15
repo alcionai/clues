@@ -5,8 +5,6 @@ import (
 	"maps"
 	"strings"
 	"sync/atomic"
-
-	otellog "go.opentelemetry.io/otel/log"
 )
 
 // ---------------------------------------------------------------------------
@@ -29,20 +27,26 @@ type registry struct {
 	otel *otelClient
 }
 
-func newRegistry() *registry {
-	one := atomic.Int32{}
-	one.Swap(1)
-
-	return &registry{
-		currID: &one,
+// newRegistry generates a new registry and spawns a root node for the clues tree.
+func newRegistry() (*registry, int32) {
+	reg := registry{
+		currID: &atomic.Int32{},
 		nodes:  map[int32]dataNode{},
 	}
+
+	// spawn the root node
+	reg.spawnDescendant(0)
+
+	// return the registry and root node id
+	return &reg, reg.currID.Load()
 }
 
 // spawnDescendant generates a new dataNode that is a descendant of the current
 // node.  A descendant maintains a pointer to its parent, and carries any genetic
 // necessities (ie, copies of fields) that must be present for continued functionality.
-func (reg *registry) spawnDescendant(parentID int32) dataNode {
+func (reg *registry) spawnDescendant(
+	parentID int32,
+) dataNode {
 	if len(reg.nodes) < (int(parentID) + 1) {
 		parentID = 0
 	}
@@ -182,9 +186,7 @@ func (reg *registry) init(
 
 // Map flattens the tree of dataNode.values into a map.  Descendant nodes
 // take priority over ancestors in cases of collision.
-func (rn regNode) Map(
-	nodeID int32,
-) map[string]any {
+func (rn regNode) Map() map[string]any {
 	if !rn.ok || len(rn.reg.nodes) == 0 {
 		return map[string]any{}
 	}
@@ -206,13 +208,13 @@ func (rn regNode) Map(
 		},
 	}
 
-	rn.reg.iterNodesRootToLeaf(nodeID, fn)
+	rn.reg.iterNodesRootToLeaf(rn.id, fn)
 
 	if len(nodeNames) > 0 {
 		m["clues_trace"] = strings.Join(nodeNames, ",")
 	}
 
-	agents := rn.reg.nodes[nodeID].agents
+	agents := rn.node().agents
 
 	if len(agents) == 0 {
 		return m
@@ -232,14 +234,13 @@ func (rn regNode) Map(
 // Slice flattens the tree of dataNode.values into a Slice where all even
 // indices contain the keys, and all odd indices contain values.  Descendant
 // nodes take priority over ancestors in cases of collision.
-func (rn regNode) Slice(
-	nodeID int32,
-) []any {
+func (rn regNode) Slice() []any {
 	if !rn.ok {
 		return []any{}
 	}
 
-	m := rn.Map(nodeID)
+	// map ensures we have a deduplicated set of keys.
+	m := rn.Map()
 	s := make([]any, 2*len(m))
 	i := 0
 
@@ -250,19 +251,4 @@ func (rn regNode) Slice(
 	}
 
 	return s
-}
-
-// ---------------------------------------------------------------------------
-// otel
-// ---------------------------------------------------------------------------
-
-// OTELLogger gets the otel logger instance from the otel client.
-// Returns nil if otel wasn't initialized.
-func (r registry) OTELLogger() otellog.Logger {
-	// TODO: can I pull this out of the ctx?
-	if r.otel == nil {
-		return nil
-	}
-
-	return r.otel.logger
 }

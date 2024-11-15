@@ -380,37 +380,37 @@ func BenchmarkErr_WithClues_randKRandV(b *testing.B) {
 	_ = err
 }
 
-func BenchmarkErr_InErr_const(b *testing.B) {
+func BenchmarkErr_Values_const(b *testing.B) {
 	var err *clues.Err
 	var m map[string]any
 	for i := 0; i < b.N; i++ {
 		err = clues.New("err")
 		err = err.With("foo", "bar")
-		m = clues.InErr(err).Map()
+		m = clues.Values(err)
 	}
 	_ = err
 	_ = m
 }
 
-func BenchmarkErr_InErr_static(b *testing.B) {
+func BenchmarkErr_Values_static(b *testing.B) {
 	var err *clues.Err
 	var m map[string]any
 	for i := 0; i < b.N; i++ {
 		err = clues.New("err")
 		err = err.With(i, -i)
-		m = clues.InErr(err).Map()
+		m = clues.Values(err)
 	}
 	_ = err
 	_ = m
 }
 
-func BenchmarkErr_InErr_rand(b *testing.B) {
+func BenchmarkErr_Values_rand(b *testing.B) {
 	var err *clues.Err
 	var m map[string]any
 	for i := 0; i < b.N; i++ {
 		err = clues.New("err")
 		err = err.With(benchVals[i%benchSize], benchVals[i%benchSize])
-		m = clues.InErr(err).Map()
+		m = clues.Values(err)
 	}
 	_ = err
 	_ = m

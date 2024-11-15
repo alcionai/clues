@@ -67,7 +67,7 @@ func (b builder) log(l logLevel, msg string) {
 
 	if b.err != nil {
 		// error values should override context values.
-		maps.Copy(cv, clues.InErr(b.err).Map())
+		maps.Copy(cv, clues.Values(b.err))
 
 		// attach the error and its labels
 		cv["error"] = b.err

@@ -183,7 +183,7 @@ func makeStackWrap(
 // TODO: transform all this to comply with a standard interface
 // ------------------------------------------------------------
 
-// ancestors builds out the ancestor lineage of this
+// unwrappedRootToLeaf builds out the ancestor lineage of this
 // particular error.  This follows standard layout rules
 // already established elsewhere:
 // * the first entry is the oldest ancestor, the last is
@@ -192,7 +192,7 @@ func makeStackWrap(
 //
 // TODO: get other ancestor stack builders to work off of this
 // func instead of spreading that handling everywhere.
-func ancestors(err error) []error {
+func unwrappedRootToLeaf(err error) []error {
 	return stackAncestorsOntoSelf(err)
 }
 
@@ -223,33 +223,6 @@ func stackAncestorsOntoSelf(err error) []error {
 	return errs
 }
 
-// InErr returns the map of contextual values in the error.
-// Each error in the stack is unwrapped and all maps are
-// unioned. In case of collision, lower level error data
-// take least priority.
-// TODO: remove this in favor of a type-independent In()
-// that returns an interface which both dataNodes and Err
-// comply with.
-func InErr(err error) *dataNode {
-	if isNilErrIface(err) {
-		return &dataNode{}
-	}
-
-	return &dataNode{values: inErr(err)}
-}
-
-func inErr(err error) map[string]any {
-	if isNilErrIface(err) {
-		return map[string]any{}
-	}
-
-	if e, ok := err.(*Err); ok {
-		return e.values()
-	}
-
-	return inErr(Unwrap(err))
-}
-
 // ------------------------------------------------------------
 // getters - k:v store
 // ------------------------------------------------------------
@@ -258,25 +231,20 @@ func inErr(err error) map[string]any {
 // the error.  Each error in the stack is unwrapped and all
 // maps are unioned. In case of collision, lower level error
 // data take least priority.
-func (err *Err) Values() *dataNode {
+func Values(err error) map[string]any {
 	if isNilErrIface(err) {
-		return &dataNode{}
-	}
-
-	return &dataNode{values: err.values()}
-}
-
-func (err *Err) values() map[string]any {
-	if isNilErrIface(err) {
-		return map[string]any{}
+		return nil
 	}
 
 	vals := map[string]any{}
-	maps.Copy(vals, err.data.Map())
-	maps.Copy(vals, inErr(err.e))
 
-	for _, se := range err.stack {
-		maps.Copy(vals, inErr(se))
+	for _, ancestor := range unwrappedRootToLeaf(err) {
+		cerr, ok := ancestor.(*Err)
+		if !ok {
+			continue
+		}
+
+		maps.Copy(vals, cerr.data.values)
 	}
 
 	return vals
@@ -381,16 +349,16 @@ func Comments(err error) comments {
 		return comments{}
 	}
 
-	ancs := ancestors(err)
+	ancestors := unwrappedRootToLeaf(err)
 	result := comments{}
 
-	for _, ancestor := range ancs {
+	for _, ancestor := range ancestors {
 		ce, ok := ancestor.(*Err)
 		if !ok {
 			continue
 		}
 
-		result = append(result, ce.data.Comments()...)
+		result = append(result, ce.data.comment)
 	}
 
 	return result
@@ -865,8 +833,8 @@ func (err *Err) WithClues(ctx context.Context) *Err {
 		return nil
 	}
 
-	dn := In(ctx)
-	e := err.WithMap(dn.Map())
+	rn := In(ctx)
+	e := err.WithMap(rn.Map())
 
 	return e
 }
@@ -901,9 +869,16 @@ func (err *Err) With(kvs ...any) *Err {
 		return nil
 	}
 
-	if len(kvs) > 0 {
-		err.data = err.getOrAddNode().extendValues(stringify.Normalize(kvs...))
+	if len(kvs) == 0 {
+		return err
 	}
+
+	err.data = err.getOrAddNode()
+	if len(err.data.values) == 0 {
+		err.data.values = map[string]any{}
+	}
+
+	maps.Copy(err.data.values, stringify.Normalize(kvs...))
 
 	return err
 }
@@ -922,9 +897,16 @@ func (err *Err) WithMap(m map[string]any) *Err {
 		return nil
 	}
 
-	if len(m) > 0 {
-		err.data = err.getOrAddNode().extendValues(m)
+	if len(m) == 0 {
+		return err
 	}
+
+	err.data = err.getOrAddNode()
+	if len(err.data.values) == 0 {
+		err.data.values = map[string]any{}
+	}
+
+	maps.Copy(err.data.values, m)
 
 	return err
 }

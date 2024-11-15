@@ -292,8 +292,7 @@ func TestWith(t *testing.T) {
 			for _, kv := range test.with {
 				err = err.With(kv...)
 			}
-			mustEquals(t, test.expect, clues.InErr(err).Map(), false)
-			mustEquals(t, test.expect, err.Values().Map(), false)
+			mustEquals(t, test.expect, clues.Values(err), false)
 		})
 	}
 }
@@ -332,8 +331,7 @@ func TestWithMap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			err := clues.WithMap(test.initial, test.kv)
 			err = err.WithMap(test.with)
-			mustEquals(t, test.expect, clues.InErr(err).Map(), false)
-			mustEquals(t, test.expect, err.Values().Map(), false)
+			mustEquals(t, test.expect, clues.Values(err), false)
 		})
 	}
 }
@@ -373,10 +371,11 @@ func TestWithClues(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			tctx := clues.AddMap(ctx, test.kv)
+
 			err := clues.WithClues(test.initial, tctx)
 			err = err.WithMap(test.with)
-			mustEquals(t, test.expect, clues.InErr(err).Map(), false)
-			mustEquals(t, test.expect, err.Values().Map(), false)
+
+			mustEquals(t, test.expect, clues.Values(err), false)
 		})
 	}
 }
@@ -426,7 +425,7 @@ func TestValuePriority(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			mustEquals(t, test.expect, clues.InErr(test.err).Map(), false)
+			mustEquals(t, test.expect, clues.Values(test.err), false)
 		})
 	}
 }
@@ -680,8 +679,8 @@ func TestErrValues_stacks(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			vs := clues.InErr(test.err)
-			mustEquals(t, test.expect, vs.Map(), false)
+			vs := clues.Values(test.err)
+			mustEquals(t, test.expect, vs, false)
 		})
 	}
 }
@@ -689,16 +688,16 @@ func TestErrValues_stacks(t *testing.T) {
 func TestImmutableErrors(t *testing.T) {
 	err := clues.New("an error").With("k", "v")
 	check := msa{"k": "v"}
-	pre := clues.InErr(err)
-	mustEquals(t, check, pre.Map(), false)
+	pre := clues.Values(err)
+	mustEquals(t, check, pre, false)
 
 	err2 := err.With("k2", "v2")
-	if _, ok := pre.Map()["k2"]; ok {
+	if _, ok := pre["k2"]; ok {
 		t.Errorf("previous map should not have been mutated by addition")
 	}
 
-	post := clues.InErr(err2)
-	if post.Map()["k2"] != "v2" {
+	post := clues.Values(err2)
+	if post["k2"] != "v2" {
 		t.Errorf("new map should contain the added value")
 	}
 }
