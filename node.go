@@ -13,20 +13,18 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
-
-// ---------------------------------------------------------------------------
-// data nodes
-// ---------------------------------------------------------------------------
 
 type Adder interface {
 	Add(key string, n int64)
 }
+
+// ---------------------------------------------------------------------------
+// nodes
+// ---------------------------------------------------------------------------
 
 // dataNodes contain the data tracked by both clues in contexts and in errors.
 //
@@ -40,11 +38,9 @@ type Adder interface {
 // with the root having the lowest priority.  IE: if a child overwrites a key
 // declared by an ancestor, the child's entry takes priority.
 type dataNode struct {
-	parent *dataNode
-
-	// otel contains the client instance for the in memory otel runtime.  It is only
-	// present if the end user calls the clues initialization step.
-	otel *otelClient
+	id     int32
+	parent int32
+	depth  int
 
 	// span is the current otel Span.
 	// Spans are kept separately from the otelClient because we want the client to
@@ -52,10 +48,10 @@ type dataNode struct {
 	// get replaced at arbitrary points.
 	span trace.Span
 
-	// ids are optional and are used primarily as tracing markers.
+	// name is optional and is used primarily for tracing markers.
 	// if empty, the trace for that node will get skipped when building the
 	// full trace along the node's ancestry path in the tree.
-	id string
+	name string
 
 	// values are they arbitrary key:value pairs that appear in clues when callers
 	// use the Add(ctx, k, v) or err.With(k, v) adders.  Each key-value pair added
@@ -77,21 +73,49 @@ type dataNode struct {
 	agents map[string]*agent
 }
 
-// spawnDescendant generates a new dataNode that is a descendant of the current
-// node.  A descendant maintains a pointer to its parent, and carries any genetic
-// necessities (ie, copies of fields) that must be present for continued functionality.
-func (dn *dataNode) spawnDescendant() *dataNode {
-	agents := maps.Clone(dn.agents)
+// ---------------------------------------------------------------------------
+// ctx handling
+// ---------------------------------------------------------------------------
 
-	if agents == nil && dn.agents != nil {
-		agents = map[string]*agent{}
+type nodeCtxKey string
+
+const defaultNodeKey nodeCtxKey = "default_node_ctx_key"
+
+func ctxKey(namespace string) nodeCtxKey {
+	return nodeCtxKey(namespace)
+}
+
+// nodeIDFromCtx retrieves the node ID from the ctx.
+func nodeIDFromCtx(ctx context.Context) int32 {
+	dn := ctx.Value(defaultNodeKey)
+
+	if dn == nil {
+		return -1
 	}
 
-	return &dataNode{
-		parent: dn,
-		otel:   dn.otel,
-		span:   dn.span,
-		agents: agents,
+	return dn.(int32)
+}
+
+// setNodeIDInCtx adds the node id to the context and returns the updated context.
+func setNodeIDInCtx(ctx context.Context, id int32) context.Context {
+	return context.WithValue(ctx, defaultNodeKey, id)
+}
+
+type regNode struct {
+	ok  bool
+	id  int32
+	reg *registry
+}
+
+// nodeFromCtx retrieves a usable node refrerence and registry from the context.
+func nodeFromCtx(ctx context.Context) regNode {
+	id := nodeIDFromCtx(ctx)
+	reg := registryFromCtx(ctx)
+
+	return regNode{
+		ok:  id >= 0 && reg != nil,
+		id:  id,
+		reg: reg,
 	}
 }
 
@@ -101,35 +125,31 @@ func (dn *dataNode) spawnDescendant() *dataNode {
 
 // addValues adds all entries in the map to the dataNode's values.
 // automatically propagates values onto the current span.
-func (dn *dataNode) addValues(m map[string]any) *dataNode {
-	if m == nil {
-		m = map[string]any{}
+func (rn regNode) addValuesAndAttributes(
+	m map[string]any,
+) (dataNode, bool) {
+	if !rn.ok {
+		return dataNode{}, false
 	}
 
-	spawn := dn.spawnDescendant()
-	spawn.setValues(m)
-	spawn.addSpanAttributes(m)
+	dn := rn.reg.spawnDescendant(rn.id)
+	rn.setValues(dn.id, m)
+	rn.addSpanAttributes(dn.id, m)
 
-	return spawn
-}
-
-// extendValues adds all entries in the map to the dataNode's values.
-// automatically propagates values onto the current span.
-func (dn *dataNode) extendValues(m map[string]any) *dataNode {
-	if m == nil {
-		m = map[string]any{}
-	}
-
-	dn.setValues(m)
-
-	return dn
+	return dn, true
 }
 
 // setValues is a helper called by addValues.
-func (dn *dataNode) setValues(m map[string]any) {
-	if len(m) == 0 {
+// TODO: rename to addValues
+func (rn regNode) setValues(
+	nodeID int32,
+	m map[string]any,
+) {
+	if len(m) == 0 || !rn.ok {
 		return
 	}
+
+	dn := rn.reg.nodes[nodeID]
 
 	if len(dn.values) == 0 {
 		dn.values = map[string]any{}
@@ -138,130 +158,21 @@ func (dn *dataNode) setValues(m map[string]any) {
 	maps.Copy(dn.values, m)
 }
 
-// trace adds a new leaf containing a trace ID and no other values.
-func (dn *dataNode) trace(name string) *dataNode {
-	if name == "" {
-		name = makeNodeID()
-	}
-
-	spawn := dn.spawnDescendant()
-	spawn.id = name
-
-	return spawn
-}
-
-// ---------------------------------------------------------------------------
-// getters
-// ---------------------------------------------------------------------------
-
-// lineage runs the fn on every valueNode in the ancestry tree,
-// starting at the root and ending at the dataNode.
-func (dn *dataNode) lineage(fn func(id string, vs map[string]any)) {
-	if dn == nil {
+func (rn regNode) nameNode(
+	nodeID int32,
+	name string,
+) {
+	if !rn.ok {
 		return
 	}
 
-	if dn.parent != nil {
-		dn.parent.lineage(fn)
+	dn := rn.reg.nodes[nodeID]
+
+	if name == "" {
+		name = uuid.NewString()[:8]
 	}
 
-	fn(dn.id, dn.values)
-}
-
-// In returns the default dataNode from the context.
-// TODO: turn return an interface instead of a dataNode, have dataNodes
-// and errors both comply with that wrapper.
-func In(ctx context.Context) *dataNode {
-	return nodeFromCtx(ctx)
-}
-
-// Map flattens the tree of dataNode.values into a map.  Descendant nodes
-// take priority over ancestors in cases of collision.
-func (dn *dataNode) Map() map[string]any {
-	if dn == nil {
-		return map[string]any{}
-	}
-
-	var (
-		m       = map[string]any{}
-		nodeIDs = []string{}
-	)
-
-	dn.lineage(func(id string, vs map[string]any) {
-		if len(id) > 0 {
-			nodeIDs = append(nodeIDs, id)
-		}
-
-		for k, v := range vs {
-			m[k] = v
-		}
-	})
-
-	if len(nodeIDs) > 0 {
-		m["clues_trace"] = strings.Join(nodeIDs, ",")
-	}
-
-	if len(dn.agents) == 0 {
-		return m
-	}
-
-	agentVals := map[string]map[string]any{}
-
-	for _, agent := range dn.agents {
-		agentVals[agent.id] = agent.data.Map()
-	}
-
-	m["agents"] = agentVals
-
-	return m
-}
-
-// Slice flattens the tree of dataNode.values into a Slice where all even
-// indices contain the keys, and all odd indices contain values.  Descendant
-// nodes take priority over ancestors in cases of collision.
-func (dn *dataNode) Slice() []any {
-	m := dn.Map()
-	s := make([]any, 2*len(m))
-	i := 0
-
-	for k, v := range m {
-		s[i] = k
-		s[i+1] = v
-		i += 2
-	}
-
-	return s
-}
-
-// ---------------------------------------------------------------------------
-// initialization
-// ---------------------------------------------------------------------------
-
-// init sets up persistent clients in the clues ecosystem such as otel.
-// Initialization is NOT required.  It is an optional step that end
-// users can take if and when they want those clients running in their
-// clues instance.
-//
-// Multiple initializations will no-op.
-func (dn *dataNode) init(
-	ctx context.Context,
-	name string,
-	config OTELConfig,
-) error {
-	if dn == nil {
-		return nil
-	}
-
-	// if any of these already exist, initialization was previously called.
-	if dn.otel != nil {
-		return nil
-	}
-
-	cli, err := newOTELClient(ctx, name, config)
-
-	dn.otel = cli
-
-	return Stack(err).OrNil()
+	dn.name = name
 }
 
 // ---------------------------------------------------------------------------
@@ -302,20 +213,19 @@ func newComment(
 }
 
 // addComment creates a new dataNode with a comment but no other properties.
-func (dn *dataNode) addComment(
+func (rn regNode) addComment(
 	depth int,
 	msg string,
 	vs ...any,
-) *dataNode {
-	if len(msg) == 0 {
-		return dn
+) (dataNode, bool) {
+	if len(msg) == 0 || !rn.ok {
+		return dataNode{}, false
 	}
 
-	spawn := dn.spawnDescendant()
-	spawn.id = makeNodeID()
-	spawn.comment = newComment(depth+1, msg, vs...)
+	dn := rn.reg.spawnDescendant(rn.id)
+	dn.comment = newComment(depth+1, msg, vs...)
 
-	return spawn
+	return dn, true
 }
 
 // comments allows us to put a stringer on a slice of comments.
@@ -343,25 +253,22 @@ func (cs comments) String() string {
 // Comments retrieves the full ancestor comment chain.
 // The return value is ordered from the first added comment (closest to
 // the root) to the most recent one (closest to the leaf).
-func (dn *dataNode) Comments() comments {
-	if dn == nil {
+func (rn regNode) Comments() comments {
+	if !rn.ok {
 		return comments{}
 	}
 
 	result := comments{}
 
-	if !dn.comment.isEmpty() {
-		result = append(result, dn.comment)
+	fn := fnNoder{
+		fn: func(dn dataNode) {
+			if !dn.comment.isEmpty() {
+				result = append(result, dn.comment)
+			}
+		},
 	}
 
-	for dn.parent != nil {
-		dn = dn.parent
-		if !dn.comment.isEmpty() {
-			result = append(result, dn.comment)
-		}
-	}
-
-	slices.Reverse(result)
+	rn.reg.iterNodesRootToLeaf(rn.id, fn)
 
 	return result
 }
@@ -370,6 +277,7 @@ func (dn *dataNode) Comments() comments {
 // agents
 // ---------------------------------------------------------------------------
 
+// FIXME: need to move agents into a separate map in the registry
 type agent struct {
 	// the name of the agent
 	id string
@@ -382,48 +290,24 @@ type agent struct {
 }
 
 // addAgent adds a new named agent to the dataNode.
-func (dn *dataNode) addAgent(name string) *dataNode {
-	spawn := dn.spawnDescendant()
-
-	if len(spawn.agents) == 0 {
-		spawn.agents = map[string]*agent{}
+func (rn regNode) addAgent(name string) (dataNode, bool) {
+	if !rn.ok {
+		return dataNode{}, false
 	}
 
-	spawn.agents[name] = &agent{
+	dn := rn.reg.spawnDescendant(rn.id)
+
+	if len(dn.agents) == 0 {
+		dn.agents = map[string]*agent{}
+	}
+
+	dn.agents[name] = &agent{
 		id: name,
 		// no spawn here, this needs an isolated node
 		data: &dataNode{},
 	}
 
-	return spawn
-}
-
-// ---------------------------------------------------------------------------
-// ctx handling
-// ---------------------------------------------------------------------------
-
-type cluesCtxKey string
-
-const defaultCtxKey cluesCtxKey = "default_clues_ctx_key"
-
-func ctxKey(namespace string) cluesCtxKey {
-	return cluesCtxKey(namespace)
-}
-
-// nodeFromCtx pulls the datanode within a given namespace out of the context.
-func nodeFromCtx(ctx context.Context) *dataNode {
-	dn := ctx.Value(defaultCtxKey)
-
-	if dn == nil {
-		return &dataNode{}
-	}
-
-	return dn.(*dataNode)
-}
-
-// setNodeInCtx embeds the dataNode in the context, and returns the updated context.
-func setNodeInCtx(ctx context.Context, dn *dataNode) context.Context {
-	return context.WithValue(ctx, defaultCtxKey, dn)
+	return dn, true
 }
 
 // ------------------------------------------------------------
@@ -495,71 +379,60 @@ func (dn *dataNode) receiveTrace(
 // continue to be used for that purpose until replaced with another
 // span, which will appear in a separate context (and thus a separate,
 // dataNode).
-func (dn *dataNode) addSpan(
+func (rn regNode) addSpan(
 	ctx context.Context,
 	name string,
-) (context.Context, *dataNode) {
-	if dn == nil || dn.otel == nil {
-		return ctx, dn
+) (context.Context, dataNode, bool) {
+	if !rn.ok || rn.reg.otel == nil {
+		return ctx, dataNode{}, false
 	}
 
-	ctx, span := dn.otel.tracer.Start(ctx, name)
+	ctx, span := rn.reg.otel.tracer.Start(ctx, name)
 
-	spawn := dn.spawnDescendant()
-	spawn.span = span
+	dn := rn.reg.spawnDescendant(rn.id)
+	dn.span = span
 
-	return ctx, spawn
+	return ctx, dn, true
 }
 
 // closeSpan closes the otel span and removes it span from the data node.
 // If no span is present, no ops.
-func (dn *dataNode) closeSpan(ctx context.Context) *dataNode {
-	if dn == nil || dn.span == nil {
-		return dn
+func (rn regNode) closeSpan(
+	ctx context.Context,
+) {
+	if !rn.ok {
+		return
 	}
 
+	dn := rn.reg.nodes[rn.id]
 	dn.span.End()
 
-	spawn := dn.spawnDescendant()
-	spawn.span = nil
-
-	return spawn
+	return
 }
 
 // addSpanAttributes adds the values to the current span.  If the span
 // is nil (such as if otel wasn't initialized or no span has been generated),
 // this call no-ops.
-func (dn *dataNode) addSpanAttributes(
+func (rn regNode) addSpanAttributes(
+	nodeID int32,
 	values map[string]any,
 ) {
-	if dn == nil || dn.span == nil {
+	if !rn.ok {
 		return
 	}
 
+	dn := rn.reg.nodes[nodeID]
+
 	for k, v := range values {
+		// FIXME: otel typed attributes.
+		// just need a lib conversion.
 		dn.span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
 	}
-}
-
-// OTELLogger gets the otel logger instance from the otel client.
-// Returns nil if otel wasn't initialized.
-func (dn *dataNode) OTELLogger() otellog.Logger {
-	if dn == nil || dn.otel == nil {
-		return nil
-	}
-
-	return dn.otel.logger
 }
 
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
-
-// makeNodeID generates a random hash of 8 characters for use as a node ID.
-func makeNodeID() string {
-	uns := uuid.NewString()
-	return uns[:4] + uns[len(uns)-4:]
-}
 
 // getDirAndFile retrieves the file and line number of the caller.
 // Depth is the skip-caller count.  Clues funcs that call this one should
@@ -644,25 +517,19 @@ type nodeCore struct {
 // Node hierarchy, clients (such as otel), agents, and
 // hooks (such as labelCounter) are all sliced from the
 // result.
-func (dn *dataNode) Bytes() ([]byte, error) {
-	if dn == nil {
+func (rn regNode) Bytes() ([]byte, error) {
+	if !rn.ok {
 		return []byte{}, nil
 	}
 
 	var serviceName string
 
-	if dn.otel != nil {
-		serviceName = dn.otel.serviceName
+	if rn.reg.otel != nil {
+		serviceName = rn.reg.otel.serviceName
 	}
 
 	core := nodeCore{
 		OTELServiceName: serviceName,
-		Values:          map[string]string{},
-		Comments:        dn.Comments(),
-	}
-
-	for k, v := range dn.Map() {
-		core.Values[k] = stringify.Marshal(v, false)
 	}
 
 	return json.Marshal(core)
@@ -670,7 +537,9 @@ func (dn *dataNode) Bytes() ([]byte, error) {
 
 // FromBytes deserializes the bytes to a new dataNode.
 // No clients, agents, or hooks are initialized in this process.
-func FromBytes(bs []byte) (*dataNode, error) {
+func FromBytes(
+	bs []byte,
+) (*dataNode, error) {
 	core := nodeCore{}
 
 	err := json.Unmarshal(bs, &core)
@@ -697,11 +566,11 @@ func FromBytes(bs []byte) (*dataNode, error) {
 		node.values[k] = v
 	}
 
-	if len(core.OTELServiceName) > 0 {
-		node.otel = &otelClient{
-			serviceName: core.OTELServiceName,
-		}
-	}
+	// if len(core.OTELServiceName) > 0 {
+	// node.otel = &otelClient{
+	// 	serviceName: core.OTELServiceName,
+	// }
+	// }
 
 	return &node, nil
 }
