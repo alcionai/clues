@@ -28,17 +28,45 @@ type registry struct {
 }
 
 // newRegistry generates a new registry and spawns a root node for the clues tree.
-func newRegistry() (*registry, int32) {
+func newRegistry() (*registry, dataNode) {
 	reg := registry{
 		currID: &atomic.Int32{},
 		nodes:  map[int32]dataNode{},
 	}
 
 	// spawn the root node
-	reg.spawnDescendant(0)
+	root := reg.spawnDescendant(0)
 
-	// return the registry and root node id
-	return &reg, reg.currID.Load()
+	// return the registry and root node
+	return &reg, root
+}
+
+// ---------------------------------------------------------------------------
+// initialization
+// ---------------------------------------------------------------------------
+
+// initOTEL sets up a persistent otel client in the registry.
+// OTEL initialization is not required.
+// Multiple otel initializations will no-op.
+func (reg *registry) initOTEL(
+	ctx context.Context,
+	serviceName string,
+	config OTELConfig,
+) error {
+	if reg == nil {
+		return nil
+	}
+
+	// if any of these already exist, initialization was previously called.
+	if reg.otel != nil {
+		return nil
+	}
+
+	cli, err := newOTELClient(ctx, serviceName, config)
+
+	reg.otel = cli
+
+	return Stack(err).OrNil()
 }
 
 // spawnDescendant generates a new dataNode that is a descendant of the current
@@ -47,9 +75,6 @@ func newRegistry() (*registry, int32) {
 func (reg *registry) spawnDescendant(
 	parentID int32,
 ) dataNode {
-	if len(reg.nodes) < (int(parentID) + 1) {
-		parentID = 0
-	}
 
 	var (
 		id     = reg.currID.Add(1)
@@ -94,7 +119,7 @@ func (reg registry) iterNodesRootToLeaf(
 ) {
 	var (
 		curr  = reg.nodes[node]
-		nodes = make([]dataNode, 0, curr.depth+1)
+		nodes = make([]dataNode, curr.depth+1)
 	)
 
 	for i := curr.depth; i >= 0; i-- {
@@ -134,50 +159,26 @@ func regCtxKey(namespace string) registryCtxKey {
 }
 
 // registryFromCtx retrieves the registry from the context.
-func registryFromCtx(ctx context.Context) *registry {
+// If a registry is already initialized, the context is returned unchanged.
+// If no reistry exists, a new one is created and injected into the ctx.
+func registryFromCtx(ctx context.Context) (context.Context, *registry) {
 	reg := ctx.Value(defaultRegistryKey)
 
-	if reg == nil {
-		return nil
+	if reg != nil {
+		return ctx, reg.(*registry)
 	}
 
-	return reg.(*registry)
+	newReg, root := newRegistry()
+
+	ctx = setRegistryInCtx(ctx, newReg)
+	ctx = setNodeIDInCtx(ctx, root.id)
+
+	return ctx, newReg
 }
 
 // setRegistryInCtx adds the registry to the context and returns the updated context.
 func setRegistryInCtx(ctx context.Context, reg *registry) context.Context {
 	return context.WithValue(ctx, defaultRegistryKey, reg)
-}
-
-// ---------------------------------------------------------------------------
-// initialization
-// ---------------------------------------------------------------------------
-
-// init sets up persistent clients in the clues ecosystem such as otel.
-// Initialization is NOT required.  It is an optional step that end
-// users can take if and when they want those clients running in their
-// clues instance.
-//
-// Multiple initializations will no-op.
-func (reg *registry) init(
-	ctx context.Context,
-	name string,
-	config OTELConfig,
-) error {
-	if reg == nil {
-		return nil
-	}
-
-	// if any of these already exist, initialization was previously called.
-	if reg.otel != nil {
-		return nil
-	}
-
-	cli, err := newOTELClient(ctx, name, config)
-
-	reg.otel = cli
-
-	return Stack(err).OrNil()
 }
 
 // ---------------------------------------------------------------------------

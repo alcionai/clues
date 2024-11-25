@@ -109,15 +109,19 @@ type regNode struct {
 }
 
 // nodeFromCtx retrieves a usable node refrerence and registry from the context.
-func nodeFromCtx(ctx context.Context) regNode {
+// If a registry is already initialized, the context is returned unchanged.
+// If no reistry exists, a new one is created and injected into the ctx.
+func nodeFromCtx(ctx context.Context) (context.Context, regNode) {
+	ctx, reg := registryFromCtx(ctx)
 	id := nodeIDFromCtx(ctx)
-	reg := registryFromCtx(ctx)
 
-	return regNode{
+	rn := regNode{
 		ok:  id >= 0 && reg != nil,
 		id:  id,
 		reg: reg,
 	}
+
+	return ctx, rn
 }
 
 func (rn regNode) node() dataNode {
@@ -142,25 +146,25 @@ func (rn regNode) newNodeWithValuesAndAttributes(
 	}
 
 	dn := rn.reg.spawnDescendant(rn.id)
-	rn.addValues(dn.id, m)
-	rn.addSpanAttributes(dn.id, m)
+
+	rn.id = dn.id
+	rn.addValues(m)
+	rn.addSpanAttributes(m)
 
 	return dn, true
 }
 
 // addValues adds the values to the specified node.
-func (rn regNode) addValues(
-	nodeID int32,
-	m map[string]any,
-) {
+func (rn regNode) addValues(m map[string]any) {
 	if len(m) == 0 || !rn.ok {
 		return
 	}
 
-	dn := rn.reg.nodes[nodeID]
+	dn := rn.node()
 
 	if len(dn.values) == 0 {
 		dn.values = map[string]any{}
+		rn.reg.nodes[dn.id] = dn
 	}
 
 	maps.Copy(dn.values, m)
@@ -181,6 +185,8 @@ func (rn regNode) nameNode(
 	}
 
 	dn.name = name
+
+	rn.reg.nodes[dn.id] = dn
 }
 
 // ---------------------------------------------------------------------------
@@ -448,7 +454,10 @@ func (rn regNode) closeSpan() {
 	}
 
 	dn := rn.node()
-	dn.span.End()
+
+	if dn.span != nil {
+		dn.span.End()
+	}
 
 	return
 }
@@ -456,20 +465,23 @@ func (rn regNode) closeSpan() {
 // addSpanAttributes adds the values to the current span.  If the span
 // is nil (such as if otel wasn't initialized or no span has been generated),
 // this call no-ops.
-func (rn regNode) addSpanAttributes(
-	nodeID int32,
-	values map[string]any,
-) {
+func (rn regNode) addSpanAttributes(values map[string]any) {
 	if !rn.ok {
 		return
 	}
 
-	dn := rn.reg.nodes[nodeID]
+	dn := rn.node()
+
+	if dn.span == nil {
+		return
+	}
 
 	for k, v := range values {
-		// FIXME: otel typed attributes.
-		// just need a lib conversion.
-		dn.span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
+		// FIXME: otel typed attributes. just need a lib conversion.
+		v := stringify.Marshal(v, false)
+		attr := attribute.String(k, v)
+
+		dn.span.SetAttributes(attr)
 	}
 }
 

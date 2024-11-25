@@ -10,40 +10,35 @@ import (
 // persistent client initialization
 // ---------------------------------------------------------------------------
 
-// Initialize will spin up any persistent clients that are held by clues,
-// such as OTEL communication.  Clues will use these optimistically in the
-// background to provide additional telemetry hook-ins.
-//
-// Clues will operate as expected in the event of an error, or if initialization
-// is not called.  This is a purely optional step.
-func Initialize(
+// InitializeOTEL will initialize otel clients and providers in the registry.
+// OTEL initialization is not required.  Clues will function normally in case
+// of an erroneous implementation.
+func InitializeOTEL(
 	ctx context.Context,
 	serviceName string,
 	config OTELConfig,
 ) (context.Context, error) {
-	nc := nodeFromCtx(ctx)
+	ctx, nc := nodeFromCtx(ctx)
+	err := nc.reg.initOTEL(ctx, serviceName, config)
 
-	// haven't initialized the registry yet.
-	if !nc.ok {
-		nc.reg, nc.id = newRegistry()
-		nc.ok = true
-	}
-
-	err := nc.reg.init(ctx, serviceName, config)
-	if err != nil {
-		return ctx, err
-	}
-
-	return setNodeIDInCtx(ctx, nc.id), nil
+	return ctx, err
 }
 
-// Close will flush all buffered data waiting to be read.  If Initialize was not
-// called, this call is a no-op.  Should be called in a defer after initializing.
+// Close will flush all buffered data waiting to be read.  If no clients were
+// initialized, this call will no-op.
 func Close(ctx context.Context) error {
-	nc := nodeFromCtx(ctx)
+	vReg := ctx.Value(defaultRegistryKey)
+	if vReg == nil {
+		return nil
+	}
 
-	if nc.reg.otel != nil {
-		err := nc.reg.otel.close(ctx)
+	reg, ok := vReg.(*registry)
+	if !ok {
+		return nil
+	}
+
+	if reg.otel != nil {
+		err := reg.otel.close(ctx)
 		if err != nil {
 			return Wrap(err, "closing otel client")
 		}
@@ -58,7 +53,7 @@ func Close(ctx context.Context) error {
 
 // Add adds all key-value pairs to the clues.
 func Add(ctx context.Context, kvs ...any) context.Context {
-	nc := nodeFromCtx(ctx)
+	ctx, nc := nodeFromCtx(ctx)
 
 	dn, ok := nc.newNodeWithValuesAndAttributes(stringify.Normalize(kvs...))
 	if !ok {
@@ -73,7 +68,7 @@ func AddMap[K comparable, V any](
 	ctx context.Context,
 	m map[K]V,
 ) context.Context {
-	nc := nodeFromCtx(ctx)
+	ctx, nc := nodeFromCtx(ctx)
 
 	kvs := make([]any, 0, len(m)*2)
 	for k, v := range m {
@@ -103,8 +98,8 @@ func InjectTrace[C traceMapCarrierBase](
 	ctx context.Context,
 	mapCarrier C,
 ) C {
-	nodeFromCtx(ctx).
-		injectTrace(ctx, asTraceMapCarrier(mapCarrier))
+	ctx, nc := nodeFromCtx(ctx)
+	nc.injectTrace(ctx, asTraceMapCarrier(mapCarrier))
 
 	return mapCarrier
 }
@@ -116,8 +111,8 @@ func ReceiveTrace[C traceMapCarrierBase](
 	ctx context.Context,
 	mapCarrier C,
 ) context.Context {
-	return nodeFromCtx(ctx).
-		receiveTrace(ctx, asTraceMapCarrier(mapCarrier))
+	ctx, nc := nodeFromCtx(ctx)
+	return nc.receiveTrace(ctx, asTraceMapCarrier(mapCarrier))
 }
 
 // AddSpan stacks a clues node onto this context and uses the provided
@@ -131,17 +126,19 @@ func AddSpan(
 	name string,
 	kvs ...any,
 ) context.Context {
-	nc := nodeFromCtx(ctx)
+	ctx, nc := nodeFromCtx(ctx)
 
 	ctx, node, ok := nc.newNodeWithSpan(ctx, name)
 	if !ok {
 		return ctx
 	}
 
+	nc.id = node.id
+
 	m := stringify.Normalize(kvs...)
 
-	nc.addValues(node.id, m)
-	nc.addSpanAttributes(node.id, m)
+	nc.addValues(m)
+	nc.addSpanAttributes(m)
 
 	return setNodeIDInCtx(ctx, node.id)
 }
@@ -149,7 +146,8 @@ func AddSpan(
 // CloseSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
 func CloseSpan(ctx context.Context) context.Context {
-	nodeFromCtx(ctx).closeSpan()
+	ctx, nc := nodeFromCtx(ctx)
+	nc.closeSpan()
 	return ctx
 }
 
@@ -183,7 +181,7 @@ func AddComment(
 	msg string,
 	vs ...any,
 ) context.Context {
-	nc := nodeFromCtx(ctx)
+	ctx, nc := nodeFromCtx(ctx)
 
 	dn, ok := nc.addComment(1, msg, vs...)
 	if !ok {
@@ -214,7 +212,7 @@ func AddAgent(
 	ctx context.Context,
 	name string,
 ) context.Context {
-	nc := nodeFromCtx(ctx)
+	ctx, nc := nodeFromCtx(ctx)
 
 	dn, ok := nc.addAgent(name)
 	if !ok {
@@ -232,7 +230,7 @@ func Relay(
 	agent string,
 	vs ...any,
 ) {
-	nc := nodeFromCtx(ctx)
+	ctx, nc := nodeFromCtx(ctx)
 	ag, ok := nc.node().agents[agent]
 
 	if !ok {
@@ -248,7 +246,8 @@ func Relay(
 // ---------------------------------------------------------------------------
 
 func In(ctx context.Context) regNode {
-	return nodeFromCtx(ctx)
+	_, nc := nodeFromCtx(ctx)
+	return nc
 }
 
 // Add adds all key-value pairs to the clues.

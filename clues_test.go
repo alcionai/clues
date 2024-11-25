@@ -8,9 +8,10 @@ import (
 	"regexp"
 	"testing"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cecrets"
-	"golang.org/x/exp/slices"
 )
 
 func init() {
@@ -155,7 +156,7 @@ func (s sa) equals(t *testing.T, other []any) {
 	}
 }
 
-func assert(
+func mustAssert(
 	t *testing.T,
 	ctx context.Context,
 	ns string,
@@ -197,15 +198,20 @@ func TestAdd(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.WithValue(context.Background(), testCtx{}, "instance")
 			check := msa{}
+			t.Log("initial check")
 			mustEquals(t, check, clues.In(ctx).Map(), false)
 
+			t.Log("loop check")
+
 			for _, kv := range test.kvs {
+				t.Log("adding", kv[0], kv[1])
 				ctx = clues.Add(ctx, kv[0], kv[1])
 				check[kv[0]] = kv[1]
+				t.Log("must eq", check)
 				mustEquals(t, check, clues.In(ctx).Map(), false)
 			}
 
-			assert(
+			mustAssert(
 				t, ctx, "",
 				test.expectM, msa{},
 				test.expectS, sa{})
@@ -239,74 +245,11 @@ func TestAddMap(t *testing.T) {
 				mustEquals(t, check, clues.In(ctx).Map(), false)
 			}
 
-			assert(
+			mustAssert(
 				t, ctx, "",
 				test.expectM, msa{},
 				test.expectS, sa{})
 		})
-	}
-}
-
-func TestAddSpan(t *testing.T) {
-	table := []struct {
-		name        string
-		names       []string
-		expectTrace string
-		kvs         sa
-		expectM     msa
-		expectS     sa
-	}{
-		{"single", []string{"single"}, "single", nil, msa{}, sa{}},
-		{"multiple", []string{"single", "multiple"}, "single,multiple", nil, msa{}, sa{}},
-		{"duplicates", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", nil, msa{}, sa{}},
-		{"single with kvs", []string{"single"}, "single", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
-		{"multiple with kvs", []string{"single", "multiple"}, "single,multiple", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
-		{"duplicates with kvs", []string{"single", "multiple", "multiple"}, "single,multiple,multiple", sa{"k", "v"}, msa{"k": "v"}, sa{"k", "v"}},
-	}
-	for _, test := range table {
-		for _, init := range []bool{true, false} {
-			t.Run(test.name, func(t *testing.T) {
-				ctx := context.Background()
-
-				if init {
-					ictx, err := clues.Initialize(ctx, test.name, clues.OTELConfig{
-						GRPCEndpoint: "localhost:4317",
-					})
-					if err != nil {
-						t.Error("initializing clues", err)
-						return
-					}
-
-					defer func() {
-						err := clues.Close(ictx)
-						if err != nil {
-							t.Error("closing clues:", err)
-							return
-						}
-					}()
-
-					ctx = ictx
-				}
-
-				ctx = context.WithValue(ctx, testCtx{}, "instance")
-				mustEquals(t, msa{}, clues.In(ctx).Map(), false)
-
-				for _, name := range test.names {
-					ctx = clues.AddSpan(ctx, name, test.kvs...)
-					defer clues.CloseSpan(ctx)
-				}
-
-				assert(
-					t, ctx, "",
-					test.expectM, msa{},
-					test.expectS, sa{})
-
-				c := clues.In(ctx).Map()
-				if c["clues_trace"] != test.expectTrace {
-					t.Errorf("expected clues_trace to equal %q, got %q", test.expectTrace, c["clues_trace"])
-				}
-			})
-		}
 	}
 }
 

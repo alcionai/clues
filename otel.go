@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/alcionai/clues/internal/stringify"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -17,12 +16,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/alcionai/clues/internal/stringify"
 )
 
 type otelClient struct {
 	serviceName string
 
-	grpcConn      *grpc.ClientConn
+	grpcConn      grpc.ClientConnInterface
 	traceProvider *sdkTrace.TracerProvider
 	tracer        trace.Tracer
 	logger        otellog.Logger
@@ -46,9 +47,11 @@ func (cli *otelClient) close(ctx context.Context) error {
 	}
 
 	if cli.grpcConn != nil {
-		err := cli.grpcConn.Close()
-		if err != nil {
-			return WrapWC(ctx, err, "closing grpc connection")
+		if conn, ok := cli.grpcConn.(*grpc.ClientConn); ok {
+			err := conn.Close()
+			if err != nil {
+				return WrapWC(ctx, err, "closing grpc connection")
+			}
 		}
 	}
 
@@ -83,7 +86,7 @@ func newOTELClient(
 		return nil, WrapWC(ctx, err, "creating otel resource")
 	}
 
-	// -- Exporter
+	// -- GRPC
 
 	conn, err := grpc.NewClient(
 		config.GRPCEndpoint,
