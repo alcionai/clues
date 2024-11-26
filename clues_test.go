@@ -269,9 +269,9 @@ func TestAddSpan(t *testing.T) {
 				ctx := context.Background()
 
 				if init {
-					ictx, err := clues.Initialize(ctx, test.name, clues.OTELConfig{
-						GRPCEndpoint: "localhost:4317",
-					})
+					ocfg := clues.OTELConfig{GRPCEndpoint: "localhost:4317"}
+
+					ictx, err := clues.InitializeOTEL(ctx, test.name, ocfg)
 					if err != nil {
 						t.Error("initializing clues", err)
 						return
@@ -326,7 +326,7 @@ func TestImmutableCtx(t *testing.T) {
 	}
 
 	pre = clues.In(testCtx)
-	if _, ok := preMap["k"]; ok {
+	if _, ok := pre.Map()["k"]; ok {
 		t.Errorf("previous map within ctx should not have been mutated by addition")
 	}
 

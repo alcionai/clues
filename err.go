@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 	"golang.org/x/exp/maps"
 )
@@ -41,7 +42,7 @@ type Err struct {
 
 	// data is the record of contextual data produced,
 	// presumably, at the time the error is created or wrapped.
-	data *dataNode
+	data *node.Node
 }
 
 // ---------------------------------------------------------------------------
@@ -56,15 +57,15 @@ func newErr(
 	m map[string]any,
 	traceDepth int,
 ) *Err {
-	_, _, file := getDirAndFile(traceDepth + 1)
+	_, _, file := node.GetDirAndFile(traceDepth + 1)
 
 	return &Err{
 		e:      e,
 		file:   file,
-		caller: getCaller(traceDepth + 1),
+		caller: node.GetCaller(traceDepth + 1),
 		msg:    msg,
 		// no ID needed for err data nodes
-		data: &dataNode{values: m},
+		data: &node.Node{Values: m},
 	}
 }
 
@@ -97,15 +98,15 @@ func toStack(
 	stack []error,
 	traceDepth int,
 ) *Err {
-	_, _, file := getDirAndFile(traceDepth + 1)
+	_, _, file := node.GetDirAndFile(traceDepth + 1)
 
 	return &Err{
 		e:      e,
 		file:   file,
-		caller: getCaller(traceDepth + 1),
+		caller: node.GetCaller(traceDepth + 1),
 		stack:  stack,
-		// no ID needed for err dataNodes
-		data: &dataNode{},
+		// no ID needed for err nodes
+		data: &node.Node{},
 	}
 }
 
@@ -211,19 +212,19 @@ func stackAncestorsOntoSelf(err error) []error {
 	return errs
 }
 
-// InErr returns the map of contextual values in the error.
+// InErr returns the structured data in the error.
 // Each error in the stack is unwrapped and all maps are
 // unioned. In case of collision, lower level error data
 // take least priority.
 // TODO: remove this in favor of a type-independent In()
-// that returns an interface which both dataNodes and Err
+// that returns an interface which both nodes and Err
 // comply with.
-func InErr(err error) *dataNode {
+func InErr(err error) *node.Node {
 	if isNilErrIface(err) {
-		return &dataNode{}
+		return &node.Node{}
 	}
 
-	return &dataNode{values: inErr(err)}
+	return &node.Node{Values: inErr(err)}
 }
 
 func inErr(err error) map[string]any {
@@ -246,12 +247,12 @@ func inErr(err error) map[string]any {
 // the error.  Each error in the stack is unwrapped and all
 // maps are unioned. In case of collision, lower level error
 // data take least priority.
-func (err *Err) Values() *dataNode {
+func (err *Err) Values() *node.Node {
 	if isNilErrIface(err) {
-		return &dataNode{}
+		return &node.Node{}
 	}
 
-	return &dataNode{values: err.values()}
+	return &node.Node{Values: err.values()}
 }
 
 func (err *Err) values() map[string]any {
@@ -359,18 +360,18 @@ func Labels(err error) map[string]struct{} {
 // ------------------------------------------------------------
 
 // Comments retrieves all comments in the error.
-func (err *Err) Comments() comments {
+func (err *Err) Comments() node.CommentHistory {
 	return Comments(err)
 }
 
 // Comments retrieves all comments in the error.
-func Comments(err error) comments {
+func Comments(err error) node.CommentHistory {
 	if isNilErrIface(err) {
-		return comments{}
+		return node.CommentHistory{}
 	}
 
 	ancs := ancestors(err)
-	result := comments{}
+	result := node.CommentHistory{}
 
 	for _, ancestor := range ancs {
 		ce, ok := ancestor.(*Err)
@@ -890,7 +891,7 @@ func (err *Err) With(kvs ...any) *Err {
 	}
 
 	if len(kvs) > 0 {
-		err.data = err.data.addValues(stringify.Normalize(kvs...))
+		err.data = err.data.AddValues(stringify.Normalize(kvs...))
 	}
 
 	return err
@@ -911,7 +912,7 @@ func (err *Err) WithMap(m map[string]any) *Err {
 	}
 
 	if len(m) > 0 {
-		err.data = err.data.addValues(m)
+		err.data = err.data.AddValues(m)
 	}
 
 	return err
@@ -951,8 +952,8 @@ func (err *Err) SkipCaller(depth int) *Err {
 		depth = 0
 	}
 
-	_, _, err.file = getDirAndFile(depth + 1)
-	err.caller = getCaller(depth + 1)
+	_, _, err.file = node.GetDirAndFile(depth + 1)
+	err.caller = node.GetCaller(depth + 1)
 
 	return err
 }
@@ -1030,8 +1031,8 @@ func (err *Err) Comment(msg string, vs ...any) *Err {
 
 	return &Err{
 		e: err,
-		// have to do a new dataNode here, or else comments will duplicate
-		data: &dataNode{comment: newComment(1, msg, vs...)},
+		// have to do a new node here, or else comments will duplicate
+		data: &node.Node{Comment: node.NewComment(1, msg, vs...)},
 	}
 }
 
@@ -1056,8 +1057,8 @@ func Comment(err error, msg string, vs ...any) *Err {
 
 	return &Err{
 		e: err,
-		// have to do a new dataNode here, or else comments will duplicate
-		data: &dataNode{comment: newComment(1, msg, vs...)},
+		// have to do a new node here, or else comments will duplicate
+		data: &node.Node{Comment: node.NewComment(1, msg, vs...)},
 	}
 }
 

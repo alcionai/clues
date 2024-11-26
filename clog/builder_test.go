@@ -126,8 +126,8 @@ func runErrorLogs(
 
 func TestGetValue(t *testing.T) {
 	var (
-		p1 int    = 1
-		ps string = "ptr"
+		p1 = 1
+		ps = "ptr"
 		pn any
 	)
 

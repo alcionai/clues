@@ -1132,63 +1132,6 @@ func TestOrNil(t *testing.T) {
 	}
 }
 
-type labelCounter map[string]int64
-
-func (tla labelCounter) Add(l string, i int64) {
-	tla[l] = tla[l] + i
-}
-
-var labelTable = []struct {
-	name   string
-	labels []string
-	expect map[string]int64
-}{
-	{
-		name:   "no labels",
-		labels: []string{},
-		expect: map[string]int64{},
-	},
-	{
-		name:   "single label",
-		labels: []string{"un"},
-		expect: map[string]int64{
-			"un": 1,
-		},
-	},
-	{
-		name:   "multiple labels",
-		labels: []string{"un", "deux"},
-		expect: map[string]int64{
-			"un":   1,
-			"deux": 1,
-		},
-	},
-	{
-		name:   "duplicated label",
-		labels: []string{"un", "un"},
-		expect: map[string]int64{
-			"un": 1,
-		},
-	},
-	{
-		name:   "multiple duplicated labels",
-		labels: []string{"un", "un", "deux", "deux"},
-		expect: map[string]int64{
-			"un":   1,
-			"deux": 1,
-		},
-	},
-	{
-		name:   "empty string labels",
-		labels: []string{"", "", "un", "deux"},
-		expect: map[string]int64{
-			"":     1,
-			"un":   1,
-			"deux": 1,
-		},
-	},
-}
-
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
