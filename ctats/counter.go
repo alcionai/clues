@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
+	"golang.org/x/exp/maps"
 
 	"github.com/alcionai/clues/internal/node"
 )
@@ -19,8 +20,11 @@ func counterFromCtx(
 ) metric.Float64UpDownCounter {
 	b := fromCtx(ctx)
 	if b == nil {
+		fmt.Println("NO BUS IN CONTEXT")
 		return nil
 	}
+
+	fmt.Printf("LOOKING FOR %s IN %v\n", id, maps.Keys(b.counters))
 
 	return b.counters[formatID(id)]
 }
@@ -36,12 +40,14 @@ func getOrCreateCounter(
 
 	ctr := counterFromCtx(ctx, id)
 	if ctr != nil {
+		fmt.Println("FOUND COUNTER IN CTX")
 		return ctr, nil
 	}
 
 	// make a new one
 	nc := node.FromCtx(ctx)
 	if nc.OTEL == nil {
+		fmt.Println("%%% MAKING A NEW COUNTER %%%")
 		return nil, errors.New("no node in ctx")
 	}
 
@@ -136,6 +142,8 @@ func (c counter[number]) Inc(ctx context.Context) {
 		fmt.Printf("err getting counter: %+v\n", err)
 		return
 	}
+
+	fmt.Println("+++INC TO", ctr)
 
 	ctr.Add(ctx, 1.0)
 }

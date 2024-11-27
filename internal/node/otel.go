@@ -430,10 +430,15 @@ func (dn *Node) AddSpan(
 	name string,
 ) (context.Context, *Node) {
 	if dn == nil || dn.OTEL == nil {
+		fmt.Println("-sp- AW FUCK IT NIL", dn)
 		return ctx, dn
 	}
 
+	fmt.Println("-sp- GREAT WE FOUND AN OTEL")
+
 	ctx, span := dn.OTEL.Tracer.Start(ctx, name)
+
+	fmt.Println("-sp- STARTED A SPAN")
 
 	spawn := dn.SpawnDescendant()
 	spawn.Span = span

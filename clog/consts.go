@@ -1,31 +1,50 @@
 package clog
 
-// Default / Example labels
-const (
+type labels struct {
 	// good for categorizing debugging-level api call info.
-	APICall = "clabel_api_call"
+	APIResponse,
 	// when you want your log to cause a lot of noise.
-	AlarmOnThis = "clabel_alarm_on_this"
-	// for info about end-of-run resource cleanup.
-	Cleanup = "clabel_cleanup"
+	AlarmWhenYouSeeThis,
+	// for things that happen while releasing resources.
+	Cleanup,
 	// for showcasing the runtime configuration of your app
-	Configuration = "clabel_configuration"
+	ConfigurationOverview,
 	// everything that you want to know about the process
 	// at the time of its conclusion.
-	EndOfRunResults = "clabel_end_of_run_results"
-	// good for marking the the error logs that you need to review
-	// when debugging "what exactly failed in this run?"
-	FailureOrigin = "clabel_failure_origin"
-	// when you want debug logging to include info about every item
-	// that gets handled through the process.
-	IndividualItemDetails = "clabel_individual_item_details"
+	EndOfRun,
+	// maybe you have more error logs than you have failure causes.
+	// That's okay, it's what searching by labes is here for.
+	Failures,
+	// when you want debug logging to include info about every
+	// little thing  that gets handled through the process.  No,
+	// honestly, we don't expect you to use this label.  It's just
+	// an example for fun.
+	EveryLittleThing,
 	// when debugging the progress of a process and you want to
 	// include logs that track the completion of long running
 	// processes.
-	ProgressTicker = "clabel_progress_ticker"
+	ProgressTracker,
 	// everything that you want to know about the state of the
 	// application when you kick off a new process.
-	StartOfRun = "clabel_start_of_run"
+	StartOfRun,
 	// who needs a logging level when you can use a label instead?
-	Warning = "clabel_warning"
-)
+	Warning string
+}
+
+// Labels provides a example set of labels for use with
+// clog.Ctx(ctx).Label(). This list is not canonical, or even
+// important to clog.  It's just here to help give you some ideas.
+func Labels() labels {
+	return labels{
+		APIResponse:           "api_response",
+		AlarmWhenYouSeeThis:   "alarm_when_you_see_this",
+		Cleanup:               "cleanup",
+		ConfigurationOverview: "configuration_overview",
+		EndOfRun:              "end_of_run",
+		Failures:              "failures",
+		EveryLittleThing:      "every_little_thing",
+		ProgressTracker:       "progress_tracker",
+		StartOfRun:            "start_of_run",
+		Warning:               "warning",
+	}
+}

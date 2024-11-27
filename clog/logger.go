@@ -3,6 +3,7 @@ package clog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -208,12 +209,11 @@ func fromCtx(ctx context.Context) (*clogger, bool) {
 		return singleton(ctx, Settings{}.EnsureDefaults()), false
 	}
 
-	found := true
-
 	l := ctx.Value(ctxKey)
+	found := l != nil
+
 	// if l is still nil, we need to grab the global singleton or construct a singleton.
 	if l == nil {
-		found = false
 		l = singleton(ctx, Settings{}.EnsureDefaults())
 	}
 
@@ -282,6 +282,8 @@ func Inherit(
 	if !foundFrom || (foundTo && !clobber) {
 		return to
 	}
+
+	fmt.Println(">>> REPLACING LOGGER")
 
 	return plantLoggerInCtx(to, fromClogger)
 }

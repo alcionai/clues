@@ -2,6 +2,7 @@ package ctats
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -21,16 +22,18 @@ const defaultCtxKey metricsBusKey = "default_metrics_bus_key"
 
 func fromCtx(ctx context.Context) *bus {
 	if ctx == nil {
+		fmt.Println("NIL CTATS CTX")
 		return nil
 	}
 
-	dn := ctx.Value(defaultCtxKey)
+	cv := ctx.Value(defaultCtxKey)
 
-	if dn == nil {
+	if cv == nil {
+		fmt.Println("CTATS HAS NIL CONTEXT VALUE")
 		return nil
 	}
 
-	return dn.(*bus)
+	return cv.(*bus)
 }
 
 func embedInCtx(ctx context.Context, b *bus) context.Context {
@@ -80,6 +83,8 @@ func Inherit(
 	fromBus := fromCtx(from)
 	toBus := fromCtx(to)
 
+	fmt.Println("ctats ft", fromBus, toBus)
+
 	if to == nil {
 		to = context.Background()
 	}
@@ -88,6 +93,8 @@ func Inherit(
 	if fromBus == nil || (toBus != nil && !clobber) {
 		return to
 	}
+
+	fmt.Println(">>> REPLACING CTATS")
 
 	return embedInCtx(to, fromBus)
 }

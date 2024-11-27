@@ -69,6 +69,10 @@ func Inherit(
 		// Likewise, the 'from' ctx is not expected to contain a span, so we only want to
 		// maintain the span information that's currently live.
 		toNode.Span = trace.SpanFromContext(to)
+
+		if toNode.Span != nil {
+			fmt.Println("AND FOUND A SPAN, TOO!")
+		}
 	}
 
 	// if we have no fromNode OTEL, or are not clobbering, return the toNode.
@@ -171,6 +175,8 @@ func AddSpan(
 		ctx, spanned = nc.AddSpan(ctx, name)
 		spanned = spanned.AppendToTree(name)
 	}
+
+	fmt.Println("GET SPANNED, YO")
 
 	return node.EmbedInCtx(ctx, spanned)
 }

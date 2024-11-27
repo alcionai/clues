@@ -2,6 +2,7 @@ package chttp
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/alcionai/clues"
@@ -26,8 +27,8 @@ func NewInheritorHTTPMiddleware(
 		rctx = clog.Inherit(ctx, rctx, true)
 		rctx = ctats.Inherit(ctx, rctx, true)
 
-		r = r.WithContext(rctx)
+		fmt.Println("---FINISHED INHERITING")
 
-		handler.ServeHTTP(w, r)
+		handler.ServeHTTP(w, r.WithContext(rctx))
 	})
 }

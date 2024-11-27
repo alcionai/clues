@@ -94,7 +94,7 @@ func (b builder) log(l logLevel, msg string) {
 
 	// plus any values added using builder.With()
 	for k, v := range b.with {
-		zsl.With(k, v)
+		zsl = zsl.With(k, v)
 
 		attr := node.NewAttribute(stringify.Fmt(k)[0], v)
 		record.AddAttributes(attr.KV())
