@@ -20,6 +20,10 @@ type metricsBusKey string
 const defaultCtxKey metricsBusKey = "default_metrics_bus_key"
 
 func fromCtx(ctx context.Context) *bus {
+	if ctx == nil {
+		return nil
+	}
+
 	dn := ctx.Value(defaultCtxKey)
 
 	if dn == nil {
@@ -62,6 +66,35 @@ func Initialize(ctx context.Context) (context.Context, error) {
 
 	return embedInCtx(ctx, b), nil
 }
+
+// Inherit propagates the ctats client from one context to another.  This is particularly
+// useful for taking an initialized context from a main() func and ensuring the ctats
+// is available for request-bound conetxts, such as in a http server pattern.
+//
+// If the 'to' context already contains an initialized ctats, no change is made.
+// Callers can force a 'from' ctats to override a 'to' ctats by setting clobber=true.
+func Inherit(
+	from, to context.Context,
+	clobber bool,
+) context.Context {
+	fromBus := fromCtx(from)
+	toBus := fromCtx(to)
+
+	if to == nil {
+		to = context.Background()
+	}
+
+	// return the 'to' context unmodified if we won't update the context.
+	if fromBus == nil || (toBus != nil && !clobber) {
+		return to
+	}
+
+	return embedInCtx(to, fromBus)
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
 
 // number covers the values that callers are allowed to provide
 // to the metrics factories.  No matter the provided value, a

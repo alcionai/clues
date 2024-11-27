@@ -78,7 +78,7 @@ func TestBytes(t *testing.T) {
 			node: func() *Node {
 				return &Node{
 					OTEL: &OTELClient{
-						serviceName: "serviceName",
+						ServiceName: "serviceName",
 					},
 					Values: map[string]any{
 						"fisher":  "flannigan",
@@ -96,7 +96,7 @@ func TestBytes(t *testing.T) {
 				`"comments":[{"Caller":"i am caller","File":"i am file","Message":"i am message"}]}`),
 			expectDeserialized: &Node{
 				OTEL: &OTELClient{
-					serviceName: "serviceName",
+					ServiceName: "serviceName",
 				},
 				Values: map[string]any{
 					"fisher":  "flannigan",

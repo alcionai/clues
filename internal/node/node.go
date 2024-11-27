@@ -248,6 +248,10 @@ func CtxKey(namespace string) CluesCtxKey {
 
 // FromCtx pulls the node within a given namespace out of the context.
 func FromCtx(ctx context.Context) *Node {
+	if ctx == nil {
+		return &Node{}
+	}
+
 	dn := ctx.Value(defaultCtxKey)
 
 	if dn == nil {
@@ -300,7 +304,7 @@ func (dn *Node) Bytes() ([]byte, error) {
 	var serviceName string
 
 	if dn.OTEL != nil {
-		serviceName = dn.OTEL.serviceName
+		serviceName = dn.OTEL.ServiceName
 	}
 
 	core := nodeCore{
@@ -347,7 +351,7 @@ func FromBytes(bs []byte) (*Node, error) {
 
 	if len(core.OTELServiceName) > 0 {
 		node.OTEL = &OTELClient{
-			serviceName: core.OTELServiceName,
+			ServiceName: core.OTELServiceName,
 		}
 	}
 

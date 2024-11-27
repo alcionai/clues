@@ -203,14 +203,21 @@ func plantLoggerInCtx(
 
 // fromCtx pulls the clogger out of the context.  If no logger exists in the
 // ctx, it returns the global singleton.
-func fromCtx(ctx context.Context) *clogger {
+func fromCtx(ctx context.Context) (*clogger, bool) {
+	if ctx == nil {
+		return singleton(ctx, Settings{}.EnsureDefaults()), false
+	}
+
+	found := true
+
 	l := ctx.Value(ctxKey)
 	// if l is still nil, we need to grab the global singleton or construct a singleton.
 	if l == nil {
+		found = false
 		l = singleton(ctx, Settings{}.EnsureDefaults())
 	}
 
-	return l.(*clogger)
+	return l.(*clogger), found
 }
 
 // Ctx retrieves the logger embedded in the context.
@@ -252,4 +259,29 @@ func Singleton() *builder {
 // had initialized the singleton.
 func Flush(ctx context.Context) {
 	_ = Ctx(ctx).zsl.Sync()
+}
+
+// Inherit propagates the clog client from one context to another.  This is particularly
+// useful for taking an initialized context from a main() func and ensuring the logger
+// is available for request-bound conetxts, such as in a http server pattern.
+//
+// If the 'to' context already contains an initialized logger, no change is made.
+// Callers can force a 'from' logger to override a 'to' logger by setting clobber=true.
+func Inherit(
+	from, to context.Context,
+	clobber bool,
+) context.Context {
+	fromClogger, foundFrom := fromCtx(from)
+	_, foundTo := fromCtx(to)
+
+	if to == nil {
+		to = context.Background()
+	}
+
+	// return the 'to' context unmodified if we won't update the context.
+	if !foundFrom || (foundTo && !clobber) {
+		return to
+	}
+
+	return plantLoggerInCtx(to, fromClogger)
 }

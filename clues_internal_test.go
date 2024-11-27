@@ -1,4 +1,4 @@
-package ctats
+package clues
 
 import (
 	"context"
@@ -6,77 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/metric"
+
+	"github.com/alcionai/clues/internal/node"
 )
 
-func TestFormatID(t *testing.T) {
-	table := []struct {
-		name   string
-		in     string
-		expect string
-	}{
-		{
-			name:   "empty",
-			in:     "",
-			expect: "",
-		},
-		{
-			name:   "simple",
-			in:     "foobarbaz",
-			expect: "foobarbaz",
-		},
-		{
-			name:   "already correct",
-			in:     "foo.bar.baz",
-			expect: "foo.bar.baz",
-		},
-		{
-			name:   "only underscore delimited",
-			in:     "foo_bar_baz",
-			expect: "foo_bar_baz",
-		},
-		{
-			name:   "spaces to underscores",
-			in:     "foo bar baz",
-			expect: "foo_bar_baz",
-		},
-		{
-			name:   "camel case",
-			in:     "FooBarBaz",
-			expect: "foo.bar.baz",
-		},
-		{
-			name:   "all caps",
-			in:     "FOOBARBAZ",
-			expect: "foobarbaz",
-		},
-		{
-			name:   "kebab case",
-			in:     "foo-bar-baz",
-			expect: "foo.bar.baz",
-		},
-		{
-			name:   "mixed",
-			in:     "fooBar baz-fnords",
-			expect: "foo.bar_baz.fnords",
-		},
-	}
-	for _, test := range table {
-		t.Run(test.name, func(t *testing.T) {
-			result := formatID(test.in)
-			assert.Equal(t, test.expect, result, "input: %s", test.in)
-		})
-	}
-}
-
 func TestInherit(t *testing.T) {
-	stubBus1 := &bus{
-		counters:   map[string]metric.Float64UpDownCounter{},
-		gauges:     map[string]metric.Float64Gauge{},
-		histograms: map[string]metric.Float64Histogram{},
-	}
-	stubBus2 := &bus{}
-
 	table := []struct {
 		name    string
 		from    func() context.Context
@@ -89,8 +23,8 @@ func TestInherit(t *testing.T) {
 			from: func() context.Context { return nil },
 			to:   func() context.Context { return nil },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.Nil(t, b)
+				n := node.FromCtx(ctx)
+				require.Nil(t, n.OTEL)
 			},
 		},
 		{
@@ -98,8 +32,8 @@ func TestInherit(t *testing.T) {
 			from: func() context.Context { return context.Background() },
 			to:   func() context.Context { return nil },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.Nil(t, b)
+				n := node.FromCtx(ctx)
+				require.Nil(t, n.OTEL)
 			},
 		},
 		{
@@ -107,8 +41,8 @@ func TestInherit(t *testing.T) {
 			from: func() context.Context { return nil },
 			to:   func() context.Context { return context.Background() },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.Nil(t, b)
+				n := node.FromCtx(ctx)
+				require.Nil(t, n.OTEL)
 			},
 		},
 		{
@@ -116,85 +50,125 @@ func TestInherit(t *testing.T) {
 			from: func() context.Context { return context.Background() },
 			to:   func() context.Context { return context.Background() },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.Nil(t, b)
+				n := node.FromCtx(ctx)
+				require.Nil(t, n.OTEL)
 			},
 		},
 		{
 			name: "from: populated, to: nil",
 			from: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "test",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
 			},
 			to: func() context.Context { return nil },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "test", n.OTEL.ServiceName)
 			},
 		},
 		{
 			name: "from: populated, to: background",
 			from: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "test",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
 			},
 			to: func() context.Context { return context.Background() },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "test", n.OTEL.ServiceName)
 			},
 		},
 		{
 			name: "from: nil, to: populated",
 			from: func() context.Context { return nil },
 			to: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "to",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
 			},
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "to", n.OTEL.ServiceName)
 			},
 		},
 		{
 			name: "from: background, to: populated",
 			from: func() context.Context { return context.Background() },
 			to: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "to",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
 			},
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "to", n.OTEL.ServiceName)
 			},
 		},
 		{
 			name: "from: populated, to: populated",
 			from: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "from",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
 			},
 			to: func() context.Context {
-				return embedInCtx(context.Background(), stubBus2)
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "to",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
 			},
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus2, b)
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "to", n.OTEL.ServiceName)
 			},
 		},
 		{
 			name: "from: populated, to: populated, clobbered",
 			from: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "from",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
 			},
 			to: func() context.Context {
-				return embedInCtx(context.Background(), stubBus2)
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "to",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
 			},
 			clobber: true,
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "from", n.OTEL.ServiceName)
 			},
 		},
 	}
