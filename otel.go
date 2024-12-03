@@ -1,8 +1,12 @@
 package clues
 
-import "github.com/alcionai/clues/internal/node"
+import (
+	"errors"
 
-var ErrMissingOtelGRPCEndpoint = New("missing otel grpc endpoint").NoTrace()
+	"github.com/alcionai/clues/internal/node"
+)
+
+var ErrMissingOtelGRPCEndpoint = errors.New("missing otel grpc endpoint")
 
 const (
 	DefaultOTELGRPCEndpoint = "localhost:4317"

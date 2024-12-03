@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/alcionai/clues"
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 	otellog "go.opentelemetry.io/otel/log"
@@ -68,11 +69,11 @@ func (b builder) log(l logLevel, msg string) {
 
 	if b.err != nil {
 		// error values should override context values.
-		maps.Copy(cv, clues.InErr(b.err).Map())
+		maps.Copy(cv, cluerr.CluesIn(b.err).Map())
 
 		// attach the error and its labels
 		cv["error"] = b.err
-		cv["error_labels"] = clues.Labels(b.err)
+		cv["error_labels"] = cluerr.Labels(b.err)
 	}
 
 	// finally, make sure we attach the labels and comments
