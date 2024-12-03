@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/log/global"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	sdkLog "go.opentelemetry.io/otel/sdk/log"
 	sdkMetric "go.opentelemetry.io/otel/sdk/metric"
@@ -38,7 +39,7 @@ type OTELClient struct {
 	Logger         log.Logger
 
 	MeterProvider *sdkMetric.MeterProvider
-	Meter         Meterer
+	Meter         metric.Meter
 
 	TracerProvider *sdkTrace.TracerProvider
 	Tracer         trace.Tracer
@@ -482,7 +483,7 @@ func (dn *Node) OTELLogger() log.Logger {
 
 // OTELMeter gets the otel logger instance from the otel client.
 // Returns nil if otel wasn't initialized.
-func (dn *Node) OTELMeter() Meterer {
+func (dn *Node) OTELMeter() metric.Meter {
 	if dn == nil || dn.OTEL == nil {
 		return nil
 	}
