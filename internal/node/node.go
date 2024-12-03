@@ -15,6 +15,10 @@ import (
 // data nodes
 // ---------------------------------------------------------------------------
 
+type Noder interface {
+	Node() *Node
+}
+
 // Node contains the data tracked by both clues in contexts and in errors.
 //
 // These nodes compose a tree, such that nodes can walk their ancestry path from
