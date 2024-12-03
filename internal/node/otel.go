@@ -155,7 +155,7 @@ func NewOTELClient(
 	client.TracerProvider, err = newTracerProvider(ctx, client.grpcConn, server)
 	if err != nil {
 		closeClient()
-		return nil, errors.Wrap(err, "generating a tracerProvider")
+		return nil, errors.Wrap(err, "generating a tracer provider")
 	}
 
 	// set propagation to include traceContext and baggage (the default is no-op).
@@ -172,7 +172,7 @@ func NewOTELClient(
 	client.LoggerProvider, err = newLoggerProvider(ctx, client.grpcConn, server)
 	if err != nil {
 		closeClient()
-		return nil, errors.Wrap(err, "generating a tracerProvider")
+		return nil, errors.Wrap(err, "generating a logger provider")
 	}
 
 	global.SetLoggerProvider(client.LoggerProvider)
@@ -183,7 +183,7 @@ func NewOTELClient(
 	client.MeterProvider, err = newMeterProvider(ctx, client.grpcConn, server)
 	if err != nil {
 		closeClient()
-		return nil, errors.Wrap(err, "generating a tracerProvider")
+		return nil, errors.Wrap(err, "generating a meter provider")
 	}
 
 	otel.SetMeterProvider(client.MeterProvider)
@@ -200,11 +200,13 @@ func newTracerProvider(
 	conn *grpc.ClientConn,
 	server *resource.Resource,
 ) (*sdkTrace.TracerProvider, error) {
-	if ctx != nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
+	if ctx == nil {
+		return nil, errors.New("nil ctx")
 	}
+
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
 	if err != nil {
@@ -243,11 +245,13 @@ func newMeterProvider(
 	conn *grpc.ClientConn,
 	server *resource.Resource,
 ) (*sdkMetric.MeterProvider, error) {
-	if ctx != nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
+	if ctx == nil {
+		return nil, errors.New("nil ctx")
 	}
+
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	exporter, err := otlpmetricgrpc.New(
 		ctx,
@@ -280,11 +284,13 @@ func newLoggerProvider(
 	conn *grpc.ClientConn,
 	server *resource.Resource,
 ) (*sdkLog.LoggerProvider, error) {
-	if ctx != nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
+	if ctx == nil {
+		return nil, errors.New("nil ctx")
 	}
+
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	exporter, err := otlploggrpc.New(ctx, otlploggrpc.WithGRPCConn(conn))
 	if err != nil {
