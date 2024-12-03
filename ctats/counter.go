@@ -45,7 +45,15 @@ func getOrCreateCounter(
 		return nil, errors.New("no node in ctx")
 	}
 
-	return nc.OTELMeter().Float64UpDownCounter(id)
+	ctr, err := nc.OTELMeter().Float64UpDownCounter(id)
+	if err != nil {
+		return nil, errors.Wrap(err, "making new counter")
+	}
+
+	b := fromCtx(ctx)
+	b.counters[id] = ctr
+
+	return ctr, nil
 }
 
 // RegisterCounter introduces a new counter with the given unit and description.
