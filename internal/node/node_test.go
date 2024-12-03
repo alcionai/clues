@@ -14,31 +14,35 @@ import (
 
 func TestNode_Init(t *testing.T) {
 	table := []struct {
-		name string
-		node *Node
-		ctx  context.Context
+		name    string
+		node    *Node
+		ctx     context.Context
+		wantErr require.ErrorAssertionFunc
 	}{
 		{
-			name: "nil ctx",
-			node: &Node{},
-			ctx:  nil,
+			name:    "nil ctx",
+			node:    &Node{},
+			ctx:     nil,
+			wantErr: require.Error,
 		},
 		{
-			name: "nil node",
-			node: nil,
-			ctx:  context.Background(),
+			name:    "nil node",
+			node:    nil,
+			ctx:     context.Background(),
+			wantErr: require.NoError,
 		},
 		{
-			name: "context.Context",
-			node: &Node{},
-			ctx:  context.Background(),
+			name:    "context.Context",
+			node:    &Node{},
+			ctx:     context.Background(),
+			wantErr: require.NoError,
 		},
 	}
 
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			err := test.node.InitOTEL(test.ctx, test.name, OTELConfig{})
-			require.NoError(t, err)
+			test.wantErr(t, err)
 		})
 	}
 }
