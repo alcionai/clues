@@ -6,15 +6,13 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cecrets"
+	"github.com/alcionai/clues/cluerr"
 )
 
 // ---------------------------------------------------
 // consts
 // ---------------------------------------------------
-
-const clogLogFileEnv = "CLOG_LOG_FILE"
 
 type logLevel string
 
@@ -84,14 +82,14 @@ func (s Settings) LogToStdOut() Settings {
 // LogToFile defines a system file to write all logs onto.
 func (s Settings) LogToFile(pathToFile string) (Settings, error) {
 	if len(pathToFile) == 0 {
-		return s, clues.New("missing filepath for logging")
+		return s, cluerr.New("missing filepath for logging")
 	}
 
 	logdir := filepath.Dir(pathToFile)
 
 	err := os.MkdirAll(logdir, 0o755)
 	if err != nil {
-		return s, clues.Wrap(err, "ensuring log file dir exists").
+		return s, cluerr.Wrap(err, "ensuring log file dir exists").
 			With("log_dir", logdir)
 	}
 

@@ -1,4 +1,4 @@
-package clues_test
+package cluerr_test
 
 import (
 	"context"
@@ -9,7 +9,20 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/alcionai/clues"
+	"github.com/alcionai/clues/cluerr"
+	"github.com/alcionai/clues/internal/tester"
 )
+
+type msa map[string]any
+
+func toMSA[T any](m map[string]T) msa {
+	to := make(msa, len(m))
+	for k, v := range m {
+		to[k] = v
+	}
+
+	return to
+}
 
 type testingError struct{}
 
@@ -30,35 +43,35 @@ func TestStack(t *testing.T) {
 		{
 			name: "SingleNil",
 			getErr: func() error {
-				return clues.Stack(nil).OrNil()
+				return cluerr.Stack(nil).OrNil()
 			},
 			expectNil: true,
 		},
 		{
 			name: "DoubleNil",
 			getErr: func() error {
-				return clues.Stack(nil, nil).OrNil()
+				return cluerr.Stack(nil, nil).OrNil()
 			},
 			expectNil: true,
 		},
 		{
 			name: "TripleNil",
 			getErr: func() error {
-				return clues.Stack(nil, nil, nil).OrNil()
+				return cluerr.Stack(nil, nil, nil).OrNil()
 			},
 			expectNil: true,
 		},
 		{
 			name: "StackNilNil",
 			getErr: func() error {
-				return clues.Stack(clues.Stack(nil), nil).OrNil()
+				return cluerr.Stack(cluerr.Stack(nil), nil).OrNil()
 			},
 			expectNil: true,
 		},
 		{
 			name: "NilStackNilNil",
 			getErr: func() error {
-				return clues.Stack(nil, clues.Stack(nil), nil).OrNil()
+				return cluerr.Stack(nil, cluerr.Stack(nil), nil).OrNil()
 			},
 			expectNil: true,
 		},
@@ -67,7 +80,7 @@ func TestStack(t *testing.T) {
 			getErr: func() error {
 				var e testingErrorIface
 
-				return clues.Stack(nil, e, clues.Stack(nil)).OrNil()
+				return cluerr.Stack(nil, e, cluerr.Stack(nil)).OrNil()
 			},
 			expectNil: true,
 		},
@@ -76,7 +89,7 @@ func TestStack(t *testing.T) {
 			getErr: func() error {
 				var e testingErrorIface = testingError{}
 
-				return clues.Stack(nil, e, clues.Stack(nil)).OrNil()
+				return cluerr.Stack(nil, e, cluerr.Stack(nil)).OrNil()
 			},
 			expectNil: false,
 		},
@@ -85,14 +98,14 @@ func TestStack(t *testing.T) {
 			getErr: func() error {
 				var e testingErrorIface = &testingError{}
 
-				return clues.Stack(nil, e, clues.Stack(nil)).OrNil()
+				return cluerr.Stack(nil, e, cluerr.Stack(nil)).OrNil()
 			},
 			expectNil: false,
 		},
 		{
 			name: "NonPointerError",
 			getErr: func() error {
-				return clues.Stack(nil, testingError{}, clues.Stack(nil)).OrNil()
+				return cluerr.Stack(nil, testingError{}, cluerr.Stack(nil)).OrNil()
 			},
 			expectNil: false,
 		},
@@ -120,29 +133,29 @@ func TestHasLabel(t *testing.T) {
 	}{
 		{
 			name: "multiple stacked clues errors with label on first",
-			initial: clues.Stack(
-				clues.New("Labeled").Label(label),
-				clues.New("NotLabeled")),
+			initial: cluerr.Stack(
+				cluerr.New("Labeled").Label(label),
+				cluerr.New("NotLabeled")),
 		},
 		{
 			name: "multiple stacked clues errors with label on second",
-			initial: clues.Stack(
-				clues.New("NotLabeled"),
-				clues.New("Labeled").Label(label)),
+			initial: cluerr.Stack(
+				cluerr.New("NotLabeled"),
+				cluerr.New("Labeled").Label(label)),
 		},
 		{
 			name:    "single stacked clues error with label",
-			initial: clues.Stack(clues.New("Labeled").Label(label)),
+			initial: cluerr.Stack(cluerr.New("Labeled").Label(label)),
 		},
 	}
 
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			if !clues.HasLabel(test.initial, label) {
+			if !cluerr.HasLabel(test.initial, label) {
 				t.Errorf(
 					"expected error to have label [%s] but got %v",
 					label,
-					maps.Keys(clues.Labels(test.initial)))
+					maps.Keys(cluerr.Labels(test.initial)))
 			}
 		})
 	}
@@ -152,16 +165,16 @@ func TestLabel(t *testing.T) {
 	table := []struct {
 		name    string
 		initial error
-		expect  func(*testing.T, *clues.Err)
+		expect  func(*testing.T, *cluerr.Err)
 	}{
 		{"nil", nil, nil},
 		{"standard error", errors.New("an error"), nil},
-		{"clues error", clues.New("clues error"), nil},
-		{"clues error wrapped", fmt.Errorf("%w", clues.New("clues error")), nil},
+		{"clues error", cluerr.New("clues error"), nil},
+		{"clues error wrapped", fmt.Errorf("%w", cluerr.New("clues error")), nil},
 		{
 			"clues error with label",
-			clues.New("clues error").Label("fnords"),
-			func(t *testing.T, err *clues.Err) {
+			cluerr.New("clues error").Label("fnords"),
+			func(t *testing.T, err *cluerr.Err) {
 				if !err.HasLabel("fnords") {
 					t.Error("expected error to have label [fnords]")
 				}
@@ -169,8 +182,8 @@ func TestLabel(t *testing.T) {
 		},
 		{
 			"clues error with label wrapped",
-			fmt.Errorf("%w", clues.New("clues error").Label("fnords")),
-			func(t *testing.T, err *clues.Err) {
+			fmt.Errorf("%w", cluerr.New("clues error").Label("fnords")),
+			func(t *testing.T, err *cluerr.Err) {
 				if !err.HasLabel("fnords") {
 					t.Error("expected error to have label [fnords]")
 				}
@@ -179,12 +192,12 @@ func TestLabel(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			if clues.HasLabel(test.initial, "foo") {
+			if cluerr.HasLabel(test.initial, "foo") {
 				t.Error("new error should have no label")
 			}
 
-			err := clues.Label(test.initial, "foo")
-			if !clues.HasLabel(err, "foo") && test.initial != nil {
+			err := cluerr.Label(test.initial, "foo")
+			if !cluerr.HasLabel(err, "foo") && test.initial != nil {
 				t.Error("expected error to have label [foo]")
 			}
 
@@ -196,7 +209,7 @@ func TestLabel(t *testing.T) {
 			}
 
 			err.Label("bar")
-			if !clues.HasLabel(err, "bar") {
+			if !cluerr.HasLabel(err, "bar") {
 				t.Error("expected error to have label [bar]")
 			}
 
@@ -211,11 +224,11 @@ func TestLabels(t *testing.T) {
 	var (
 		ma    = msa{"a": struct{}{}}
 		mab   = msa{"a": struct{}{}, "b": struct{}{}}
-		a     = clues.New("a").Label("a")
-		acopy = clues.New("acopy").Label("a")
-		b     = clues.New("b").Label("b")
-		wrap  = clues.Wrap(
-			clues.Stack(
+		a     = cluerr.New("a").Label("a")
+		acopy = cluerr.New("acopy").Label("a")
+		b     = cluerr.New("b").Label("b")
+		wrap  = cluerr.Wrap(
+			cluerr.Stack(
 				fmt.Errorf("%w", a),
 				fmt.Errorf("%w", b),
 				fmt.Errorf("%w", acopy),
@@ -229,30 +242,30 @@ func TestLabels(t *testing.T) {
 	}{
 		{"nil", nil, msa{}},
 		{"standard error", errors.New("an error"), msa{}},
-		{"unlabeled error", clues.New("clues error"), msa{}},
+		{"unlabeled error", cluerr.New("clues error"), msa{}},
 		{"pkg/errs wrap around labeled error", errors.Wrap(a, "wa"), ma},
-		{"clues wrapped", clues.Wrap(a, "wrap"), ma},
-		{"clues stacked", clues.Stack(a, b), mab},
-		{"clues stacked with copy", clues.Stack(a, b, acopy), mab},
-		{"error chain", clues.Stack(b, fmt.Errorf("%w", a), fmt.Errorf("%w", acopy)), mab},
+		{"clues wrapped", cluerr.Wrap(a, "wrap"), ma},
+		{"clues stacked", cluerr.Stack(a, b), mab},
+		{"clues stacked with copy", cluerr.Stack(a, b, acopy), mab},
+		{"error chain", cluerr.Stack(b, fmt.Errorf("%w", a), fmt.Errorf("%w", acopy)), mab},
 		{"error wrap chain", wrap, mab},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			result := clues.Labels(test.initial)
-			mustEquals(t, test.expect, toMSA(result), false)
+			result := cluerr.Labels(test.initial)
+			tester.MustEquals(t, test.expect, toMSA(result), false)
 		})
 	}
 }
 
 var (
 	base = errors.New("an error")
-	cerr = func() error { return clues.Stack(base) }
+	cerr = func() error { return cluerr.Stack(base) }
 	werr = func() error {
-		return fmt.Errorf("%w", clues.Wrap(base, "wrapped error with vals").With("z", 0))
+		return fmt.Errorf("%w", cluerr.Wrap(base, "wrapped error with vals").With("z", 0))
 	}
 	serr = func() error {
-		return clues.Stack(clues.New("primary").With("z", 0), errors.New("secondary"))
+		return cluerr.Stack(cluerr.New("primary").With("z", 0), errors.New("secondary"))
 	}
 )
 
@@ -288,12 +301,12 @@ func TestWith(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			err := clues.With(test.initial, test.k, test.v)
+			err := cluerr.Stack(test.initial).With(test.k, test.v)
 			for _, kv := range test.with {
 				err = err.With(kv...)
 			}
-			mustEquals(t, test.expect, clues.InErr(err).Map(), false)
-			mustEquals(t, test.expect, err.Values().Map(), false)
+			tester.MustEquals(t, test.expect, cluerr.CluesIn(err).Map(), false)
+			tester.MustEquals(t, test.expect, err.Values().Map(), false)
 		})
 	}
 }
@@ -330,10 +343,10 @@ func TestWithMap(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			err := clues.WithMap(test.initial, test.kv)
+			err := cluerr.Stack(test.initial).WithMap(test.kv)
 			err = err.WithMap(test.with)
-			mustEquals(t, test.expect, clues.InErr(err).Map(), false)
-			mustEquals(t, test.expect, err.Values().Map(), false)
+			tester.MustEquals(t, test.expect, cluerr.CluesIn(err).Map(), false)
+			tester.MustEquals(t, test.expect, err.Values().Map(), false)
 		})
 	}
 }
@@ -373,10 +386,10 @@ func TestWithClues(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			tctx := clues.AddMap(ctx, test.kv)
-			err := clues.WithClues(test.initial, tctx)
+			err := cluerr.Stack(test.initial).WithClues(tctx)
 			err = err.WithMap(test.with)
-			mustEquals(t, test.expect, clues.InErr(err).Map(), false)
-			mustEquals(t, test.expect, err.Values().Map(), false)
+			tester.MustEquals(t, test.expect, cluerr.CluesIn(err).Map(), false)
+			tester.MustEquals(t, test.expect, err.Values().Map(), false)
 		})
 	}
 }
@@ -394,9 +407,9 @@ func TestValuePriority(t *testing.T) {
 				// the last addition to a ctx should take priority
 				ctx = clues.Add(ctx, "in-ctx", 2)
 
-				err := clues.NewWC(ctx, "err").With("in-err", 1)
+				err := cluerr.NewWC(ctx, "err").With("in-err", 1)
 				// the first addition to an error should take priority
-				err = clues.StackWC(ctx, err).With("in-err", 2)
+				err = cluerr.StackWC(ctx, err).With("in-err", 2)
 
 				return err
 			}(),
@@ -406,9 +419,9 @@ func TestValuePriority(t *testing.T) {
 			name: "last stack wins",
 			err: func() error {
 				ctx := clues.Add(context.Background(), "in-ctx", 1)
-				err := clues.NewWC(ctx, "last in stack").With("in-err", 1)
-				err = clues.Stack(
-					clues.New("first in stack").With("in-err", 2),
+				err := cluerr.NewWC(ctx, "last in stack").With("in-err", 1)
+				err = cluerr.Stack(
+					cluerr.New("first in stack").With("in-err", 2),
 					err)
 				return err
 			}(),
@@ -418,7 +431,7 @@ func TestValuePriority(t *testing.T) {
 			name: ".With wins over ctx",
 			err: func() error {
 				ctx := clues.Add(context.Background(), "k", 1)
-				err := clues.NewWC(ctx, "last in stack").With("k", 2)
+				err := cluerr.NewWC(ctx, "last in stack").With("k", 2)
 				return err
 			}(),
 			expect: msa{"k": 2},
@@ -426,39 +439,25 @@ func TestValuePriority(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			mustEquals(t, test.expect, clues.InErr(test.err).Map(), false)
+			tester.MustEquals(t, test.expect, cluerr.CluesIn(test.err).Map(), false)
 		})
 	}
 }
 
 func TestUnwrap(t *testing.T) {
 	e := errors.New("cause")
-	we := clues.Wrap(e, "outer")
+	we := cluerr.Wrap(e, "outer")
 
 	ce := we.Unwrap()
 	if ce != e {
 		t.Errorf("expected result error [%v] to be base error [%v]\n", ce, e)
 	}
 
-	ce = clues.Unwrap(we)
-	if ce != e {
-		t.Errorf("expected result error [%v] to be base error [%v]\n", ce, e)
-	}
-
-	se := clues.Stack(e)
+	se := cluerr.Stack(e)
 
 	ce = se.Unwrap()
 	if ce != e {
 		t.Errorf("expected result error [%v] to be base error [%v]\n", ce, e)
-	}
-
-	ce = clues.Unwrap(se)
-	if ce != e {
-		t.Errorf("expected result error [%v] to be base error [%v]\n", ce, e)
-	}
-
-	if clues.Unwrap(nil) != nil {
-		t.Errorf("expected nil unwrap input to return nil")
 	}
 }
 
@@ -466,9 +465,9 @@ func TestWrapNilStackSlice(t *testing.T) {
 	// an empty slice of errors
 	sl := make([]error, 10)
 	// when stacked
-	st := clues.Stack(sl...)
+	st := cluerr.Stack(sl...)
 	// then wrapped
-	e := clues.Wrap(st, "wrapped")
+	e := cluerr.Wrap(st, "wrapped")
 	// should contain nil
 	if e.OrNil() != nil {
 		t.Errorf("e.OrNil() <%+v> should be nil", e.OrNil())
@@ -485,65 +484,65 @@ func TestErr_Error(t *testing.T) {
 	}{
 		{
 			name:   "new error",
-			err:    clues.New("new"),
+			err:    cluerr.New("new"),
 			expect: "new",
 		},
 		{
 			name:   "stacked error",
-			err:    clues.Stack(sentinel),
+			err:    cluerr.Stack(sentinel),
 			expect: sentinel.Error(),
 		},
 		{
 			name:   "wrapped new error",
-			err:    clues.Wrap(clues.New("new"), "wrap"),
+			err:    cluerr.Wrap(cluerr.New("new"), "wrap"),
 			expect: "wrap: new",
 		},
 		{
 			name:   "wrapped non-clues error",
-			err:    clues.Wrap(sentinel, "wrap"),
+			err:    cluerr.Wrap(sentinel, "wrap"),
 			expect: "wrap: " + sentinel.Error(),
 		},
 		{
 			name:   "wrapped stacked error",
-			err:    clues.Wrap(clues.Stack(sentinel), "wrap"),
+			err:    cluerr.Wrap(cluerr.Stack(sentinel), "wrap"),
 			expect: "wrap: " + sentinel.Error(),
 		},
 		{
 			name:   "multiple wraps",
-			err:    clues.Wrap(clues.Wrap(clues.New("new"), "wrap"), "wrap2"),
+			err:    cluerr.Wrap(cluerr.Wrap(cluerr.New("new"), "wrap"), "wrap2"),
 			expect: "wrap2: wrap: new",
 		},
 		{
 			name:   "wrap-stack-wrap-new",
-			err:    clues.Wrap(clues.Stack(clues.Wrap(clues.New("new"), "wrap")), "wrap2"),
+			err:    cluerr.Wrap(cluerr.Stack(cluerr.Wrap(cluerr.New("new"), "wrap")), "wrap2"),
 			expect: "wrap2: wrap: new",
 		},
 		{
 			name:   "many stacked errors",
-			err:    clues.Stack(sentinel, errors.New("middle"), errors.New("base")),
+			err:    cluerr.Stack(sentinel, errors.New("middle"), errors.New("base")),
 			expect: sentinel.Error() + ": middle: base",
 		},
 		{
 			name: "stacked stacks",
-			err: clues.Stack(
-				clues.Stack(sentinel, errors.New("left")),
-				clues.Stack(errors.New("right"), errors.New("base")),
+			err: cluerr.Stack(
+				cluerr.Stack(sentinel, errors.New("left")),
+				cluerr.Stack(errors.New("right"), errors.New("base")),
 			),
 			expect: sentinel.Error() + ": left: right: base",
 		},
 		{
 			name: "wrapped stacks",
-			err: clues.Stack(
-				clues.Wrap(clues.Stack(errors.New("top"), errors.New("left")), "left-stack"),
-				clues.Wrap(clues.Stack(errors.New("right"), errors.New("base")), "right-stack"),
+			err: cluerr.Stack(
+				cluerr.Wrap(cluerr.Stack(errors.New("top"), errors.New("left")), "left-stack"),
+				cluerr.Wrap(cluerr.Stack(errors.New("right"), errors.New("base")), "right-stack"),
 			),
 			expect: "left-stack: top: left: right-stack: right: base",
 		},
 		{
-			name: "wrapped stacks, all clues.New",
-			err: clues.Stack(
-				clues.Wrap(clues.Stack(clues.New("top"), clues.New("left")), "left-stack"),
-				clues.Wrap(clues.Stack(clues.New("right"), clues.New("base")), "right-stack"),
+			name: "wrapped stacks, all cluerr.New",
+			err: cluerr.Stack(
+				cluerr.Wrap(cluerr.Stack(cluerr.New("top"), cluerr.New("left")), "left-stack"),
+				cluerr.Wrap(cluerr.Stack(cluerr.New("right"), cluerr.New("base")), "right-stack"),
 			),
 			expect: "left-stack: top: left: right-stack: right: base",
 		},
@@ -566,45 +565,45 @@ func TestErrValues_stacks(t *testing.T) {
 	}{
 		{
 			name:   "single err",
-			err:    clues.Stack(clues.New("an err").With("k", "v")),
+			err:    cluerr.Stack(cluerr.New("an err").With("k", "v")),
 			expect: msa{"k": "v"},
 		},
 		{
 			name: "two stack",
-			err: clues.Stack(
-				clues.New("an err").With("k", "v"),
-				clues.New("other").With("k2", "v2"),
+			err: cluerr.Stack(
+				cluerr.New("an err").With("k", "v"),
+				cluerr.New("other").With("k2", "v2"),
 			),
 			expect: msa{"k": "v", "k2": "v2"},
 		},
 		{
 			name: "sandvitch",
-			err: clues.Stack(
-				clues.New("top").With("k", "v"),
+			err: cluerr.Stack(
+				cluerr.New("top").With("k", "v"),
 				errors.New("mid"),
-				clues.New("base").With("k2", "v2"),
+				cluerr.New("base").With("k2", "v2"),
 			),
 			expect: msa{"k": "v", "k2": "v2"},
 		},
 		{
 			name: "value collision",
-			err: clues.Stack(
-				clues.New("top").With("k", "v"),
-				clues.New("mid").With("k2", "v2"),
-				clues.New("base").With("k", "v3"),
+			err: cluerr.Stack(
+				cluerr.New("top").With("k", "v"),
+				cluerr.New("mid").With("k2", "v2"),
+				cluerr.New("base").With("k", "v3"),
 			),
 			expect: msa{"k": "v3", "k2": "v2"},
 		},
 		{
 			name: "double double",
-			err: clues.Stack(
-				clues.Stack(
-					clues.New("top").With("k", "v"),
-					clues.New("left").With("k2", "v2"),
+			err: cluerr.Stack(
+				cluerr.Stack(
+					cluerr.New("top").With("k", "v"),
+					cluerr.New("left").With("k2", "v2"),
 				),
-				clues.Stack(
-					clues.New("right").With("k3", "v3"),
-					clues.New("base").With("k4", "v4"),
+				cluerr.Stack(
+					cluerr.New("right").With("k3", "v3"),
+					cluerr.New("base").With("k4", "v4"),
 				),
 			),
 			expect: msa{
@@ -616,14 +615,14 @@ func TestErrValues_stacks(t *testing.T) {
 		},
 		{
 			name: "double double collision",
-			err: clues.Stack(
-				clues.Stack(
-					clues.New("top").With("k", "v"),
-					clues.New("left").With("k2", "v2"),
+			err: cluerr.Stack(
+				cluerr.Stack(
+					cluerr.New("top").With("k", "v"),
+					cluerr.New("left").With("k2", "v2"),
 				),
-				clues.Stack(
-					clues.New("right").With("k3", "v3"),
-					clues.New("base").With("k", "v4"),
+				cluerr.Stack(
+					cluerr.New("right").With("k3", "v3"),
+					cluerr.New("base").With("k", "v4"),
 				),
 			),
 			expect: msa{
@@ -634,17 +633,17 @@ func TestErrValues_stacks(t *testing.T) {
 		},
 		{
 			name: "double double animal wrap",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("top").With("k", "v"),
-						clues.New("left").With("k2", "v2"),
+			err: cluerr.Stack(
+				cluerr.Wrap(
+					cluerr.Stack(
+						cluerr.New("top").With("k", "v"),
+						cluerr.New("left").With("k2", "v2"),
 					),
 					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right").With("k3", "v3"),
-						clues.New("base").With("k4", "v4"),
+				cluerr.Wrap(
+					cluerr.Stack(
+						cluerr.New("right").With("k3", "v3"),
+						cluerr.New("base").With("k4", "v4"),
 					),
 					"right-stack"),
 			),
@@ -657,17 +656,17 @@ func TestErrValues_stacks(t *testing.T) {
 		},
 		{
 			name: "double double animal wrap collision",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("top").With("k", "v"),
-						clues.New("left").With("k2", "v2"),
+			err: cluerr.Stack(
+				cluerr.Wrap(
+					cluerr.Stack(
+						cluerr.New("top").With("k", "v"),
+						cluerr.New("left").With("k2", "v2"),
 					),
 					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right").With("k3", "v3"),
-						clues.New("base").With("k", "v4"),
+				cluerr.Wrap(
+					cluerr.Stack(
+						cluerr.New("right").With("k3", "v3"),
+						cluerr.New("base").With("k", "v4"),
 					),
 					"right-stack"),
 			),
@@ -680,24 +679,24 @@ func TestErrValues_stacks(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			vs := clues.InErr(test.err)
-			mustEquals(t, test.expect, vs.Map(), false)
+			vs := cluerr.CluesIn(test.err)
+			tester.MustEquals(t, test.expect, vs.Map(), false)
 		})
 	}
 }
 
 func TestImmutableErrors(t *testing.T) {
-	err := clues.New("an error").With("k", "v")
+	err := cluerr.New("an error").With("k", "v")
 	check := msa{"k": "v"}
-	pre := clues.InErr(err)
-	mustEquals(t, check, pre.Map(), false)
+	pre := cluerr.CluesIn(err)
+	tester.MustEquals(t, check, pre.Map(), false)
 
 	err2 := err.With("k2", "v2")
 	if _, ok := pre.Map()["k2"]; ok {
 		t.Errorf("previous map should not have been mutated by addition")
 	}
 
-	post := clues.InErr(err2)
+	post := cluerr.CluesIn(err2)
 	if post.Map()["k2"] != "v2" {
 		t.Errorf("new map should contain the added value")
 	}
@@ -732,10 +731,10 @@ var (
 	target    = mockTarget{errors.New(tgt)}
 	sentinel  = errors.New(stnl)
 	other     = errors.New("other")
-	leftTop   = clues.New(lt).With(lt, "v"+lt).Label(lt)
-	leftBase  = clues.New(lb).With(lb, "v"+lb).Label(lb)
-	rightTop  = clues.New(rt).With(rt, "v"+rt).Label(rt)
-	rightBase = clues.New(rb).With(rb, "v"+rb).Label(rb)
+	leftTop   = cluerr.New(lt).With(lt, "v"+lt).Label(lt)
+	leftBase  = cluerr.New(lb).With(lb, "v"+lb).Label(lb)
+	rightTop  = cluerr.New(rt).With(rt, "v"+rt).Label(rt)
+	rightBase = cluerr.New(rb).With(rb, "v"+rb).Label(rb)
 )
 
 var testTable = []struct {
@@ -747,79 +746,79 @@ var testTable = []struct {
 }{
 	{
 		name:         "plain stack",
-		err:          clues.Stack(target, sentinel),
+		err:          cluerr.Stack(target, sentinel),
 		expectMsg:    "target: sentinel",
 		expectLabels: msa{},
 		expectValues: msa{},
 	},
 	{
 		name:         "plain wrap",
-		err:          clues.Wrap(clues.Stack(target, sentinel), "wrap"),
+		err:          cluerr.Wrap(cluerr.Stack(target, sentinel), "wrap"),
 		expectLabels: msa{},
 		expectMsg:    "wrap: target: sentinel",
 		expectValues: msa{},
 	},
 	{
 		name:         "two stack; top",
-		err:          clues.Stack(clues.Stack(target, sentinel), other),
+		err:          cluerr.Stack(cluerr.Stack(target, sentinel), other),
 		expectMsg:    "target: sentinel: other",
 		expectLabels: msa{},
 		expectValues: msa{},
 	},
 	{
 		name:         "two stack; base",
-		err:          clues.Stack(other, clues.Stack(target, sentinel)),
+		err:          cluerr.Stack(other, cluerr.Stack(target, sentinel)),
 		expectMsg:    "other: target: sentinel",
 		expectLabels: msa{},
 		expectValues: msa{},
 	},
 	{
 		name:         "two wrap",
-		err:          clues.Wrap(clues.Wrap(clues.Stack(target, sentinel), "inner"), "outer"),
+		err:          cluerr.Wrap(cluerr.Wrap(cluerr.Stack(target, sentinel), "inner"), "outer"),
 		expectMsg:    "outer: inner: target: sentinel",
 		expectLabels: msa{},
 		expectValues: msa{},
 	},
 	{
 		name:         "wrap stack",
-		err:          clues.Wrap(clues.Stack(target, sentinel), "wrap"),
+		err:          cluerr.Wrap(cluerr.Stack(target, sentinel), "wrap"),
 		expectMsg:    "wrap: target: sentinel",
 		expectLabels: msa{},
 		expectValues: msa{},
 	},
 	{
 		name:         "stackwrap",
-		err:          clues.StackWrap(target, sentinel, "wrap"),
+		err:          cluerr.StackWrap(target, sentinel, "wrap"),
 		expectMsg:    "target: wrap: sentinel",
 		expectLabels: msa{},
 		expectValues: msa{},
 	},
 	{
 		name:         "stackwrapWC",
-		err:          clues.StackWrapWC(context.Background(), target, sentinel, "wrap"),
+		err:          cluerr.StackWrapWC(context.Background(), target, sentinel, "wrap"),
 		expectMsg:    "target: wrap: sentinel",
 		expectLabels: msa{},
 		expectValues: msa{},
 	},
 	{
 		name:         "wrap two stack: top",
-		err:          clues.Wrap(clues.Stack(target, sentinel, other), "wrap"),
+		err:          cluerr.Wrap(cluerr.Stack(target, sentinel, other), "wrap"),
 		expectMsg:    "wrap: target: sentinel: other",
 		expectLabels: msa{},
 		expectValues: msa{},
 	},
 	{
 		name:         "wrap two stack: base",
-		err:          clues.Wrap(clues.Stack(other, target, sentinel), "wrap"),
+		err:          cluerr.Wrap(cluerr.Stack(other, target, sentinel), "wrap"),
 		expectMsg:    "wrap: other: target: sentinel",
 		expectLabels: msa{},
 		expectValues: msa{},
 	},
 	{
 		name: "double double stack; left top",
-		err: clues.Stack(
-			clues.Stack(target, sentinel, leftBase),
-			clues.Stack(rightTop, rightBase),
+		err: cluerr.Stack(
+			cluerr.Stack(target, sentinel, leftBase),
+			cluerr.Stack(rightTop, rightBase),
 		),
 		expectMsg: "target: sentinel: left-base: right-top: right-base",
 		expectLabels: msa{
@@ -835,9 +834,9 @@ var testTable = []struct {
 	},
 	{
 		name: "double double stack; left base",
-		err: clues.Stack(
-			clues.Stack(leftTop, target, sentinel),
-			clues.Stack(rightTop, rightBase),
+		err: cluerr.Stack(
+			cluerr.Stack(leftTop, target, sentinel),
+			cluerr.Stack(rightTop, rightBase),
 		),
 		expectMsg: "left-top: target: sentinel: right-top: right-base",
 		expectLabels: msa{
@@ -853,9 +852,9 @@ var testTable = []struct {
 	},
 	{
 		name: "double double stack; right top",
-		err: clues.Stack(
-			clues.Stack(leftTop, leftBase),
-			clues.Stack(target, sentinel, rightBase),
+		err: cluerr.Stack(
+			cluerr.Stack(leftTop, leftBase),
+			cluerr.Stack(target, sentinel, rightBase),
 		),
 		expectMsg: "left-top: left-base: target: sentinel: right-base",
 		expectLabels: msa{
@@ -871,9 +870,9 @@ var testTable = []struct {
 	},
 	{
 		name: "double double animal wrap; right base",
-		err: clues.Stack(
-			clues.Wrap(clues.Stack(leftTop, leftBase), "left-stack"),
-			clues.Wrap(clues.Stack(rightTop, target, sentinel), "right-stack"),
+		err: cluerr.Stack(
+			cluerr.Wrap(cluerr.Stack(leftTop, leftBase), "left-stack"),
+			cluerr.Wrap(cluerr.Stack(rightTop, target, sentinel), "right-stack"),
 		),
 		expectMsg: "left-stack: left-top: left-base: right-stack: right-top: target: sentinel",
 		expectLabels: msa{
@@ -889,9 +888,9 @@ var testTable = []struct {
 	},
 	{
 		name: "double double animal wrap; left top",
-		err: clues.Stack(
-			clues.Wrap(clues.Stack(target, sentinel, leftBase), "left-stack"),
-			clues.Wrap(clues.Stack(rightTop, rightBase), "right-stack"),
+		err: cluerr.Stack(
+			cluerr.Wrap(cluerr.Stack(target, sentinel, leftBase), "left-stack"),
+			cluerr.Wrap(cluerr.Stack(rightTop, rightBase), "right-stack"),
 		),
 		expectMsg: "left-stack: target: sentinel: left-base: right-stack: right-top: right-base",
 		expectLabels: msa{
@@ -907,9 +906,9 @@ var testTable = []struct {
 	},
 	{
 		name: "double double animal wrap; left base",
-		err: clues.Stack(
-			clues.Wrap(clues.Stack(leftTop, target, sentinel), "left-stack"),
-			clues.Wrap(clues.Stack(rightTop, rightBase), "right-stack"),
+		err: cluerr.Stack(
+			cluerr.Wrap(cluerr.Stack(leftTop, target, sentinel), "left-stack"),
+			cluerr.Wrap(cluerr.Stack(rightTop, rightBase), "right-stack"),
 		),
 		expectMsg: "left-stack: left-top: target: sentinel: right-stack: right-top: right-base",
 		expectLabels: msa{
@@ -925,9 +924,9 @@ var testTable = []struct {
 	},
 	{
 		name: "double double animal wrap; right top",
-		err: clues.Stack(
-			clues.Wrap(clues.Stack(leftTop, leftBase), "left-stack"),
-			clues.Wrap(clues.Stack(target, sentinel, rightBase), "right-stack"),
+		err: cluerr.Stack(
+			cluerr.Wrap(cluerr.Stack(leftTop, leftBase), "left-stack"),
+			cluerr.Wrap(cluerr.Stack(target, sentinel, rightBase), "right-stack"),
 		),
 		expectMsg: "left-stack: left-top: left-base: right-stack: target: sentinel: right-base",
 		expectLabels: msa{
@@ -943,9 +942,9 @@ var testTable = []struct {
 	},
 	{
 		name: "double double animal wrap; right base",
-		err: clues.Stack(
-			clues.Wrap(clues.Stack(leftTop, leftBase), "left-stack"),
-			clues.Wrap(clues.Stack(rightTop, target, sentinel), "right-stack"),
+		err: cluerr.Stack(
+			cluerr.Wrap(cluerr.Stack(leftTop, leftBase), "left-stack"),
+			cluerr.Wrap(cluerr.Stack(rightTop, target, sentinel), "right-stack"),
 		),
 		expectMsg: "left-stack: left-top: left-base: right-stack: right-top: target: sentinel",
 		expectLabels: msa{
@@ -970,7 +969,7 @@ func TestIs(t *testing.T) {
 		})
 	}
 
-	notSentinel := clues.New("sentinel")
+	notSentinel := cluerr.New("sentinel")
 
 	// NOT Is checks
 	table := []struct {
@@ -979,24 +978,24 @@ func TestIs(t *testing.T) {
 	}{
 		{
 			name: "plain stack",
-			err:  clues.Stack(notSentinel),
+			err:  cluerr.Stack(notSentinel),
 		},
 		{
 			name: "plain wrap",
-			err:  clues.Wrap(notSentinel, "wrap"),
+			err:  cluerr.Wrap(notSentinel, "wrap"),
 		},
 		{
 			name: "double double animal wrap",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						clues.New("left-base"),
+			err: cluerr.Stack(
+				cluerr.Wrap(
+					cluerr.Stack(
+						cluerr.New("left-top"),
+						cluerr.New("left-base"),
 					),
 					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
+				cluerr.Wrap(
+					cluerr.Stack(
+						cluerr.New("right-top"),
 						notSentinel,
 					),
 					"right-stack"),
@@ -1031,24 +1030,24 @@ func TestAs(t *testing.T) {
 	}{
 		{
 			name: "plain stack",
-			err:  clues.Stack(notTarget),
+			err:  cluerr.Stack(notTarget),
 		},
 		{
 			name: "plain wrap",
-			err:  clues.Wrap(notTarget, "wrap"),
+			err:  cluerr.Wrap(notTarget, "wrap"),
 		},
 		{
 			name: "double double animal wrap",
-			err: clues.Stack(
-				clues.Wrap(
-					clues.Stack(
-						clues.New("left-top"),
-						clues.New("left-base"),
+			err: cluerr.Stack(
+				cluerr.Wrap(
+					cluerr.Stack(
+						cluerr.New("left-top"),
+						cluerr.New("left-base"),
 					),
 					"left-stack"),
-				clues.Wrap(
-					clues.Stack(
-						clues.New("right-top"),
+				cluerr.Wrap(
+					cluerr.Stack(
+						cluerr.New("right-top"),
 						notTarget,
 					),
 					"right-stack"),
@@ -1068,29 +1067,29 @@ func TestAs(t *testing.T) {
 func TestToCore(t *testing.T) {
 	for _, test := range testTable {
 		t.Run(test.name, func(t *testing.T) {
-			c := clues.ToCore(test.err)
+			c := cluerr.ToCore(test.err)
 			if test.expectMsg != c.Msg {
 				t.Errorf("expected Msg [%v], got [%v]", test.expectMsg, c.Msg)
 			}
-			mustEquals(t, test.expectLabels, toMSA(c.Labels), false)
-			mustEquals(t, test.expectValues, toMSA(c.Values), false)
+			tester.MustEquals(t, test.expectLabels, toMSA(c.Labels), false)
+			tester.MustEquals(t, test.expectValues, toMSA(c.Values), false)
 		})
 	}
 }
 
 func TestStackNils(t *testing.T) {
-	result := clues.Stack(nil)
+	result := cluerr.Stack(nil)
 	if result != nil {
 		t.Errorf("expected nil, got [%v]", result)
 	}
 
-	e := clues.New("err")
-	result = clues.Stack(e, nil)
+	e := cluerr.New("err")
+	result = cluerr.Stack(e, nil)
 	if result.Error() != e.Error() {
 		t.Errorf("expected [%v], got [%v]", e, result)
 	}
 
-	result = clues.Stack(nil, e)
+	result = cluerr.Stack(nil, e)
 	if result.Error() != e.Error() {
 		t.Errorf("expected [%v], got [%v]", e, result)
 	}
@@ -1099,7 +1098,7 @@ func TestStackNils(t *testing.T) {
 func TestOrNil(t *testing.T) {
 	table := []struct {
 		name      string
-		err       *clues.Err
+		err       *cluerr.Err
 		expectNil bool
 	}{
 		{
@@ -1109,12 +1108,12 @@ func TestOrNil(t *testing.T) {
 		},
 		{
 			name:      "nil stack",
-			err:       clues.Stack(nil).With("foo", "bar"),
+			err:       cluerr.Stack(nil).With("foo", "bar"),
 			expectNil: true,
 		},
 		{
 			name:      "nil wrap",
-			err:       clues.Wrap(nil, "msg").With("foo", "bar"),
+			err:       cluerr.Wrap(nil, "msg").With("foo", "bar"),
 			expectNil: true,
 		},
 		{
@@ -1132,81 +1131,24 @@ func TestOrNil(t *testing.T) {
 	}
 }
 
-type labelCounter map[string]int64
-
-func (tla labelCounter) Add(l string, i int64) {
-	tla[l] = tla[l] + i
-}
-
-var labelTable = []struct {
-	name   string
-	labels []string
-	expect map[string]int64
-}{
-	{
-		name:   "no labels",
-		labels: []string{},
-		expect: map[string]int64{},
-	},
-	{
-		name:   "single label",
-		labels: []string{"un"},
-		expect: map[string]int64{
-			"un": 1,
-		},
-	},
-	{
-		name:   "multiple labels",
-		labels: []string{"un", "deux"},
-		expect: map[string]int64{
-			"un":   1,
-			"deux": 1,
-		},
-	},
-	{
-		name:   "duplicated label",
-		labels: []string{"un", "un"},
-		expect: map[string]int64{
-			"un": 1,
-		},
-	},
-	{
-		name:   "multiple duplicated labels",
-		labels: []string{"un", "un", "deux", "deux"},
-		expect: map[string]int64{
-			"un":   1,
-			"deux": 1,
-		},
-	},
-	{
-		name:   "empty string labels",
-		labels: []string{"", "", "un", "deux"},
-		expect: map[string]int64{
-			"":     1,
-			"un":   1,
-			"deux": 1,
-		},
-	},
-}
-
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
 func withSkipCaller(err error, depth int) error {
-	return clues.WithSkipCaller(err, depth)
+	return cluerr.SkipCaller(err, depth)
 }
 
-func cluesWithSkipCaller(err *clues.Err, depth int) error {
+func cluesWithSkipCaller(err *cluerr.Err, depth int) error {
 	return err.SkipCaller(depth)
 }
 
-func wrapWithFuncWithGeneric[E error](err E) *clues.Err {
-	return clues.Wrap(err, "with-generic")
+func wrapWithFuncWithGeneric[E error](err E) *cluerr.Err {
+	return cluerr.Wrap(err, "with-generic")
 }
 
-func withNoTrace(err error) *clues.Err {
-	return clues.Wrap(err, "no-trace").NoTrace()
+func withNoTrace(err error) *cluerr.Err {
+	return cluerr.Wrap(err, "no-trace").NoTrace()
 }
 
 func withCommentWrapper(
@@ -1215,13 +1157,14 @@ func withCommentWrapper(
 	vs ...any,
 ) error {
 	// always add two comments to test that both are saved
-	return clues.
-		Comment(err, msg, vs...).
+	return cluerr.
+		Stack(err).
+		Comment(msg, vs...).
 		Comment(msg+" - repeat", vs...)
 }
 
-func cluesWithCommentWrapper(
-	err *clues.Err,
+func cluerrWithCommentWrapper(
+	err *cluerr.Err,
 	msg string,
 	vs ...any,
 ) error {

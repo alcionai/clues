@@ -6,6 +6,8 @@ import (
 	"reflect"
 
 	"github.com/alcionai/clues"
+	"github.com/alcionai/clues/cluerr"
+	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.uber.org/zap"
@@ -67,11 +69,11 @@ func (b builder) log(l logLevel, msg string) {
 
 	if b.err != nil {
 		// error values should override context values.
-		maps.Copy(cv, clues.InErr(b.err).Map())
+		maps.Copy(cv, cluerr.CluesIn(b.err).Map())
 
 		// attach the error and its labels
 		cv["error"] = b.err
-		cv["error_labels"] = clues.Labels(b.err)
+		cv["error_labels"] = cluerr.Labels(b.err)
 	}
 
 	// finally, make sure we attach the labels and comments
@@ -86,7 +88,7 @@ func (b builder) log(l logLevel, msg string) {
 	for k, v := range cv {
 		zsl = zsl.With(k, v)
 
-		attr := clues.NewAttribute(k, v)
+		attr := node.NewAttribute(k, v)
 		record.AddAttributes(attr.KV())
 	}
 
@@ -94,7 +96,7 @@ func (b builder) log(l logLevel, msg string) {
 	for k, v := range b.with {
 		zsl.With(k, v)
 
-		attr := clues.NewAttribute(stringify.Fmt(k)[0], v)
+		attr := node.NewAttribute(stringify.Fmt(k)[0], v)
 		record.AddAttributes(attr.KV())
 	}
 

@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/alcionai/clues"
+	"github.com/alcionai/clues/cluerr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,7 +40,7 @@ func TestSettings_LogToFile(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			set, err := Settings{}.LogToFile(test.input)
-			test.expectErr(t, err, clues.ToCore(err))
+			test.expectErr(t, err, cluerr.ToCore(err))
 			assert.Equal(t, test.expectOverride, set.fileOverride)
 		})
 	}
