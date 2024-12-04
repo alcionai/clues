@@ -153,8 +153,8 @@ func singleton(ctx context.Context, set Settings) *clogger {
 
 	node := clues.In(ctx)
 
-	if node.OTEL != nil && node.OTEL.Logger != nil {
-		cloggerton.otel = node.OTEL.Logger
+	if node.OTELLogger() != nil {
+		cloggerton.otel = node.OTELLogger()
 	}
 
 	return cloggerton
