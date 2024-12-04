@@ -34,7 +34,7 @@ type builder struct {
 }
 
 func newBuilder(ctx context.Context) *builder {
-	clgr := fromCtx(ctx)
+	clgr, _ := fromCtx(ctx)
 
 	return &builder{
 		ctx:      ctx,

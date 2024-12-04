@@ -1,4 +1,4 @@
-package ctats
+package clog
 
 import (
 	"context"
@@ -6,76 +6,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/metric"
 )
 
-func TestFormatID(t *testing.T) {
-	table := []struct {
-		name   string
-		in     string
-		expect string
-	}{
-		{
-			name:   "empty",
-			in:     "",
-			expect: "",
-		},
-		{
-			name:   "simple",
-			in:     "foobarbaz",
-			expect: "foobarbaz",
-		},
-		{
-			name:   "already correct",
-			in:     "foo.bar.baz",
-			expect: "foo.bar.baz",
-		},
-		{
-			name:   "only underscore delimited",
-			in:     "foo_bar_baz",
-			expect: "foo_bar_baz",
-		},
-		{
-			name:   "spaces to underscores",
-			in:     "foo bar baz",
-			expect: "foo_bar_baz",
-		},
-		{
-			name:   "camel case",
-			in:     "FooBarBaz",
-			expect: "foo.bar.baz",
-		},
-		{
-			name:   "all caps",
-			in:     "FOOBARBAZ",
-			expect: "foobarbaz",
-		},
-		{
-			name:   "kebab case",
-			in:     "foo-bar-baz",
-			expect: "foo.bar.baz",
-		},
-		{
-			name:   "mixed",
-			in:     "fooBar baz-fnords",
-			expect: "foo.bar_baz.fnords",
-		},
-	}
-	for _, test := range table {
-		t.Run(test.name, func(t *testing.T) {
-			result := formatID(test.in)
-			assert.Equal(t, test.expect, result, "input: %s", test.in)
-		})
-	}
-}
-
 func TestInherit(t *testing.T) {
-	stubBus1 := &bus{
-		counters:   map[string]metric.Float64UpDownCounter{},
-		gauges:     map[string]metric.Float64Gauge{},
-		histograms: map[string]metric.Float64Histogram{},
+	stubClogger1 := &clogger{
+		set: Settings{
+			Level: "test",
+		},
 	}
-	stubBus2 := &bus{}
+	stubClogger2 := &clogger{}
 
 	table := []struct {
 		name    string
@@ -89,8 +28,9 @@ func TestInherit(t *testing.T) {
 			from: func() context.Context { return nil },
 			to:   func() context.Context { return nil },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.Nil(t, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.False(t, found)
 			},
 		},
 		{
@@ -98,8 +38,9 @@ func TestInherit(t *testing.T) {
 			from: func() context.Context { return context.Background() },
 			to:   func() context.Context { return nil },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.Nil(t, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.False(t, found)
 			},
 		},
 		{
@@ -107,8 +48,9 @@ func TestInherit(t *testing.T) {
 			from: func() context.Context { return nil },
 			to:   func() context.Context { return context.Background() },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.Nil(t, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.False(t, found)
 			},
 		},
 		{
@@ -116,85 +58,92 @@ func TestInherit(t *testing.T) {
 			from: func() context.Context { return context.Background() },
 			to:   func() context.Context { return context.Background() },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.Nil(t, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.False(t, found)
 			},
 		},
 		{
 			name: "from: populated, to: nil",
 			from: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				return plantLoggerInCtx(context.Background(), stubClogger1)
 			},
 			to: func() context.Context { return nil },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.True(t, found)
+				assert.Equal(t, stubClogger1, logger)
 			},
 		},
 		{
 			name: "from: populated, to: background",
 			from: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				return plantLoggerInCtx(context.Background(), stubClogger1)
 			},
 			to: func() context.Context { return context.Background() },
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.True(t, found)
+				assert.Equal(t, stubClogger1, logger)
 			},
 		},
 		{
 			name: "from: nil, to: populated",
 			from: func() context.Context { return nil },
 			to: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				return plantLoggerInCtx(context.Background(), stubClogger1)
 			},
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.True(t, found)
+				assert.Equal(t, stubClogger1, logger)
 			},
 		},
 		{
 			name: "from: background, to: populated",
 			from: func() context.Context { return context.Background() },
 			to: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				return plantLoggerInCtx(context.Background(), stubClogger1)
 			},
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.True(t, found)
+				assert.Equal(t, stubClogger1, logger)
 			},
 		},
 		{
 			name: "from: populated, to: populated",
 			from: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				return plantLoggerInCtx(context.Background(), stubClogger1)
 			},
 			to: func() context.Context {
-				return embedInCtx(context.Background(), stubBus2)
+				return plantLoggerInCtx(context.Background(), stubClogger2)
 			},
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus2, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.True(t, found)
+				assert.Equal(t, stubClogger2, logger)
 			},
 		},
 		{
 			name: "from: populated, to: populated, clobbered",
 			from: func() context.Context {
-				return embedInCtx(context.Background(), stubBus1)
+				return plantLoggerInCtx(context.Background(), stubClogger1)
 			},
 			to: func() context.Context {
-				return embedInCtx(context.Background(), stubBus2)
+				return plantLoggerInCtx(context.Background(), stubClogger2)
 			},
 			clobber: true,
 			assert: func(t *testing.T, ctx context.Context) {
-				b := fromCtx(ctx)
-				require.NotNil(t, b)
-				assert.Equal(t, stubBus1, b)
+				logger, found := fromCtx(ctx)
+				require.NotNil(t, logger)
+				assert.True(t, found)
+				assert.Equal(t, stubClogger1, logger)
 			},
 		},
 	}

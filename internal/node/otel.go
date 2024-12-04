@@ -32,7 +32,7 @@ import (
 // ------------------------------------------------------------
 
 type OTELClient struct {
-	serviceName string
+	ServiceName string
 	grpcConn    *grpc.ClientConn
 
 	LoggerProvider *sdkLog.LoggerProvider

@@ -6,6 +6,7 @@ import (
 
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ---------------------------------------------------------------------------
@@ -46,6 +47,39 @@ func Close(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// Inherit propagates all clients from one context to another.  This is particularly
+// useful for taking an initialized context from a main() func and ensuring its clients
+// are available for request-bound conetxts, such as in a http server pattern.
+//
+// If the 'to' context already contains an initialized client, no change is made.
+// Callers can force a 'from' client to override a 'to' client by setting clobber=true.
+func Inherit(
+	from, to context.Context,
+	clobber bool,
+) context.Context {
+	fromNode := node.FromCtx(from)
+	toNode := node.FromCtx(to)
+
+	if to == nil {
+		to = context.Background()
+	} else if toNode.Span == nil {
+		// A span may already exist in the 'to' context thanks to otel package integration.
+		// Likewise, the 'from' ctx is not expected to contain a span, so we only want to
+		// maintain the span information that's currently live.
+		toNode.Span = trace.SpanFromContext(to)
+	}
+
+	// if we have no fromNode OTEL, or are not clobbering, return the toNode.
+	if fromNode.OTEL == nil || (toNode.OTEL != nil && !clobber) {
+		return node.EmbedInCtx(to, toNode)
+	}
+
+	// otherwise pass along the fromNode OTEL client.
+	toNode.OTEL = fromNode.OTEL
+
+	return node.EmbedInCtx(to, toNode)
 }
 
 // ---------------------------------------------------------------------------
