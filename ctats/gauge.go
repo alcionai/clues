@@ -34,9 +34,9 @@ func getOrCreateGauge(
 ) (metric.Float64Gauge, error) {
 	id = formatID(id)
 
-	ctr := gaugeFromCtx(ctx, id)
-	if ctr != nil {
-		return ctr, nil
+	gauge := gaugeFromCtx(ctx, id)
+	if gauge != nil {
+		return gauge, nil
 	}
 
 	// make a new one
@@ -45,7 +45,15 @@ func getOrCreateGauge(
 		return nil, errors.New("no node in ctx")
 	}
 
-	return nc.OTELMeter().Float64Gauge(id)
+	gauge, err := nc.OTELMeter().Float64Gauge(id)
+	if err != nil {
+		return nil, errors.Wrap(err, "making new gauge")
+	}
+
+	b := fromCtx(ctx)
+	b.gauges[id] = gauge
+
+	return gauge, nil
 }
 
 // RegisterGauge introduces a new gauge with the given unit and description.
@@ -64,8 +72,8 @@ func RegisterGauge(
 	id = formatID(id)
 
 	// if we already have a gauge registered to that ID, do nothing.
-	ctr := gaugeFromCtx(ctx, id)
-	if ctr != nil {
+	gauge := gaugeFromCtx(ctx, id)
+	if gauge != nil {
 		return ctx, nil
 	}
 
@@ -86,13 +94,13 @@ func RegisterGauge(
 	}
 
 	// register the gauge
-	ctr, err := nc.OTELMeter().Float64Gauge(id, opts...)
+	gauge, err := nc.OTELMeter().Float64Gauge(id, opts...)
 	if err != nil {
 		return ctx, errors.Wrap(err, "creating gauge")
 	}
 
 	cb := fromCtx(ctx)
-	cb.gauges[id] = ctr
+	cb.gauges[id] = gauge
 
 	return embedInCtx(ctx, cb), nil
 }
@@ -112,11 +120,11 @@ type gauge[N number] struct {
 
 // Set sets the gauge to n.
 func (c gauge[number]) Set(ctx context.Context, n number) {
-	ctr, err := getOrCreateGauge(ctx, c.getID())
+	gauge, err := getOrCreateGauge(ctx, c.getID())
 	if err != nil {
 		fmt.Printf("err getting gauge: %+v\n", err)
 		return
 	}
 
-	ctr.Record(ctx, float64(n))
+	gauge.Record(ctx, float64(n))
 }

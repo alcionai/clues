@@ -34,9 +34,9 @@ func getOrCreateHistogram(
 ) (metric.Float64Histogram, error) {
 	id = formatID(id)
 
-	ctr := histogramFromCtx(ctx, id)
-	if ctr != nil {
-		return ctr, nil
+	hist := histogramFromCtx(ctx, id)
+	if hist != nil {
+		return hist, nil
 	}
 
 	// make a new one
@@ -45,7 +45,15 @@ func getOrCreateHistogram(
 		return nil, errors.New("no node in ctx")
 	}
 
-	return nc.OTELMeter().Float64Histogram(id)
+	hist, err := nc.OTELMeter().Float64Histogram(id)
+	if err != nil {
+		return nil, errors.Wrap(err, "making new histogram")
+	}
+
+	b := fromCtx(ctx)
+	b.histograms[id] = hist
+
+	return hist, nil
 }
 
 // RegisterHistogram introduces a new histogram with the given unit and description.
@@ -64,8 +72,8 @@ func RegisterHistogram(
 	id = formatID(id)
 
 	// if we already have a histogram registered to that ID, do nothing.
-	ctr := histogramFromCtx(ctx, id)
-	if ctr != nil {
+	hist := histogramFromCtx(ctx, id)
+	if hist != nil {
 		return ctx, nil
 	}
 
@@ -86,13 +94,13 @@ func RegisterHistogram(
 	}
 
 	// register the histogram
-	ctr, err := nc.OTELMeter().Float64Histogram(id, opts...)
+	hist, err := nc.OTELMeter().Float64Histogram(id, opts...)
 	if err != nil {
 		return ctx, errors.Wrap(err, "creating histogram")
 	}
 
 	cb := fromCtx(ctx)
-	cb.histograms[id] = ctr
+	cb.histograms[id] = hist
 
 	return embedInCtx(ctx, cb), nil
 }
@@ -112,11 +120,11 @@ type histogram[N number] struct {
 
 // Add increments the histogram by n. n can be negative.
 func (c histogram[number]) Record(ctx context.Context, n number) {
-	ctr, err := getOrCreateHistogram(ctx, c.getID())
+	hist, err := getOrCreateHistogram(ctx, c.getID())
 	if err != nil {
 		fmt.Printf("err getting histogram: %+v\n", err)
 		return
 	}
 
-	ctr.Record(ctx, float64(n))
+	hist.Record(ctx, float64(n))
 }
