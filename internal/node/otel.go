@@ -430,7 +430,7 @@ func (dn *Node) AddSpan(
 	name string,
 ) (context.Context, *Node) {
 	if dn == nil || dn.OTEL == nil {
-		fmt.Println("-sp- AW FUCK IT NIL", dn)
+		fmt.Println("-sp- AW IT NIL", dn)
 		return ctx, dn
 	}
 
