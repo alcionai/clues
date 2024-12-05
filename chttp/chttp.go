@@ -14,7 +14,7 @@ import (
 // the request context.  Since clues prefers context-bound client propagation
 // over global singletons, this behavior is necessary to ensure request contexts
 // maintain scope of initialized values.
-func InheritorHTTPMiddleware(
+func InheritorMiddleware(
 	ctx context.Context,
 ) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
