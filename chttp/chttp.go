@@ -14,20 +14,23 @@ import (
 // the request context.  Since clues prefers context-bound client propagation
 // over global singletons, this behavior is necessary to ensure request contexts
 // maintain scope of initialized values.
-func NewInheritorHTTPMiddleware(
+func InheritorMiddleware(
 	ctx context.Context,
-	handler http.Handler,
-) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rctx := r.Context()
+) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			rctx := r.Context()
 
-		// always assume the request context needs to be clobbered.
-		rctx = clues.Inherit(ctx, rctx, true)
-		rctx = clog.Inherit(ctx, rctx, true)
-		rctx = ctats.Inherit(ctx, rctx, true)
+			// always assume the request context needs to be clobbered.
+			rctx = clues.Inherit(ctx, rctx, true)
+			rctx = clog.Inherit(ctx, rctx, true)
+			rctx = ctats.Inherit(ctx, rctx, true)
 
-		r = r.WithContext(rctx)
+			r = r.WithContext(rctx)
 
-		handler.ServeHTTP(w, r)
-	})
+			next.ServeHTTP(w, r)
+		}
+
+		return http.HandlerFunc(fn)
+	}
 }
