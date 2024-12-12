@@ -76,9 +76,14 @@ func (b builder) log(l logLevel, msg string) {
 		cv["error_labels"] = cluerr.Labels(b.err)
 	}
 
-	// finally, make sure we attach the labels and comments
-	cv["clog_labels"] = maps.Keys(b.labels)
-	cv["clog_comments"] = maps.Keys(b.comments)
+	// attach the labels and comments, if populated
+	if len(b.labels) > 0 {
+		cv["clog_labels"] = maps.Keys(b.labels)
+	}
+
+	if len(b.comments) > 0 {
+		cv["clog_comments"] = maps.Keys(b.comments)
+	}
 
 	if b.skipCallerJumps > 0 {
 		zsl = zsl.WithOptions(zap.AddCallerSkip(b.skipCallerJumps))
