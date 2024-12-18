@@ -67,16 +67,20 @@ func (b builder) log(l logLevel, msg string) {
 	record.SetBody(otellog.StringValue(msg))
 	record.SetSeverity(convertLevel(l))
 
+	// attach the error and its labels
 	if b.err != nil {
 		// error values should override context values.
 		maps.Copy(cv, cluerr.CluesIn(b.err).Map())
 
-		// attach the error and its labels
 		cv["error"] = b.err
-		cv["error_labels"] = cluerr.Labels(b.err)
+
+		labels := cluerr.Labels(b.err)
+		if len(labels) > 0 {
+			cv["error_labels"] = cluerr.Labels(b.err)
+		}
 	}
 
-	// attach the labels and comments, if populated
+	// attach the clog labels and comments
 	if len(b.labels) > 0 {
 		cv["clog_labels"] = maps.Keys(b.labels)
 	}
@@ -99,7 +103,7 @@ func (b builder) log(l logLevel, msg string) {
 
 	// plus any values added using builder.With()
 	for k, v := range b.with {
-		zsl.With(k, v)
+		zsl = zsl.With(k, v)
 
 		attr := node.NewAttribute(stringify.Fmt(k)[0], v)
 		record.AddAttributes(attr.KV())
