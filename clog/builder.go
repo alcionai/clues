@@ -112,7 +112,8 @@ func (b builder) log(l logLevel, msg string) {
 	// then write everything to the logger
 	switch l {
 	case LevelDebug:
-		var ok bool
+		// if no label filters are set, always allow debug level logs
+		ok := len(cloggerton.set.OnlyLogDebugIfContainsLabel) == 0
 
 		for _, l := range cloggerton.set.OnlyLogDebugIfContainsLabel {
 			if _, match := b.labels[l]; match {
