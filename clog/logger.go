@@ -95,6 +95,8 @@ func genLogger(set Settings) *zap.SugaredLogger {
 func zapcoreFallback(set Settings) *zap.Logger {
 	levelFilter := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 		switch set.Level {
+		case LevelDebug:
+			return true
 		case LevelInfo:
 			return lvl >= zapcore.InfoLevel
 		case LevelError:
@@ -120,6 +122,8 @@ func zapcoreFallback(set Settings) *zap.Logger {
 // converts a given logLevel into the zapcore level enum.
 func setLevel(cfg zap.Config, level logLevel) zap.Config {
 	switch level {
+	case LevelDebug:
+		cfg.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
 	case LevelInfo:
 		cfg.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
 	case LevelError:
