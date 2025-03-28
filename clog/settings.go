@@ -23,6 +23,23 @@ const (
 	LevelDisabled logLevel = "disabled"
 )
 
+// includes returns true if the provided log level
+// is of equal or greater importance to the receiver.
+func (ll logLevel) includes(lvl logLevel) bool {
+	switch ll {
+	case LevelDebug:
+		return lvl != LevelDisabled
+	case LevelInfo:
+		return lvl == LevelError || lvl == LevelInfo
+	case LevelError:
+		return lvl == LevelError
+	case LevelDisabled:
+		fallthrough
+	default:
+		return false
+	}
+}
+
 type logFormat string
 
 const (
