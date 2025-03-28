@@ -31,6 +31,7 @@ type builder struct {
 	labels          map[string]struct{}
 	comments        map[string]struct{}
 	skipCallerJumps int
+	settings        Settings
 }
 
 func newBuilder(ctx context.Context) *builder {
@@ -43,6 +44,7 @@ func newBuilder(ctx context.Context) *builder {
 		with:     map[any]any{},
 		labels:   map[string]struct{}{},
 		comments: map[string]struct{}{},
+		settings: clgr.set,
 	}
 }
 
@@ -55,6 +57,10 @@ func newBuilder(ctx context.Context) *builder {
 // we can chase later.  This is all still in the early/poc stage and needs
 // additional polish to shine.
 func (b builder) log(l logLevel, msg string) {
+	if !b.settings.Level.includes(l) {
+		return
+	}
+
 	var (
 		cluesNode = clues.In(b.ctx)
 		cv        = cluesNode.Map()
@@ -65,7 +71,7 @@ func (b builder) log(l logLevel, msg string) {
 	// if otelLog is nil, this will eventually no-op
 	record := otellog.Record{}
 	record.SetBody(otellog.StringValue(msg))
-	record.SetSeverity(convertLevel(l))
+	record.SetSeverity(toOTELSeverity(l))
 
 	// attach the error and its labels
 	if b.err != nil {
@@ -140,7 +146,9 @@ func (b builder) log(l logLevel, msg string) {
 		otelLogger = cluesNode.OTELLogger()
 	}
 
-	if otelLogger != nil {
+	checkOTELSeverity := otellog.EnabledParameters{Severity: toOTELSeverity(l)}
+
+	if otelLogger != nil && otelLogger.Enabled(b.ctx, checkOTELSeverity) {
 		otelLogger.Emit(b.ctx, record)
 	}
 }

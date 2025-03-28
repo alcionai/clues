@@ -2,7 +2,7 @@ package clog
 
 import "go.opentelemetry.io/otel/log"
 
-func convertLevel(level logLevel) log.Severity {
+func toOTELSeverity(level logLevel) log.Severity {
 	switch level {
 	case LevelDebug:
 		return log.SeverityDebug
