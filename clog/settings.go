@@ -28,7 +28,7 @@ const (
 func (ll logLevel) includes(lvl logLevel) bool {
 	switch ll {
 	case LevelDebug:
-		return true
+		return lvl != LevelDisabled
 	case LevelInfo:
 		return lvl == LevelError || lvl == LevelInfo
 	case LevelError:

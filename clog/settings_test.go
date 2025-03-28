@@ -67,7 +67,7 @@ func TestLogLevel_Includes(t *testing.T) {
 		},
 		{
 			name:  "info",
-			input: LevelDebug,
+			input: LevelInfo,
 			allow: []logLevel{
 				LevelInfo,
 				LevelError,
@@ -79,7 +79,7 @@ func TestLogLevel_Includes(t *testing.T) {
 		},
 		{
 			name:  "error",
-			input: LevelDebug,
+			input: LevelError,
 			allow: []logLevel{
 				LevelError,
 			},
@@ -91,7 +91,18 @@ func TestLogLevel_Includes(t *testing.T) {
 		},
 		{
 			name:  "disabled allows nothing",
-			input: LevelDebug,
+			input: LevelDisabled,
+			allow: []logLevel{},
+			notallow: []logLevel{
+				LevelDebug,
+				LevelInfo,
+				LevelError,
+				LevelDisabled,
+			},
+		},
+		{
+			name:  "hacked values allow nothing",
+			input: logLevel("snood"),
 			allow: []logLevel{},
 			notallow: []logLevel{
 				LevelDebug,
