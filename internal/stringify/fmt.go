@@ -3,6 +3,8 @@ package stringify
 import (
 	"fmt"
 	"reflect"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 // ---------------------------------------------------------------------------
@@ -49,7 +51,8 @@ func Fmt(vals ...any) []string {
 // 2. conceal all concealer interfaces
 // 3. flat string values
 // 4. string all stringer interfaces
-// 5. fmt.sprintf the rest
+// 5. fmt.sprintf all formatter interfaces
+// 6. spew.Sprintf the rest
 func Marshal(a any, shouldConceal bool) string {
 	if a == nil {
 		return ""
@@ -73,7 +76,12 @@ func Marshal(a any, shouldConceal bool) string {
 		return as.String()
 	}
 
-	return fmt.Sprintf("%+v", a)
+	// If value implements fmt.Formatter, then we do not need any additional formatting.
+	if _, ok := a.(fmt.Formatter); ok {
+		return fmt.Sprintf("%+v", a)
+	}
+
+	return spew.Sprintf("%+v", a)
 }
 
 // Normalize ensures that the variadic of key-value pairs is even in length,

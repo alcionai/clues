@@ -30,7 +30,26 @@ func (a aConcealer) Conceal() string                { return "***" }
 func (a aConcealer) Format(fs fmt.State, verb rune) { io.WriteString(fs, "***") }
 func (a aConcealer) PlainString() string            { return fmt.Sprintf("%v", a.v) }
 
+type testPtrStruct struct {
+	ptrV1 *string
+	inner *testPtrInnerStruct
+}
+
+type testPtrInnerStruct struct {
+	ptrV2 *string
+}
+
 func TestFmt(t *testing.T) {
+	ptrTestString := "ptrString"
+	ptrString := &ptrTestString
+
+	testStruct := &testPtrStruct{
+		ptrV1: ptrString,
+		inner: &testPtrInnerStruct{
+			ptrV2: ptrString,
+		},
+	}
+
 	table := []struct {
 		name   string
 		input  []any
@@ -87,6 +106,16 @@ func TestFmt(t *testing.T) {
 			name:   "many values",
 			input:  []any{1, "a", true, aStringer{"smarf"}},
 			expect: []string{"1", "a", "true", "smarf"},
+		},
+		{
+			name:   "ptr value",
+			input:  []any{ptrString},
+			expect: []string{fmt.Sprintf("<*>(%p)%s", ptrString, ptrTestString)},
+		},
+		{
+			name:   "ptr struct",
+			input:  []any{testStruct},
+			expect: []string{fmt.Sprintf("<*>(%p){ptrV1:<*>(%p)%s inner:<*>(%p){ptrV2:<*>(%p)%s}}", testStruct, ptrString, ptrTestString, testStruct.inner, ptrString, ptrTestString)},
 		},
 	}
 
