@@ -30,23 +30,29 @@ func (a aConcealer) Conceal() string                { return "***" }
 func (a aConcealer) Format(fs fmt.State, verb rune) { io.WriteString(fs, "***") }
 func (a aConcealer) PlainString() string            { return fmt.Sprintf("%v", a.v) }
 
-type testPtrStruct struct {
-	ptrV1 *string
-	inner *testPtrInnerStruct
+type aPtrStruct struct {
+	val   *string
+	inner *aPtrInnerStruct
 }
 
-type testPtrInnerStruct struct {
-	ptrV2 *string
+type aPtrInnerStruct struct {
+	val *string
 }
+
+type aFormatter struct {
+	v *string
+}
+
+func (a aFormatter) Format(fs fmt.State, verb rune) { io.WriteString(fs, "formatted") }
 
 func TestFmt(t *testing.T) {
 	ptrTestString := "ptrString"
 	ptrString := &ptrTestString
 
-	testStruct := &testPtrStruct{
-		ptrV1: ptrString,
-		inner: &testPtrInnerStruct{
-			ptrV2: ptrString,
+	structWithPointerFields := &aPtrStruct{
+		val: ptrString,
+		inner: &aPtrInnerStruct{
+			val: ptrString,
 		},
 	}
 
@@ -88,6 +94,11 @@ func TestFmt(t *testing.T) {
 			expect: []string{`map[fisher flannigan fitzbog:{}]`},
 		},
 		{
+			name:   "map sort keys",
+			input:  []any{map[string]string{"a": "a", "c": "c", "b": "b"}},
+			expect: []string{"map[a:a b:b c:c]"},
+		},
+		{
 			name:   "concealer",
 			input:  []any{aConcealer{"fisher flannigan fitzbog"}},
 			expect: []string{"***"},
@@ -113,9 +124,21 @@ func TestFmt(t *testing.T) {
 			expect: []string{fmt.Sprintf("<*>(%p)%s", ptrString, ptrTestString)},
 		},
 		{
-			name:   "ptr struct",
-			input:  []any{testStruct},
-			expect: []string{fmt.Sprintf("<*>(%p){ptrV1:<*>(%p)%s inner:<*>(%p){ptrV2:<*>(%p)%s}}", testStruct, ptrString, ptrTestString, testStruct.inner, ptrString, ptrTestString)},
+			name:  "ptr struct",
+			input: []any{structWithPointerFields},
+			expect: []string{fmt.Sprintf("<*>(%p){val:<*>(%p)%s inner:<*>(%p){val:<*>(%p)%s}}",
+				structWithPointerFields,
+				ptrString,
+				ptrTestString,
+				structWithPointerFields.inner,
+				ptrString,
+				ptrTestString,
+			)},
+		},
+		{
+			name:   "formatter",
+			input:  []any{aFormatter{ptrString}},
+			expect: []string{"formatted"},
 		},
 	}
 

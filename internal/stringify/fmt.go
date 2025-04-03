@@ -81,6 +81,7 @@ func Marshal(a any, shouldConceal bool) string {
 		return fmt.Sprintf("%+v", a)
 	}
 
+	spew.Config.SortKeys = true
 	return spew.Sprintf("%+v", a)
 }
 
