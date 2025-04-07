@@ -81,8 +81,10 @@ func Marshal(a any, shouldConceal bool) string {
 		return fmt.Sprintf("%+v", a)
 	}
 
-	spew.Config.SortKeys = true
-	return spew.Sprintf("%+v", a)
+	cfg := spew.NewDefaultConfig()
+	cfg.SortKeys = true
+
+	return cfg.Sprintf("%+v", a)
 }
 
 // Normalize ensures that the variadic of key-value pairs is even in length,
