@@ -12,7 +12,7 @@ import (
 // tests
 // ---------------------------------------------------------------------------
 
-func TestNode_Init(t *testing.T) {
+func TestNode_InitOTEL(t *testing.T) {
 	table := []struct {
 		name    string
 		node    *Node
