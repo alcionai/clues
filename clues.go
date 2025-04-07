@@ -107,13 +107,7 @@ func AddMap[K comparable, V any](
 	m map[K]V,
 ) context.Context {
 	nc := node.FromCtx(ctx)
-
-	kvs := make([]any, 0, len(m)*2)
-	for k, v := range m {
-		kvs = append(kvs, k, v)
-	}
-
-	return node.EmbedInCtx(ctx, nc.AddValues(stringify.Normalize(kvs...)))
+	return node.EmbedInCtx(ctx, nc.AddValues(stringify.NormalizeMap(m)))
 }
 
 // ---------------------------------------------------------------------------

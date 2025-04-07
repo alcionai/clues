@@ -223,3 +223,82 @@ func TestNormalize(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeMap(t *testing.T) {
+	ptrTestString := "ptrString"
+	ptrString := &ptrTestString
+
+	table := []struct {
+		name   string
+		input  map[any]any
+		expect map[string]any
+	}{
+		{
+			name:   "nil",
+			input:  nil,
+			expect: map[string]any{},
+		},
+		{
+			name:   "any is nil",
+			input:  map[any]any{"": nil},
+			expect: map[string]any{"": ""},
+		},
+		{
+			name:   "string",
+			input:  map[any]any{"fisher flannigan": "fitzbog"},
+			expect: map[string]any{"fisher flannigan": "fitzbog"},
+		},
+		{
+			name:   "number",
+			input:  map[any]any{-1.2345: -5.4321},
+			expect: map[string]any{"-1.2345": "-5.4321"},
+		},
+		{
+			name:   "slice",
+			input:  map[any]any{"k": []string{"a", "b"}},
+			expect: map[string]any{"k": "[a b]"},
+		},
+		{
+			name: "map",
+			input: map[any]any{struct{ fname string }{fname: "fvalue"}: map[string]struct{}{
+				"fisher flannigan fitzbog": {},
+			}},
+			expect: map[string]any{"{fname:fvalue}": "map[fisher flannigan fitzbog:{}]"},
+		},
+		{
+			name:   "concealer",
+			input:  map[any]any{"k": aConcealer{"fisher flannigan fitzbog"}},
+			expect: map[string]any{"k": "***"},
+		},
+		{
+			name:   "stringer",
+			input:  map[any]any{"k": aStringer{"I have seen the fnords."}},
+			expect: map[string]any{"k": "I have seen the fnords."},
+		},
+		{
+			name:   "not a stringer",
+			input:  map[any]any{"k": notAStringer{"I have seen the fnords."}},
+			expect: map[string]any{"k": "{v:I have seen the fnords.}"},
+		},
+		{
+			name:   "formatter",
+			input:  map[any]any{aFormatter{ptrString}: aFormatter{ptrString}},
+			expect: map[string]any{"formatted": "formatted"},
+		},
+		{
+			name:  "many values",
+			input: map[any]any{2: true, false: aStringer{"smarf"}},
+			expect: map[string]any{
+				"2":     "true",
+				"false": "smarf",
+			},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			result := NormalizeMap(test.input)
+			assert.Equal(t, test.expect, result)
+		})
+	}
+}

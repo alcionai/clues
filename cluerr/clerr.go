@@ -239,7 +239,7 @@ func (err *Err) WithMap(m map[string]any) *Err {
 	}
 
 	if len(m) > 0 {
-		err.data = err.data.AddValues(m)
+		err.data = err.data.AddValues(stringify.NormalizeMap(m))
 	}
 
 	return err
