@@ -101,6 +101,19 @@ func (cli *OTELClient) Close(ctx context.Context) error {
 // ------------------------------------------------------------
 
 type OTELConfig struct {
+	// Resource contains information about the thing sourcing logs, metrics, and
+	// traces in OTEL. This information will be available in backends on all logs
+	// traces, and metrics that are generated from this source.
+	//
+	// The provided resource should represent the service that's initializing
+	// clues. The resource should encapsulate all parts of the metrics that need
+	// reporting, not just a subset of them (i.e. it represents the "root" of the
+	// information that will be reported to OTEL).
+	//
+	// If not provided, a minimal Resource containing the service name will be
+	// created.
+	Resource *resource.Resource
+
 	// specify the endpoint location to use for grpc communication.
 	// If empty, no telemetry exporter will be generated.
 	// ex: localhost:4317
@@ -122,10 +135,17 @@ func NewOTELClient(
 	config OTELConfig,
 ) (*OTELClient, error) {
 	// -- Resource
-	server, err := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceNameKey.String(serviceName)))
-	if err != nil {
-		return nil, errors.Wrap(err, "creating otel server resource")
+	var (
+		err    error
+		server = config.Resource
+	)
+
+	if server == nil {
+		server, err = resource.New(ctx, resource.WithAttributes(
+			semconv.ServiceNameKey.String(serviceName)))
+		if err != nil {
+			return nil, errors.Wrap(err, "creating otel server resource")
+		}
 	}
 
 	// -- Client
