@@ -104,3 +104,13 @@ func Normalize(kvs ...any) map[string]any {
 
 	return norm
 }
+
+func NormalizeMap[K comparable, V any](m map[K]V) map[string]any {
+	kvs := make([]any, 0, len(m)*2)
+
+	for k, v := range m {
+		kvs = append(kvs, k, v)
+	}
+
+	return Normalize(kvs...)
+}
