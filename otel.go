@@ -19,6 +19,11 @@ type OTELConfig struct {
 	// traces in OTEL. This information will be available in backends on all logs
 	// traces, and metrics that are generated from this source.
 	//
+	// The provided resource should represent the service that's initializing
+	// clues. The resource should encapsulate all parts of the metrics that need
+	// reporting, not just a subset of them (i.e. it represents the "root" of the
+	// information that will be reported to OTEL).
+	//
 	// If not provided, a minimal Resource containing the service name will be
 	// created.
 	Resource *resource.Resource
