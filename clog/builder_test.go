@@ -53,17 +53,17 @@ func TestBuilder(t *testing.T) {
 
 			bld.SkipCaller(1)
 
-		// ensure no collision between separate builders
-		// using the same ctx.
-		err := cluerr.New("an error").
-			With("fnords", "i have seen them").
-			Label("errLabel")
+			// ensure no collision between separate builders
+			// using the same ctx.
+			err := cluerr.New("an error").
+				With("fnords", "i have seen them").
+				Label("errLabel")
 
-		other := CtxErr(ctx, err)
-		assert.Empty(t, other.with)
-		assert.Empty(t, other.labels)
-		assert.Empty(t, other.comments)
-		assert.ErrorIs(t, other.err, err, cluerr.ToCore(err))
+			other := CtxErr(ctx, err)
+			assert.Empty(t, other.with)
+			assert.Empty(t, other.labels)
+			assert.Empty(t, other.comments)
+			assert.ErrorIs(t, other.err, err, cluerr.ToCore(err))
 
 			other.With("foo", "smarf")
 			assert.Contains(t, other.with, "foo")
