@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 )
 
@@ -16,13 +17,13 @@ import (
 func histogramFromCtx(
 	ctx context.Context,
 	id string,
-) metric.Float64Histogram {
+) (*bus, recorder) {
 	b := fromCtx(ctx)
 	if b == nil {
-		return nil
+		return newBus(), nil
 	}
 
-	return b.histograms[formatID(id)]
+	return b, b.histograms[formatID(id)]
 }
 
 // getOrCreateHistogram attempts to retrieve a histogram from the
@@ -31,18 +32,25 @@ func histogramFromCtx(
 func getOrCreateHistogram(
 	ctx context.Context,
 	id string,
-) (metric.Float64Histogram, error) {
+) (recorder, error) {
 	id = formatID(id)
 
-	hist := histogramFromCtx(ctx, id)
+	b, hist := histogramFromCtx(ctx, id)
 	if hist != nil {
 		return hist, nil
+	}
+
+	if b.initializedToNoop {
+		nr := &noopRecorder{}
+		b.histograms[id] = nr
+
+		return nr, nil
 	}
 
 	// make a new one
 	nc := node.FromCtx(ctx)
 	if nc.OTEL == nil {
-		return nil, errors.New("no node in ctx")
+		return nil, cluerr.Stack(errNoNodeInCtx)
 	}
 
 	hist, err := nc.OTELMeter().Float64Histogram(id)
@@ -50,7 +58,6 @@ func getOrCreateHistogram(
 		return nil, errors.Wrap(err, "making new histogram")
 	}
 
-	b := fromCtx(ctx)
 	b.histograms[id] = hist
 
 	return hist, nil
@@ -72,9 +79,16 @@ func RegisterHistogram(
 	id = formatID(id)
 
 	// if we already have a histogram registered to that ID, do nothing.
-	hist := histogramFromCtx(ctx, id)
+	b, hist := histogramFromCtx(ctx, id)
 	if hist != nil {
 		return ctx, nil
+	}
+
+	if b.initializedToNoop {
+		nr := &noopRecorder{}
+		b.histograms[id] = nr
+
+		return embedInCtx(ctx, b), nil
 	}
 
 	// can't do anything if otel hasn't been initialized.
@@ -99,10 +113,9 @@ func RegisterHistogram(
 		return ctx, errors.Wrap(err, "creating histogram")
 	}
 
-	cb := fromCtx(ctx)
-	cb.histograms[id] = hist
+	b.histograms[id] = hist
 
-	return embedInCtx(ctx, cb), nil
+	return embedInCtx(ctx, b), nil
 }
 
 // Histogram returns a histogram factory for the provided id.
@@ -117,6 +130,14 @@ func Histogram[N number](id string) histogram[N] {
 type histogram[N number] struct {
 	base
 }
+
+type recorder interface {
+	Record(ctx context.Context, incr float64, options ...metric.RecordOption)
+}
+
+type noopRecorder struct{}
+
+func (n noopRecorder) Record(context.Context, float64, ...metric.RecordOption) {}
 
 // Add increments the histogram by n. n can be negative.
 func (c histogram[number]) Record(ctx context.Context, n number) {

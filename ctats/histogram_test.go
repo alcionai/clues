@@ -4,24 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alcionai/clues/internal/node"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestHistogram(t *testing.T) {
-	noc, err := node.NewOTELClient(
-		context.Background(),
-		t.Name(),
-		node.OTELConfig{})
-	require.NoError(t, err)
+	ctx := InitializeNoop(context.Background(), t.Name())
 
-	ctx := node.EmbedInCtx(context.Background(), &node.Node{OTEL: noc})
-
-	ctx, err = Initialize(ctx)
-	require.NoError(t, err)
-
-	ctx, err = RegisterHistogram(ctx, "reg.h", "test", "testing histogram")
+	ctx, err := RegisterHistogram(ctx, "reg.h", "test", "testing histogram")
 	require.NoError(t, err)
 
 	metricBus := fromCtx(ctx)

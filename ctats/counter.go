@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 )
 
@@ -16,13 +17,13 @@ import (
 func counterFromCtx(
 	ctx context.Context,
 	id string,
-) metric.Float64UpDownCounter {
+) (*bus, adder) {
 	b := fromCtx(ctx)
 	if b == nil {
-		return nil
+		return newBus(), nil
 	}
 
-	return b.counters[formatID(id)]
+	return b, b.counters[formatID(id)]
 }
 
 // getOrCreateCounter attempts to retrieve a counter from the
@@ -31,12 +32,19 @@ func counterFromCtx(
 func getOrCreateCounter(
 	ctx context.Context,
 	id string,
-) (metric.Float64UpDownCounter, error) {
+) (adder, error) {
 	id = formatID(id)
 
-	ctr := counterFromCtx(ctx, id)
+	b, ctr := counterFromCtx(ctx, id)
 	if ctr != nil {
 		return ctr, nil
+	}
+
+	if b.initializedToNoop {
+		na := &noopAdder{}
+		b.counters[id] = na
+
+		return na, nil
 	}
 
 	// make a new one
@@ -50,7 +58,6 @@ func getOrCreateCounter(
 		return nil, errors.Wrap(err, "making new counter")
 	}
 
-	b := fromCtx(ctx)
 	b.counters[id] = ctr
 
 	return ctr, nil
@@ -72,15 +79,22 @@ func RegisterCounter(
 	id = formatID(id)
 
 	// if we already have a counter registered to that ID, do nothing.
-	ctr := counterFromCtx(ctx, id)
+	b, ctr := counterFromCtx(ctx, id)
 	if ctr != nil {
 		return ctx, nil
+	}
+
+	if b.initializedToNoop {
+		na := &noopAdder{}
+		b.counters[id] = na
+
+		return embedInCtx(ctx, b), nil
 	}
 
 	// can't do anything if otel hasn't been initialized.
 	nc := node.FromCtx(ctx)
 	if nc.OTEL == nil {
-		return ctx, errors.New("no clues in ctx")
+		return ctx, cluerr.Stack(errNoNodeInCtx)
 	}
 
 	opts := []metric.Float64UpDownCounterOption{}
@@ -99,13 +113,11 @@ func RegisterCounter(
 		return ctx, errors.Wrap(err, "creating counter")
 	}
 
-	cb := fromCtx(ctx)
-	cb.counters[id] = ctr
+	b.counters[id] = ctr
 
-	return embedInCtx(ctx, cb), nil
+	return embedInCtx(ctx, b), nil
 }
 
-// Counter returns a counter factory for the provided id.
 // If a Counter instance has been registered for that ID, the
 // registered instance will be used.  If not, a new instance
 // will get generated.
@@ -117,6 +129,14 @@ func Counter[N number](id string) counter[N] {
 type counter[N number] struct {
 	base
 }
+
+type adder interface {
+	Add(ctx context.Context, incr float64, options ...metric.AddOption)
+}
+
+type noopAdder struct{}
+
+func (n noopAdder) Add(context.Context, float64, ...metric.AddOption) {}
 
 // Add increments the counter by n. n can be negative.
 func (c counter[number]) Add(ctx context.Context, n number) {

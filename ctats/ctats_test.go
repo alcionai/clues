@@ -6,8 +6,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/metric"
 )
+
+func TestInitializeNoop(t *testing.T) {
+	// should simply work
+	ctx := InitializeNoop(context.Background(), t.Name())
+	require.NotNil(t, ctx)
+
+	b := fromCtx(ctx)
+	require.NotNil(t, b)
+	assert.True(t, b.initializedToNoop)
+}
 
 func TestFormatID(t *testing.T) {
 	table := []struct {
@@ -70,11 +79,7 @@ func TestFormatID(t *testing.T) {
 }
 
 func TestInherit(t *testing.T) {
-	stubBus1 := &bus{
-		counters:   map[string]metric.Float64UpDownCounter{},
-		gauges:     map[string]metric.Float64Gauge{},
-		histograms: map[string]metric.Float64Histogram{},
-	}
+	stubBus1 := newBus()
 	stubBus2 := &bus{}
 
 	table := []struct {

@@ -1,9 +1,11 @@
 module github.com/alcionai/clues
 
 go 1.23.2
+
 toolchain go1.24.1
 
 require (
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/google/uuid v1.6.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0
@@ -24,7 +26,6 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1 // indirect

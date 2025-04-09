@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 )
 
@@ -16,13 +17,13 @@ import (
 func gaugeFromCtx(
 	ctx context.Context,
 	id string,
-) metric.Float64Gauge {
+) (*bus, recorder) {
 	b := fromCtx(ctx)
 	if b == nil {
-		return nil
+		return newBus(), nil
 	}
 
-	return b.gauges[formatID(id)]
+	return b, b.gauges[formatID(id)]
 }
 
 // getOrCreateGauge attempts to retrieve a gauge from the
@@ -31,18 +32,25 @@ func gaugeFromCtx(
 func getOrCreateGauge(
 	ctx context.Context,
 	id string,
-) (metric.Float64Gauge, error) {
+) (recorder, error) {
 	id = formatID(id)
 
-	gauge := gaugeFromCtx(ctx, id)
+	b, gauge := gaugeFromCtx(ctx, id)
 	if gauge != nil {
 		return gauge, nil
+	}
+
+	if b.initializedToNoop {
+		nr := &noopRecorder{}
+		b.gauges[id] = nr
+
+		return nr, nil
 	}
 
 	// make a new one
 	nc := node.FromCtx(ctx)
 	if nc.OTEL == nil {
-		return nil, errors.New("no node in ctx")
+		return nil, cluerr.Stack(errNoNodeInCtx)
 	}
 
 	gauge, err := nc.OTELMeter().Float64Gauge(id)
@@ -50,7 +58,6 @@ func getOrCreateGauge(
 		return nil, errors.Wrap(err, "making new gauge")
 	}
 
-	b := fromCtx(ctx)
 	b.gauges[id] = gauge
 
 	return gauge, nil
@@ -72,9 +79,16 @@ func RegisterGauge(
 	id = formatID(id)
 
 	// if we already have a gauge registered to that ID, do nothing.
-	gauge := gaugeFromCtx(ctx, id)
+	b, gauge := gaugeFromCtx(ctx, id)
 	if gauge != nil {
 		return ctx, nil
+	}
+
+	if b.initializedToNoop {
+		nr := &noopRecorder{}
+		b.gauges[id] = nr
+
+		return embedInCtx(ctx, b), nil
 	}
 
 	// can't do anything if otel hasn't been initialized.
@@ -99,10 +113,9 @@ func RegisterGauge(
 		return ctx, errors.Wrap(err, "creating gauge")
 	}
 
-	cb := fromCtx(ctx)
-	cb.gauges[id] = gauge
+	b.gauges[id] = gauge
 
-	return embedInCtx(ctx, cb), nil
+	return embedInCtx(ctx, b), nil
 }
 
 // Gauge returns a gauge factory for the provided id.
