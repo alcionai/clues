@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 )
 
@@ -80,7 +81,7 @@ func RegisterCounter(
 	// can't do anything if otel hasn't been initialized.
 	nc := node.FromCtx(ctx)
 	if nc.OTEL == nil {
-		return ctx, errors.New("no clues in ctx")
+		return ctx, cluerr.Stack(errNoNodeInCtx)
 	}
 
 	opts := []metric.Float64UpDownCounterOption{}

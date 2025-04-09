@@ -9,6 +9,12 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
+func TestInitializeNoop(t *testing.T) {
+	// should simply work
+	_, err := InitializeNoop(context.Background(), t.Name())
+	require.NoError(t, err)
+}
+
 func TestFormatID(t *testing.T) {
 	table := []struct {
 		name   string

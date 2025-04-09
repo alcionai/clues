@@ -7,6 +7,7 @@ import (
 
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/pkg/errors"
 )
@@ -65,6 +66,38 @@ func Initialize(ctx context.Context) (context.Context, error) {
 	}
 
 	return embedInCtx(ctx, b), nil
+}
+
+// InitializeNoop is a convenience function for conditions where ctats gets
+// invoked downstream, but has no expectations of upstream initialization,
+// such as during unit testing.  A noop init runs ctats as normal but without
+// expecting any connection with clients such as OTEL.
+func InitializeNoop(ctx context.Context, svc string) (context.Context, error) {
+	// if already initialized, do nothing
+	if fromCtx(ctx) != nil {
+		return ctx, nil
+	}
+
+	nc := node.FromCtx(ctx)
+	if nc == nil {
+		nc = &node.Node{}
+	}
+
+	// if otel config already present, we can continue using it.
+	if nc.OTEL == nil {
+		noc, err := node.NewOTELClient(ctx, svc, node.OTELConfig{})
+		if err != nil {
+			return ctx, cluerr.Wrap(err, "generating noop otel client")
+		}
+
+		nc.OTEL = noc
+	}
+
+	ctx = node.EmbedInCtx(ctx, nc)
+
+	ctx, err := Initialize(ctx)
+
+	return ctx, cluerr.Wrap(err, "initializing noop ctats client").OrNil()
 }
 
 // Inherit propagates the ctats client from one context to another.  This is particularly

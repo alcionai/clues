@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 )
 
@@ -42,7 +43,7 @@ func getOrCreateGauge(
 	// make a new one
 	nc := node.FromCtx(ctx)
 	if nc.OTEL == nil {
-		return nil, errors.New("no node in ctx")
+		return nil, cluerr.Stack(errNoNodeInCtx)
 	}
 
 	gauge, err := nc.OTELMeter().Float64Gauge(id)

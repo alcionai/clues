@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 )
 
@@ -18,6 +19,7 @@ func histogramFromCtx(
 	id string,
 ) metric.Float64Histogram {
 	b := fromCtx(ctx)
+
 	if b == nil {
 		return nil
 	}
@@ -42,7 +44,7 @@ func getOrCreateHistogram(
 	// make a new one
 	nc := node.FromCtx(ctx)
 	if nc.OTEL == nil {
-		return nil, errors.New("no node in ctx")
+		return nil, cluerr.Stack(errNoNodeInCtx)
 	}
 
 	hist, err := nc.OTELMeter().Float64Histogram(id)

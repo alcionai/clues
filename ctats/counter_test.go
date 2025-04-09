@@ -4,21 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alcionai/clues/internal/node"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCounter(t *testing.T) {
-	noc, err := node.NewOTELClient(
-		context.Background(),
-		t.Name(),
-		node.OTELConfig{})
-	require.NoError(t, err)
-
-	ctx := node.EmbedInCtx(context.Background(), &node.Node{OTEL: noc})
-
-	ctx, err = Initialize(ctx)
+	ctx, err := InitializeNoop(context.Background(), t.Name())
 	require.NoError(t, err)
 
 	ctx, err = RegisterCounter(ctx, "reg.c", "test", "testing counter")
