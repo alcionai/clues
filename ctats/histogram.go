@@ -11,21 +11,6 @@ import (
 	"github.com/alcionai/clues/internal/node"
 )
 
-// histogramFromCtx retrieves the histogram instance from the metrics bus
-// in the context.  If the ctx has no metrics bus, or if the bus does
-// not have a histogram for the provided ID, returns nil.
-func histogramFromCtx(
-	ctx context.Context,
-	id string,
-) (*bus, recorder) {
-	b := fromCtx(ctx)
-	if b == nil {
-		return newBus(), nil
-	}
-
-	return b, b.histograms[formatID(id)]
-}
-
 // getOrCreateHistogram attempts to retrieve a histogram from the
 // context with the given ID.  If it is unable to find a histogram
 // with that ID, a new histogram is generated.
@@ -34,17 +19,15 @@ func getOrCreateHistogram(
 	id string,
 ) (recorder, error) {
 	id = formatID(id)
+	b := fromCtx(ctx)
 
-	b, hist := histogramFromCtx(ctx, id)
-	if hist != nil {
-		return hist, nil
-	}
+	var hist recorder
 
-	if b.initializedToNoop {
-		nr := &noopRecorder{}
-		b.histograms[id] = nr
-
-		return nr, nil
+	if b != nil {
+		hist = b.getHistogram(ctx, id)
+		if hist != nil {
+			return hist, nil
+		}
 	}
 
 	// make a new one
@@ -58,7 +41,9 @@ func getOrCreateHistogram(
 		return nil, errors.Wrap(err, "making new histogram")
 	}
 
-	b.histograms[id] = hist
+	if b != nil {
+		b.histograms.Store(id, hist)
+	}
 
 	return hist, nil
 }
@@ -78,17 +63,16 @@ func RegisterHistogram(
 ) (context.Context, error) {
 	id = formatID(id)
 
-	// if we already have a histogram registered to that ID, do nothing.
-	b, hist := histogramFromCtx(ctx, id)
-	if hist != nil {
-		return ctx, nil
+	b := fromCtx(ctx)
+	if b == nil {
+		b = newBus()
 	}
 
-	if b.initializedToNoop {
-		nr := &noopRecorder{}
-		b.histograms[id] = nr
+	var hist recorder
 
-		return embedInCtx(ctx, b), nil
+	hist = b.getHistogram(ctx, id)
+	if hist != nil {
+		return ctx, nil
 	}
 
 	// can't do anything if otel hasn't been initialized.
@@ -113,7 +97,7 @@ func RegisterHistogram(
 		return ctx, errors.Wrap(err, "creating histogram")
 	}
 
-	b.histograms[id] = hist
+	b.histograms.Store(id, hist)
 
 	return embedInCtx(ctx, b), nil
 }

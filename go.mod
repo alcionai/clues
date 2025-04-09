@@ -1,13 +1,12 @@
 module github.com/alcionai/clues
 
-go 1.23.2
-
-toolchain go1.24.1
+go 1.24.2
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/google/uuid v1.6.0
 	github.com/pkg/errors v0.9.1
+	github.com/puzpuzpuz/xsync/v4 v4.0.0
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.11.0

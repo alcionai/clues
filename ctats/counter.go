@@ -11,21 +11,6 @@ import (
 	"github.com/alcionai/clues/internal/node"
 )
 
-// counterFromCtx retrieves the counter instance from the metrics bus
-// in the context.  If the ctx has no metrics bus, or if the bus does
-// not have a counter for the provided ID, returns nil.
-func counterFromCtx(
-	ctx context.Context,
-	id string,
-) (*bus, adder) {
-	b := fromCtx(ctx)
-	if b == nil {
-		return newBus(), nil
-	}
-
-	return b, b.counters[formatID(id)]
-}
-
 // getOrCreateCounter attempts to retrieve a counter from the
 // context with the given ID.  If it is unable to find a counter
 // with that ID, a new counter is generated.
@@ -34,17 +19,16 @@ func getOrCreateCounter(
 	id string,
 ) (adder, error) {
 	id = formatID(id)
+	b := fromCtx(ctx)
 
-	b, ctr := counterFromCtx(ctx, id)
-	if ctr != nil {
-		return ctr, nil
-	}
+	var ctr adder
 
-	if b.initializedToNoop {
-		na := &noopAdder{}
-		b.counters[id] = na
-
-		return na, nil
+	if b != nil {
+		// if we already have a counter registered to that ID, do nothing.
+		ctr = b.getCounter(id)
+		if ctr != nil {
+			return ctr, nil
+		}
 	}
 
 	// make a new one
@@ -58,7 +42,9 @@ func getOrCreateCounter(
 		return nil, errors.Wrap(err, "making new counter")
 	}
 
-	b.counters[id] = ctr
+	if b != nil {
+		b.counters.Store(id, ctr)
+	}
 
 	return ctr, nil
 }
@@ -78,17 +64,17 @@ func RegisterCounter(
 ) (context.Context, error) {
 	id = formatID(id)
 
-	// if we already have a counter registered to that ID, do nothing.
-	b, ctr := counterFromCtx(ctx, id)
-	if ctr != nil {
-		return ctx, nil
+	b := fromCtx(ctx)
+	if b == nil {
+		b = newBus()
 	}
 
-	if b.initializedToNoop {
-		na := &noopAdder{}
-		b.counters[id] = na
+	var ctr adder
 
-		return embedInCtx(ctx, b), nil
+	// if we already have a counter registered to that ID, do nothing.
+	ctr = b.getCounter(id)
+	if ctr != nil {
+		return ctx, nil
 	}
 
 	// can't do anything if otel hasn't been initialized.
@@ -113,7 +99,7 @@ func RegisterCounter(
 		return ctx, errors.Wrap(err, "creating counter")
 	}
 
-	b.counters[id] = ctr
+	b.counters.Store(id, ctr)
 
 	return embedInCtx(ctx, b), nil
 }
