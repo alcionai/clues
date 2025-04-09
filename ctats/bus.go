@@ -3,7 +3,7 @@ package ctats
 import (
 	"context"
 
-	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/puzpuzpuz/xsync/v4"
 )
 
 type metricsBusKey string
@@ -29,9 +29,9 @@ func embedInCtx(ctx context.Context, b *bus) context.Context {
 }
 
 type bus struct {
-	counters   *xsync.MapOf[string, adder]
-	gauges     *xsync.MapOf[string, recorder]
-	histograms *xsync.MapOf[string, recorder]
+	counters   *xsync.Map[string, adder]
+	gauges     *xsync.Map[string, recorder]
+	histograms *xsync.Map[string, recorder]
 
 	// initializedToNoop is a testing convenience flag that identifies
 	// whether the OTEL client should be configured or not.
@@ -40,9 +40,9 @@ type bus struct {
 
 func newBus() *bus {
 	return &bus{
-		counters:   xsync.NewMapOf[string, adder](),
-		gauges:     xsync.NewMapOf[string, recorder](),
-		histograms: xsync.NewMapOf[string, recorder](),
+		counters:   xsync.NewMap[string, adder](),
+		gauges:     xsync.NewMap[string, recorder](),
+		histograms: xsync.NewMap[string, recorder](),
 	}
 }
 

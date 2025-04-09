@@ -362,8 +362,12 @@ func TestAddComment(t *testing.T) {
 	}
 }
 
-func addCommentToCtx(ctx context.Context, msg string) context.Context {
-	return clues.AddComment(ctx, msg)
+func addCommentToCtx(
+	ctx context.Context,
+	msg string,
+	args ...any,
+) context.Context {
+	return clues.AddComment(ctx, msg, args...)
 }
 
 // requires sets of 3 strings
