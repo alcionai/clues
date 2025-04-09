@@ -78,7 +78,7 @@ func (b bus) getGauge(
 		return g
 	}
 
-	if b.counters == nil {
+	if b.gauges == nil {
 		return nil
 	}
 
