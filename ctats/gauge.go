@@ -11,21 +11,6 @@ import (
 	"github.com/alcionai/clues/internal/node"
 )
 
-// gaugeFromCtx retrieves the gauge instance from the metrics bus
-// in the context.  If the ctx has no metrics bus, or if the bus does
-// not have a gauge for the provided ID, returns nil.
-func gaugeFromCtx(
-	ctx context.Context,
-	id string,
-) (*bus, recorder) {
-	b := fromCtx(ctx)
-	if b == nil {
-		return newBus(), nil
-	}
-
-	return b, b.gauges[formatID(id)]
-}
-
 // getOrCreateGauge attempts to retrieve a gauge from the
 // context with the given ID.  If it is unable to find a gauge
 // with that ID, a new gauge is generated.
@@ -34,17 +19,15 @@ func getOrCreateGauge(
 	id string,
 ) (recorder, error) {
 	id = formatID(id)
+	b := fromCtx(ctx)
 
-	b, gauge := gaugeFromCtx(ctx, id)
-	if gauge != nil {
-		return gauge, nil
-	}
+	var gauge recorder
 
-	if b.initializedToNoop {
-		nr := &noopRecorder{}
-		b.gauges[id] = nr
-
-		return nr, nil
+	if b != nil {
+		gauge = b.getGauge(ctx, id)
+		if gauge != nil {
+			return gauge, nil
+		}
 	}
 
 	// make a new one
@@ -58,7 +41,9 @@ func getOrCreateGauge(
 		return nil, errors.Wrap(err, "making new gauge")
 	}
 
-	b.gauges[id] = gauge
+	if b != nil {
+		b.gauges.Store(id, gauge)
+	}
 
 	return gauge, nil
 }
@@ -78,17 +63,16 @@ func RegisterGauge(
 ) (context.Context, error) {
 	id = formatID(id)
 
-	// if we already have a gauge registered to that ID, do nothing.
-	b, gauge := gaugeFromCtx(ctx, id)
-	if gauge != nil {
-		return ctx, nil
+	b := fromCtx(ctx)
+	if b == nil {
+		b = newBus()
 	}
 
-	if b.initializedToNoop {
-		nr := &noopRecorder{}
-		b.gauges[id] = nr
+	var gauge recorder
 
-		return embedInCtx(ctx, b), nil
+	gauge = b.getGauge(ctx, id)
+	if gauge != nil {
+		return ctx, nil
 	}
 
 	// can't do anything if otel hasn't been initialized.
@@ -113,7 +97,7 @@ func RegisterGauge(
 		return ctx, errors.Wrap(err, "creating gauge")
 	}
 
-	b.gauges[id] = gauge
+	b.gauges.Store(id, gauge)
 
 	return embedInCtx(ctx, b), nil
 }

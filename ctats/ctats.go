@@ -5,53 +5,14 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/alcionai/clues/internal/node"
 	"github.com/pkg/errors"
+
+	"github.com/alcionai/clues/internal/node"
 )
 
 // ---------------------------------------------------------------------------
 // ctx handling
 // ---------------------------------------------------------------------------
-
-type metricsBusKey string
-
-const defaultCtxKey metricsBusKey = "default_metrics_bus_key"
-
-func fromCtx(ctx context.Context) *bus {
-	if ctx == nil {
-		return nil
-	}
-
-	dn := ctx.Value(defaultCtxKey)
-
-	if dn == nil {
-		return nil
-	}
-
-	return dn.(*bus)
-}
-
-func embedInCtx(ctx context.Context, b *bus) context.Context {
-	return context.WithValue(ctx, defaultCtxKey, b)
-}
-
-type bus struct {
-	counters   map[string]adder
-	gauges     map[string]recorder
-	histograms map[string]recorder
-
-	// initializedToNoop is a testing convenience flag that identifies
-	// whether the OTEL client should be configured or not.
-	initializedToNoop bool
-}
-
-func newBus() *bus {
-	return &bus{
-		counters:   map[string]adder{},
-		gauges:     map[string]recorder{},
-		histograms: map[string]recorder{},
-	}
-}
 
 // Initialize ensures that a metrics collector exists in the ctx.
 // If the ctx has not already run clues.Initialize() and generated
