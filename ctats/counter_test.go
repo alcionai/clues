@@ -9,10 +9,9 @@ import (
 )
 
 func TestCounter(t *testing.T) {
-	ctx, err := InitializeNoop(context.Background(), t.Name())
-	require.NoError(t, err)
+	ctx := InitializeNoop(context.Background(), t.Name())
 
-	ctx, err = RegisterCounter(ctx, "reg.c", "test", "testing counter")
+	ctx, err := RegisterCounter(ctx, "reg.c", "test", "testing counter")
 	require.NoError(t, err)
 
 	metricBus := fromCtx(ctx)

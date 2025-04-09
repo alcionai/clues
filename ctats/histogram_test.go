@@ -9,10 +9,9 @@ import (
 )
 
 func TestHistogram(t *testing.T) {
-	ctx, err := InitializeNoop(context.Background(), t.Name())
-	require.NoError(t, err)
+	ctx := InitializeNoop(context.Background(), t.Name())
 
-	ctx, err = RegisterHistogram(ctx, "reg.h", "test", "testing histogram")
+	ctx, err := RegisterHistogram(ctx, "reg.h", "test", "testing histogram")
 	require.NoError(t, err)
 
 	metricBus := fromCtx(ctx)

@@ -5,9 +5,6 @@ import (
 	"regexp"
 	"strings"
 
-	"go.opentelemetry.io/otel/metric"
-
-	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/pkg/errors"
 )
@@ -39,9 +36,21 @@ func embedInCtx(ctx context.Context, b *bus) context.Context {
 }
 
 type bus struct {
-	counters   map[string]metric.Float64UpDownCounter
-	gauges     map[string]metric.Float64Gauge
-	histograms map[string]metric.Float64Histogram
+	counters   map[string]adder
+	gauges     map[string]recorder
+	histograms map[string]recorder
+
+	// initializedToNoop is a testing convenience flag that identifies
+	// whether the OTEL client should be configured or not.
+	initializedToNoop bool
+}
+
+func newBus() *bus {
+	return &bus{
+		counters:   map[string]adder{},
+		gauges:     map[string]recorder{},
+		histograms: map[string]recorder{},
+	}
 }
 
 // Initialize ensures that a metrics collector exists in the ctx.
@@ -50,20 +59,16 @@ type bus struct {
 //
 // Multiple calls to Initialize will no-op all after the first.
 func Initialize(ctx context.Context) (context.Context, error) {
+	if fromCtx(ctx) != nil {
+		return ctx, nil
+	}
+
 	nc := node.FromCtx(ctx)
 	if nc == nil || nc.OTEL == nil {
 		return ctx, errors.New("clues.Initialize has not been run on this context")
 	}
 
-	if fromCtx(ctx) != nil {
-		return ctx, nil
-	}
-
-	b := &bus{
-		counters:   map[string]metric.Float64UpDownCounter{},
-		gauges:     map[string]metric.Float64Gauge{},
-		histograms: map[string]metric.Float64Histogram{},
-	}
+	b := newBus()
 
 	return embedInCtx(ctx, b), nil
 }
@@ -72,32 +77,16 @@ func Initialize(ctx context.Context) (context.Context, error) {
 // invoked downstream, but has no expectations of upstream initialization,
 // such as during unit testing.  A noop init runs ctats as normal but without
 // expecting any connection with clients such as OTEL.
-func InitializeNoop(ctx context.Context, svc string) (context.Context, error) {
+func InitializeNoop(ctx context.Context, svc string) context.Context {
 	// if already initialized, do nothing
 	if fromCtx(ctx) != nil {
-		return ctx, nil
+		return ctx
 	}
 
-	nc := node.FromCtx(ctx)
-	if nc == nil {
-		nc = &node.Node{}
-	}
+	b := newBus()
+	b.initializedToNoop = true
 
-	// if otel config already present, we can continue using it.
-	if nc.OTEL == nil {
-		noc, err := node.NewOTELClient(ctx, svc, node.OTELConfig{})
-		if err != nil {
-			return ctx, cluerr.Wrap(err, "generating noop otel client")
-		}
-
-		nc.OTEL = noc
-	}
-
-	ctx = node.EmbedInCtx(ctx, nc)
-
-	ctx, err := Initialize(ctx)
-
-	return ctx, cluerr.Wrap(err, "initializing noop ctats client").OrNil()
+	return embedInCtx(ctx, b)
 }
 
 // Inherit propagates the ctats client from one context to another.  This is particularly

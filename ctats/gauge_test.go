@@ -9,10 +9,9 @@ import (
 )
 
 func TestGauge(t *testing.T) {
-	ctx, err := InitializeNoop(context.Background(), t.Name())
-	require.NoError(t, err)
+	ctx := InitializeNoop(context.Background(), t.Name())
 
-	ctx, err = RegisterGauge(ctx, "reg.g", "test", "testing gauge")
+	ctx, err := RegisterGauge(ctx, "reg.g", "test", "testing gauge")
 	require.NoError(t, err)
 
 	metricBus := fromCtx(ctx)
