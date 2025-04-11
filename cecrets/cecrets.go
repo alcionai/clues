@@ -6,8 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
-	"log"
 	"time"
 
 	"github.com/alcionai/clues/internal/stringify"
@@ -92,10 +90,7 @@ type secret struct {
 
 // use the hashed string in any fmt verb.
 func (s secret) Format(fs fmt.State, verb rune) {
-	_, err := io.WriteString(fs, s.hashText)
-	if err != nil {
-		log.Printf("error writing string: %+v\n", err)
-	}
+	fmt.Fprint(fs, s.hashText)
 }
 
 func (s secret) String() string      { return s.hashText }
