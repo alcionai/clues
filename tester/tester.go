@@ -45,8 +45,8 @@ type errLogfer interface {
 //
 // Returns true if the test fails.
 func Contains(
-	t errLogfer,
 	errOrCtx any,
+	t errLogfer,
 	kvs ...any,
 ) bool {
 	if slices.Contains(kvs, any(AllPass)) {
@@ -119,8 +119,8 @@ func Contains(
 //
 // Returns true if the test fails.
 func ContainsMap(
-	t errLogfer,
 	errOrCtx any,
+	t errLogfer,
 	m map[string]any,
 ) bool {
 	if len(m) == 0 {
@@ -220,6 +220,7 @@ func ContainsLabels(
 	for _, expect := range expected {
 		if _, ok := labels[expect]; !ok {
 			t.Error("missing label:", expect)
+
 			errored = true
 		}
 	}

@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/alcionai/clues/internal/stringify"
@@ -18,6 +17,7 @@ type hashAlg int
 
 const (
 	SHA256 hashAlg = iota
+	//nolint:revive
 	HMAC_SHA256
 	Plaintext
 	Flatmask
@@ -89,11 +89,14 @@ type secret struct {
 }
 
 // use the hashed string in any fmt verb.
-func (s secret) Format(fs fmt.State, verb rune) { io.WriteString(fs, s.hashText) }
-func (s secret) String() string                 { return s.hashText }
-func (s secret) Conceal() string                { return s.hashText }
-func (s secret) PlainString() string            { return s.plainText }
-func (s secret) V() any                         { return s.value }
+func (s secret) Format(fs fmt.State, verb rune) {
+	fmt.Fprint(fs, s.hashText)
+}
+
+func (s secret) String() string      { return s.hashText }
+func (s secret) Conceal() string     { return s.hashText }
+func (s secret) PlainString() string { return s.plainText }
+func (s secret) V() any              { return s.value }
 
 // ---------------------------------------------------------------------------
 // concealer constructors

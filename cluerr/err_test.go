@@ -3,10 +3,10 @@ package cluerr_test
 import (
 	"context"
 	"fmt"
+	"maps"
 	"testing"
 
 	"github.com/pkg/errors"
-	"golang.org/x/exp/maps"
 
 	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cluerr"
@@ -205,11 +205,17 @@ func TestLabel(t *testing.T) {
 				if test.initial != nil {
 					t.Error("error should not be nil after labeling")
 				}
+
 				return
 			}
 
-			err.Label("bar")
+			ref := err.Label("bar")
+
 			if !cluerr.HasLabel(err, "bar") {
+				t.Error("expected error to have label [bar]")
+			}
+
+			if !cluerr.HasLabel(ref, "bar") {
 				t.Error("expected error to have label [bar]")
 			}
 
@@ -259,12 +265,12 @@ func TestLabels(t *testing.T) {
 }
 
 var (
-	base = errors.New("an error")
-	cerr = func() error { return cluerr.Stack(base) }
-	werr = func() error {
-		return fmt.Errorf("%w", cluerr.Wrap(base, "wrapped error with vals").With("z", 0))
+	errBase                   = errors.New("an error")
+	errCluesStackedBase       = func() error { return cluerr.Stack(errBase) }
+	errFmtWrappedCluesWrapped = func() error {
+		return fmt.Errorf("%w", cluerr.Wrap(errBase, "wrapped error with vals").With("z", 0))
 	}
-	serr = func() error {
+	errCluesStackedCluesNew = func() error {
 		return cluerr.Stack(cluerr.New("primary").With("z", 0), errors.New("secondary"))
 	}
 )
@@ -277,34 +283,183 @@ func TestWith(t *testing.T) {
 		with    [][]any
 		expect  msa
 	}{
-		{"nil error", nil, "k", "v", [][]any{{"k2", "v2"}}, msa{}},
-		{"only base error vals", base, "k", "v", nil, msa{"k": "v"}},
-		{"empty base error vals", base, "", "", nil, msa{"": ""}},
-		{"standard", base, "k", "v", [][]any{{"k2", "v2"}}, msa{"k": "v", "k2": "v2"}},
-		{"duplicates", base, "k", "v", [][]any{{"k", "v2"}}, msa{"k": "v2"}},
-		{"multi", base, "a", "1", [][]any{{"b", "2"}, {"c", "3"}}, msa{"a": "1", "b": "2", "c": "3"}},
-		{"only clue error vals", cerr(), "k", "v", nil, msa{"k": "v"}},
-		{"empty clue error vals", cerr(), "", "", nil, msa{"": ""}},
-		{"standard cerr", cerr(), "k", "v", [][]any{{"k2", "v2"}}, msa{"k": "v", "k2": "v2"}},
-		{"duplicates cerr", cerr(), "k", "v", [][]any{{"k", "v2"}}, msa{"k": "v2"}},
-		{"multi cerr", cerr(), "a", "1", [][]any{{"b", "2"}, {"c", "3"}}, msa{"a": "1", "b": "2", "c": "3"}},
-		{"only wrapped error vals", werr(), "k", "v", nil, msa{"k": "v", "z": 0}},
-		{"empty wrapped error vals", werr(), "", "", nil, msa{"": "", "z": 0}},
-		{"standard wrapped", werr(), "k", "v", [][]any{{"k2", "v2"}}, msa{"k": "v", "k2": "v2", "z": 0}},
-		{"duplicates wrapped", werr(), "k", "v", [][]any{{"k", "v2"}}, msa{"k": "v2", "z": 0}},
-		{"multi wrapped", werr(), "a", "1", [][]any{{"b", "2"}, {"c", "3"}}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
-		{"only stacked error vals", serr(), "k", "v", nil, msa{"k": "v", "z": 0}},
-		{"empty stacked error vals", serr(), "", "", nil, msa{"": "", "z": 0}},
-		{"standard stacked", serr(), "k", "v", [][]any{{"k2", "v2"}}, msa{"k": "v", "k2": "v2", "z": 0}},
-		{"duplicates stacked", serr(), "k", "v", [][]any{{"k", "v2"}}, msa{"k": "v2", "z": 0}},
-		{"multi stacked", serr(), "a", "1", [][]any{{"b", "2"}, {"c", "3"}}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
+		{
+			"nil error",
+			nil,
+			"k",
+			"v",
+			[][]any{{"k2", "v2"}},
+			msa{},
+		},
+		{
+			"only base error vals",
+			errBase,
+			"k",
+			"v",
+			nil,
+			msa{"k": "v"},
+		},
+		{
+			"empty base error vals",
+			errBase,
+			"",
+			"",
+			nil,
+			msa{"": ""},
+		},
+		{
+			"standard",
+			errBase,
+			"k",
+			"v",
+			[][]any{{"k2", "v2"}},
+			msa{"k": "v", "k2": "v2"},
+		},
+		{
+			"duplicates",
+			errBase,
+			"k",
+			"v",
+			[][]any{{"k", "v2"}},
+			msa{"k": "v2"},
+		},
+		{
+			"multi",
+			errBase,
+			"a",
+			"1",
+			[][]any{{"b", "2"}, {"c", "3"}},
+			msa{"a": "1", "b": "2", "c": "3"},
+		},
+		{
+			"only clue error vals",
+			errCluesStackedBase(),
+			"k",
+			"v",
+			nil,
+			msa{"k": "v"},
+		},
+		{
+			"empty clue error vals",
+			errCluesStackedBase(),
+			"",
+			"",
+			nil,
+			msa{"": ""},
+		},
+		{
+			"standard cerr",
+			errCluesStackedBase(),
+			"k",
+			"v",
+			[][]any{{"k2", "v2"}},
+			msa{"k": "v", "k2": "v2"},
+		},
+		{
+			"duplicates cerr",
+			errCluesStackedBase(),
+			"k",
+			"v",
+			[][]any{{"k", "v2"}},
+			msa{"k": "v2"},
+		},
+		{
+			"multi cerr",
+			errCluesStackedBase(),
+			"a",
+			"1",
+			[][]any{{"b", "2"}, {"c", "3"}},
+			msa{"a": "1", "b": "2", "c": "3"},
+		},
+		{
+			"only wrapped error vals",
+			errFmtWrappedCluesWrapped(),
+			"k",
+			"v",
+			nil,
+			msa{"k": "v", "z": 0},
+		},
+		{
+			"empty wrapped error vals",
+			errFmtWrappedCluesWrapped(),
+			"",
+			"",
+			nil,
+			msa{"": "", "z": 0},
+		},
+		{
+			"standard wrapped",
+			errFmtWrappedCluesWrapped(),
+			"k",
+			"v",
+			[][]any{{"k2", "v2"}},
+			msa{"k": "v", "k2": "v2", "z": 0},
+		},
+		{
+			"duplicates wrapped",
+			errFmtWrappedCluesWrapped(),
+			"k",
+			"v",
+			[][]any{{"k", "v2"}},
+			msa{"k": "v2", "z": 0},
+		},
+		{
+			"multi wrapped",
+			errFmtWrappedCluesWrapped(),
+			"a",
+			"1",
+			[][]any{{"b", "2"}, {"c", "3"}},
+			msa{"a": "1", "b": "2", "c": "3", "z": 0},
+		},
+		{
+			"only stacked error vals",
+			errCluesStackedCluesNew(),
+			"k",
+			"v",
+			nil,
+			msa{"k": "v", "z": 0},
+		},
+		{
+			"empty stacked error vals",
+			errCluesStackedCluesNew(),
+			"",
+			"",
+			nil,
+			msa{"": "", "z": 0},
+		},
+		{
+			"standard stacked",
+			errCluesStackedCluesNew(),
+			"k",
+			"v",
+			[][]any{{"k2", "v2"}},
+			msa{"k": "v", "k2": "v2", "z": 0},
+		},
+		{
+			"duplicates stacked",
+			errCluesStackedCluesNew(),
+			"k",
+			"v",
+			[][]any{{"k", "v2"}},
+			msa{"k": "v2", "z": 0},
+		},
+		{
+			"multi stacked",
+			errCluesStackedCluesNew(),
+			"a",
+			"1",
+			[][]any{{"b", "2"}, {"c", "3"}},
+			msa{"a": "1", "b": "2", "c": "3", "z": 0},
+		},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			err := cluerr.Stack(test.initial).With(test.k, test.v)
+
 			for _, kv := range test.with {
 				err = err.With(kv...)
 			}
+
 			tester.MustEquals(t, test.expect, cluerr.CluesIn(err).Map(), false)
 			tester.MustEquals(t, test.expect, err.Values().Map(), false)
 		})
@@ -319,27 +474,153 @@ func TestWithMap(t *testing.T) {
 		with    msa
 		expect  msa
 	}{
-		{"nil error", nil, msa{"k": "v"}, msa{"k2": "v2"}, msa{}},
-		{"only base error vals", base, msa{"k": "v"}, nil, msa{"k": "v"}},
-		{"empty base error vals", base, msa{"": ""}, nil, msa{"": ""}},
-		{"standard", base, msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2"}},
-		{"duplicates", base, msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2"}},
-		{"multi", base, msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3"}},
-		{"only clue error vals", cerr(), msa{"k": "v"}, nil, msa{"k": "v"}},
-		{"empty clue error vals", cerr(), msa{"": ""}, nil, msa{"": ""}},
-		{"standard cerr", cerr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2"}},
-		{"duplicates cerr", cerr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2"}},
-		{"multi cerr", cerr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3"}},
-		{"only wrapped error vals", werr(), msa{"k": "v"}, nil, msa{"k": "v", "z": 0}},
-		{"empty wrapped error vals", werr(), msa{"": ""}, nil, msa{"": "", "z": 0}},
-		{"standard wrapped", werr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2", "z": 0}},
-		{"duplicates wrapped", werr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2", "z": 0}},
-		{"multi wrapped", werr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
-		{"only stacked error vals", serr(), msa{"k": "v"}, nil, msa{"k": "v", "z": 0}},
-		{"empty stacked error vals", serr(), msa{"": ""}, nil, msa{"": "", "z": 0}},
-		{"standard stacked", serr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2", "z": 0}},
-		{"duplicates stacked", serr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2", "z": 0}},
-		{"multi stacked", serr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
+		{
+			"nil error",
+			nil,
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{},
+		},
+		{
+			"only base error vals",
+			errBase,
+			msa{"k": "v"},
+			nil,
+			msa{"k": "v"},
+		},
+		{
+			"empty base error vals",
+			errBase,
+			msa{"": ""},
+			nil,
+			msa{"": ""},
+		},
+		{
+			"standard",
+			errBase,
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{"k": "v", "k2": "v2"},
+		},
+		{
+			"duplicates",
+			errBase,
+			msa{"k": "v"},
+			msa{"k": "v2"},
+			msa{"k": "v2"},
+		},
+		{
+			"multi",
+			errBase,
+			msa{"a": "1"},
+			msa{"b": "2", "c": "3"},
+			msa{"a": "1", "b": "2", "c": "3"},
+		},
+		{
+			"only clue error vals",
+			errCluesStackedBase(),
+			msa{"k": "v"},
+			nil,
+			msa{"k": "v"},
+		},
+		{
+			"empty clue error vals",
+			errCluesStackedBase(),
+			msa{"": ""},
+			nil,
+			msa{"": ""},
+		},
+		{
+			"standard cerr",
+			errCluesStackedBase(),
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{"k": "v", "k2": "v2"},
+		},
+		{
+			"duplicates cerr",
+			errCluesStackedBase(),
+			msa{"k": "v"},
+			msa{"k": "v2"},
+			msa{"k": "v2"},
+		},
+		{
+			"multi cerr",
+			errCluesStackedBase(),
+			msa{"a": "1"},
+			msa{"b": "2", "c": "3"},
+			msa{"a": "1", "b": "2", "c": "3"},
+		},
+		{
+			"only wrapped error vals",
+			errFmtWrappedCluesWrapped(),
+			msa{"k": "v"},
+			nil,
+			msa{"k": "v", "z": 0},
+		},
+		{
+			"empty wrapped error vals",
+			errFmtWrappedCluesWrapped(),
+			msa{"": ""},
+			nil,
+			msa{"": "", "z": 0},
+		},
+		{
+			"standard wrapped",
+			errFmtWrappedCluesWrapped(),
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{"k": "v", "k2": "v2", "z": 0},
+		},
+		{
+			"duplicates wrapped",
+			errFmtWrappedCluesWrapped(),
+			msa{"k": "v"},
+			msa{"k": "v2"},
+			msa{"k": "v2", "z": 0},
+		},
+		{
+			"multi wrapped",
+			errFmtWrappedCluesWrapped(),
+			msa{"a": "1"},
+			msa{"b": "2", "c": "3"},
+			msa{"a": "1", "b": "2", "c": "3", "z": 0},
+		},
+		{
+			"only stacked error vals",
+			errCluesStackedCluesNew(),
+			msa{"k": "v"},
+			nil,
+			msa{"k": "v", "z": 0},
+		},
+		{
+			"empty stacked error vals",
+			errCluesStackedCluesNew(),
+			msa{"": ""},
+			nil,
+			msa{"": "", "z": 0},
+		},
+		{
+			"standard stacked",
+			errCluesStackedCluesNew(),
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{"k": "v", "k2": "v2", "z": 0},
+		},
+		{
+			"duplicates stacked",
+			errCluesStackedCluesNew(),
+			msa{"k": "v"},
+			msa{"k": "v2"},
+			msa{"k": "v2", "z": 0},
+		},
+		{
+			"multi stacked",
+			errCluesStackedCluesNew(),
+			msa{"a": "1"},
+			msa{"b": "2", "c": "3"},
+			msa{"a": "1", "b": "2", "c": "3", "z": 0},
+		},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
@@ -361,27 +642,153 @@ func TestWithClues(t *testing.T) {
 		with    msa
 		expect  msa
 	}{
-		{"nil error", nil, msa{"k": "v"}, msa{"k2": "v2"}, msa{}},
-		{"only base error vals", base, msa{"k": "v"}, nil, msa{"k": "v"}},
-		{"empty base error vals", base, msa{"": ""}, nil, msa{"": ""}},
-		{"standard", base, msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2"}},
-		{"duplicates", base, msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2"}},
-		{"multi", base, msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3"}},
-		{"only clue error vals", cerr(), msa{"k": "v"}, nil, msa{"k": "v"}},
-		{"empty clue error vals", cerr(), msa{"": ""}, nil, msa{"": ""}},
-		{"standard cerr", cerr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2"}},
-		{"duplicates cerr", cerr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2"}},
-		{"multi cerr", cerr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3"}},
-		{"only wrapped error vals", werr(), msa{"k": "v"}, nil, msa{"k": "v", "z": 0}},
-		{"empty wrapped error vals", werr(), msa{"": ""}, nil, msa{"": "", "z": 0}},
-		{"standard wrapped", werr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2", "z": 0}},
-		{"duplicates wrapped", werr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2", "z": 0}},
-		{"multi wrapped", werr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
-		{"only stacked error vals", serr(), msa{"k": "v"}, nil, msa{"k": "v", "z": 0}},
-		{"empty stacked error vals", serr(), msa{"": ""}, nil, msa{"": "", "z": 0}},
-		{"standard stacked", serr(), msa{"k": "v"}, msa{"k2": "v2"}, msa{"k": "v", "k2": "v2", "z": 0}},
-		{"duplicates stacked", serr(), msa{"k": "v"}, msa{"k": "v2"}, msa{"k": "v2", "z": 0}},
-		{"multi stacked", serr(), msa{"a": "1"}, msa{"b": "2", "c": "3"}, msa{"a": "1", "b": "2", "c": "3", "z": 0}},
+		{
+			"nil error",
+			nil,
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{},
+		},
+		{
+			"only base error vals",
+			errBase,
+			msa{"k": "v"},
+			nil,
+			msa{"k": "v"},
+		},
+		{
+			"empty base error vals",
+			errBase,
+			msa{"": ""},
+			nil,
+			msa{"": ""},
+		},
+		{
+			"standard",
+			errBase,
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{"k": "v", "k2": "v2"},
+		},
+		{
+			"duplicates",
+			errBase,
+			msa{"k": "v"},
+			msa{"k": "v2"},
+			msa{"k": "v2"},
+		},
+		{
+			"multi",
+			errBase,
+			msa{"a": "1"},
+			msa{"b": "2", "c": "3"},
+			msa{"a": "1", "b": "2", "c": "3"},
+		},
+		{
+			"only clue error vals",
+			errCluesStackedBase(),
+			msa{"k": "v"},
+			nil,
+			msa{"k": "v"},
+		},
+		{
+			"empty clue error vals",
+			errCluesStackedBase(),
+			msa{"": ""},
+			nil,
+			msa{"": ""},
+		},
+		{
+			"standard cerr",
+			errCluesStackedBase(),
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{"k": "v", "k2": "v2"},
+		},
+		{
+			"duplicates cerr",
+			errCluesStackedBase(),
+			msa{"k": "v"},
+			msa{"k": "v2"},
+			msa{"k": "v2"},
+		},
+		{
+			"multi cerr",
+			errCluesStackedBase(),
+			msa{"a": "1"},
+			msa{"b": "2", "c": "3"},
+			msa{"a": "1", "b": "2", "c": "3"},
+		},
+		{
+			"only wrapped error vals",
+			errFmtWrappedCluesWrapped(),
+			msa{"k": "v"},
+			nil,
+			msa{"k": "v", "z": 0},
+		},
+		{
+			"empty wrapped error vals",
+			errFmtWrappedCluesWrapped(),
+			msa{"": ""},
+			nil,
+			msa{"": "", "z": 0},
+		},
+		{
+			"standard wrapped",
+			errFmtWrappedCluesWrapped(),
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{"k": "v", "k2": "v2", "z": 0},
+		},
+		{
+			"duplicates wrapped",
+			errFmtWrappedCluesWrapped(),
+			msa{"k": "v"},
+			msa{"k": "v2"},
+			msa{"k": "v2", "z": 0},
+		},
+		{
+			"multi wrapped",
+			errFmtWrappedCluesWrapped(),
+			msa{"a": "1"},
+			msa{"b": "2", "c": "3"},
+			msa{"a": "1", "b": "2", "c": "3", "z": 0},
+		},
+		{
+			"only stacked error vals",
+			errCluesStackedCluesNew(),
+			msa{"k": "v"},
+			nil,
+			msa{"k": "v", "z": 0},
+		},
+		{
+			"empty stacked error vals",
+			errCluesStackedCluesNew(),
+			msa{"": ""},
+			nil,
+			msa{"": "", "z": 0},
+		},
+		{
+			"standard stacked",
+			errCluesStackedCluesNew(),
+			msa{"k": "v"},
+			msa{"k2": "v2"},
+			msa{"k": "v", "k2": "v2", "z": 0},
+		},
+		{
+			"duplicates stacked",
+			errCluesStackedCluesNew(),
+			msa{"k": "v"},
+			msa{"k": "v2"},
+			msa{"k": "v2", "z": 0},
+		},
+		{
+			"multi stacked",
+			errCluesStackedCluesNew(),
+			msa{"a": "1"},
+			msa{"b": "2", "c": "3"},
+			msa{"a": "1", "b": "2", "c": "3", "z": 0},
+		},
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
@@ -689,9 +1096,11 @@ func TestImmutableErrors(t *testing.T) {
 	err := cluerr.New("an error").With("k", "v")
 	check := msa{"k": "v"}
 	pre := cluerr.CluesIn(err)
+
 	tester.MustEquals(t, check, pre.Map(), false)
 
 	err2 := err.With("k2", "v2")
+
 	if _, ok := pre.Map()["k2"]; ok {
 		t.Errorf("previous map should not have been mutated by addition")
 	}
@@ -727,6 +1136,7 @@ const (
 	tgt  = "target"
 )
 
+//nolint:revive
 var (
 	target    = mockTarget{errors.New(tgt)}
 	sentinel  = errors.New(stnl)
@@ -773,8 +1183,14 @@ var testTable = []struct {
 		expectValues: msa{},
 	},
 	{
-		name:         "two wrap",
-		err:          cluerr.Wrap(cluerr.Wrap(cluerr.Stack(target, sentinel), "inner"), "outer"),
+		name: "two wrap",
+		err: cluerr.Wrap(
+			cluerr.Wrap(
+				cluerr.Stack(target, sentinel),
+				"inner",
+			),
+			"outer",
+		),
 		expectMsg:    "outer: inner: target: sentinel",
 		expectLabels: msa{},
 		expectValues: msa{},
@@ -892,6 +1308,7 @@ var testTable = []struct {
 			cluerr.Wrap(cluerr.Stack(target, sentinel, leftBase), "left-stack"),
 			cluerr.Wrap(cluerr.Stack(rightTop, rightBase), "right-stack"),
 		),
+		//nolint:lll
 		expectMsg: "left-stack: target: sentinel: left-base: right-stack: right-top: right-base",
 		expectLabels: msa{
 			lb: struct{}{},
@@ -1068,9 +1485,11 @@ func TestToCore(t *testing.T) {
 	for _, test := range testTable {
 		t.Run(test.name, func(t *testing.T) {
 			c := cluerr.ToCore(test.err)
+
 			if test.expectMsg != c.Msg {
 				t.Errorf("expected Msg [%v], got [%v]", test.expectMsg, c.Msg)
 			}
+
 			tester.MustEquals(t, test.expectLabels, toMSA(c.Labels), false)
 			tester.MustEquals(t, test.expectValues, toMSA(c.Values), false)
 		})
@@ -1084,6 +1503,7 @@ func TestStackNils(t *testing.T) {
 	}
 
 	e := cluerr.New("err")
+
 	result = cluerr.Stack(e, nil)
 	if result.Error() != e.Error() {
 		t.Errorf("expected [%v], got [%v]", e, result)

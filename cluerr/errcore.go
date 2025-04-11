@@ -6,7 +6,6 @@ import (
 
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
-	"golang.org/x/exp/maps"
 )
 
 // ErrCore is a minimized version of an Err{}. It produces a concrete, storable
@@ -70,7 +69,13 @@ func (ec *ErrCore) String() string {
 // stringer handles all the fancy formatting of an errorCore.
 func (ec *ErrCore) stringer(fancy bool) string {
 	sep := ", "
-	ls := strings.Join(maps.Keys(ec.Labels), sep)
+	keys := []string{}
+
+	for k := range ec.Labels {
+		keys = append(keys, k)
+	}
+
+	ls := strings.Join(keys, sep)
 
 	vsl := []string{}
 	for k, v := range ec.Values {
@@ -87,7 +92,11 @@ func (ec *ErrCore) stringer(fancy bool) string {
 	cs := strings.Join(csl, sep)
 
 	if fancy {
-		return `{msg:"` + ec.Msg + `", labels:[` + ls + `], values:{` + vs + `}, comments:[` + cs + `]}`
+		return `{msg:"` + ec.Msg +
+			`", labels:[` + ls +
+			`], values:{` + vs +
+			`}, comments:[` + cs +
+			`]}`
 	}
 
 	s := []string{}

@@ -5,10 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/tester"
-	"github.com/stretchr/testify/assert"
 )
 
 type mockT struct {
@@ -174,7 +175,7 @@ func TestContains(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			et := test.expecter(t)
 
-			failed := tester.Contains(et, test.input, test.want...)
+			failed := tester.Contains(test.input, et, test.want...)
 
 			et.verify()
 
@@ -300,7 +301,7 @@ func TestContainsMap(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			et := test.expecter(t)
 
-			failed := tester.ContainsMap(et, test.input, test.want)
+			failed := tester.ContainsMap(test.input, et, test.want)
 
 			et.verify()
 

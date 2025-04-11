@@ -1,0 +1,47 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Lint
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Golang with cache
+        uses: magnetikonline/action-golang-cache@v4
+        with:
+          go-version-file: go.mod
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.6
+          working-directory: ${{ inputs.cwd }}
+
+      - name: staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: 2025.1.1
+          install-go: false
+          working-directory: ${{ inputs.cwd }}
+          cache-key: ${{ inputs.cwd }}
+
+      - name: Run allowtags
+        working-directory: ${{ inputs.cwd }}
+        run: |
+          go install github.com/ashmrtn/allowtags@v0.0.2
+          allowtags --allow-key json       \
+            ./...
+
+      - name: Run tint
+        run: |
+          go install github.com/meain/tint@latest
+          tint lint ${{ inputs.cwd }}

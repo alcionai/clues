@@ -3,12 +3,13 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"strings"
 
-	"github.com/alcionai/clues/internal/stringify"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/exp/maps"
+
+	"github.com/alcionai/clues/internal/stringify"
 )
 
 // ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ type Node struct {
 	// collision resolution.
 	Values map[string]any
 
-	// each node can hold a single commment.  The history of comments produced
+	// each node can hold a single comment.  The history of comments produced
 	// by the ancestry path through the tree will get concatenated from oldest
 	// ancestor to the current node to produce the Comment history.
 	Comment Comment
@@ -331,7 +332,7 @@ func FromBytes(bs []byte) (*Node, error) {
 	}
 
 	node := Node{
-		// FIXME: do something with the serialized commments.
+		// FIXME: do something with the serialized comments.
 		// I'm punting on this for now because I want to figure
 		// out the best middle ground between avoiding a slice of
 		// comments in each node for serialization sake (they

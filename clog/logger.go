@@ -164,9 +164,9 @@ func singleton(ctx context.Context, set Settings) *clogger {
 	return cloggerton
 }
 
-// ------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // context management
-// ------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
 type loggingKey string
 
@@ -238,15 +238,17 @@ func CtxErr(ctx context.Context, err error) *builder {
 	return nb
 }
 
-// Singleton is a shorthand for .Ctx(context.Background()).  IE: it'll use the singleton
-// logger directly; building one if necessary.  You should avoid this and use .Ctx or
-// .CtxErr if possible.  Likelihood is that you're somewhere deep in a func chain that
-// doesn't accept a ctx, and you still want to add a quick log; maybe for debugging purposes.
+// Singleton is a shorthand for .Ctx(context.Background()).  IE: it'll use the
+// singleton logger directly; building one if necessary.  You should avoid this and
+// use .Ctx or .CtxErr if possible.  Likelihood is that you're somewhere deep in a
+// func chain that doesn't accept a ctx, and you still want to add a quick log; maybe
+// for debugging purposes.
 //
 // That's fine!  Everything should work great.
 //
-// Unless you call this before initialization.  Then it'll panic.  We do want you to init
-// the logger first, else you'll potentially lose these logs due different buffers.
+// Unless you call this before initialization.  Then it'll panic.  We do want you
+// to init the logger first, else you'll potentially lose these logs due different
+// buffers.
 func Singleton() *builder {
 	if cloggerton == nil {
 		panic(errors.New("clog singleton requires prior initialization"))

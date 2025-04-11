@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"maps"
 	"reflect"
 	"strings"
 
 	"github.com/alcionai/clues/internal/node"
-	"golang.org/x/exp/maps"
 )
 
 // Err augments an error with labels (a categorization system) and
@@ -147,13 +146,13 @@ func formatReg(err *Err, s fmt.State, verb rune) {
 	write(s, verb, err.msg)
 
 	if len(err.msg) > 0 && err.e != nil {
-		io.WriteString(s, ": ")
+		fmt.Fprint(s, ": ")
 	}
 
 	format(err.e, s, verb)
 
 	if (len(err.msg) > 0 || err.e != nil) && len(err.stack) > 0 {
-		io.WriteString(s, ": ")
+		fmt.Fprint(s, ": ")
 	}
 
 	for _, e := range err.stack {
@@ -174,13 +173,13 @@ func formatPlusV(err *Err, s fmt.State, verb rune) {
 	}
 
 	if len(err.stack) > 0 && err.e != nil {
-		io.WriteString(s, "\n")
+		fmt.Fprint(s, "\n")
 	}
 
 	format(err.e, s, verb)
 
 	if (len(err.stack) > 0 || err.e != nil) && len(err.msg) > 0 {
-		io.WriteString(s, "\n")
+		fmt.Fprint(s, "\n")
 	}
 
 	write(s, verb, err.msg)
@@ -227,17 +226,18 @@ func write(s fmt.State, verb rune, msgs ...string) {
 	case 'v':
 		if s.Flag('+') {
 			if len(msgs) == 1 {
-				io.WriteString(s, msgs[0])
+				fmt.Fprint(s, msgs[0])
 			} else if len(msgs[1]) > 0 {
 				fmt.Fprintf(s, msgs[0], msgs[1])
 			}
+
 			return
 		}
 
 		fallthrough
 
 	case 's':
-		io.WriteString(s, msgs[0])
+		fmt.Fprint(s, msgs[0])
 
 	case 'q':
 		fmt.Fprintf(s, "%q", msgs[0])
@@ -325,6 +325,7 @@ func unwrap(err error) error {
 	}
 
 	ue := u.Unwrap()
+
 	return ue
 }
 
@@ -419,5 +420,6 @@ func isNilErrIface(err error) bool {
 
 	val := reflect.ValueOf(err)
 
-	return ((val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface) && val.IsNil())
+	return (val.Kind() == reflect.Pointer ||
+		val.Kind() == reflect.Interface) && val.IsNil()
 }

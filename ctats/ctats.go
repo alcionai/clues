@@ -97,9 +97,7 @@ func (b base) getID() string {
 	return formatID(b.id)
 }
 
-var (
-	camel = regexp.MustCompile("([a-z0-9])([A-Z])")
-)
+var camel = regexp.MustCompile("([a-z0-9])([A-Z])")
 
 // formatID transforms kebab-case and camelCase to dot.delimited case,
 // replaces all spaces with underscores, and lowers the string.
@@ -107,5 +105,6 @@ func formatID(id string) string {
 	id = strings.ReplaceAll(id, " ", "_")
 	id = camel.ReplaceAllString(id, "$1.$2")
 	id = strings.ReplaceAll(id, "-", ".")
+
 	return strings.ToLower(id)
 }

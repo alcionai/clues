@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alcionai/clues/cluerr"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/alcionai/clues/cluerr"
 )
 
 func TestBuilder(t *testing.T) {

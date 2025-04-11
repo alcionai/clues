@@ -4,9 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/alcionai/clues/cluerr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/alcionai/clues/cluerr"
 )
 
 func TestSettings_LogToFile(t *testing.T) {
@@ -118,6 +119,7 @@ func TestLogLevel_Includes(t *testing.T) {
 			for _, allow := range test.allow {
 				assert.True(t, test.input.includes(allow))
 			}
+
 			for _, not := range test.notallow {
 				assert.False(t, test.input.includes(not))
 			}

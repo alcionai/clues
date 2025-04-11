@@ -7,7 +7,12 @@ import (
 
 // set the hash alg key for consistency
 func init() {
-	SetHasher(HashCfg{HMAC_SHA256, []byte("gobbledeygook-believe-it-or-not-this-is-randomly-generated")})
+	SetHasher(
+		HashCfg{
+			HMAC_SHA256,
+			[]byte("gobbledeygook-believe-it-or-not-this-is-randomly-generated"),
+		},
+	)
 }
 
 type mockStringer struct {
@@ -82,27 +87,38 @@ func TestMask(t *testing.T) {
 			expect := "***"
 
 			m := Mask(test.input)
+
 			if m.Conceal() != expect {
 				t.Errorf(`expected Conceal() result %q, got %q`, expect, m.Conceal())
 			}
+
 			if m.String() != expect {
 				t.Errorf(`expected String() result %q, got %q`, expect, m.String())
 			}
+
 			if m.PlainString() != test.expectPlain {
-				t.Errorf(`expected PlainString() result %q, got %q`, test.expectPlain, m.PlainString())
+				t.Errorf(
+					`expected PlainString() result %q, got %q`,
+					test.expectPlain,
+					m.PlainString(),
+				)
 			}
+
 			result := fmt.Sprintf("%s", m)
 			if result != expect {
 				t.Errorf(`expected %%s fmt result %q, got %q`, expect, result)
 			}
+
 			result = fmt.Sprintf("%v", m)
 			if result != expect {
 				t.Errorf(`expected %%v fmt result %q, got %q`, expect, result)
 			}
+
 			result = fmt.Sprintf("%+v", m)
 			if result != expect {
 				t.Errorf(`expected %%+v fmt result %q, got %q`, expect, result)
 			}
+
 			result = fmt.Sprintf("%#v", m)
 			if result != expect {
 				t.Errorf(`expected %%#v fmt result %q, got %q`, expect, result)
@@ -152,27 +168,38 @@ func TestHide(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			h := Hide(test.input)
+
 			if h.Conceal() != test.expectHash {
 				t.Errorf(`expected Conceal() result %q, got %q`, test.expectHash, h.Conceal())
 			}
+
 			if h.String() != test.expectHash {
 				t.Errorf(`expected String() result %q, got %q`, test.expectHash, h.String())
 			}
+
 			if h.PlainString() != test.expectPlain {
-				t.Errorf(`expected PlainString() result %q, got %q`, test.expectPlain, h.PlainString())
+				t.Errorf(
+					`expected PlainString() result %q, got %q`,
+					test.expectPlain,
+					h.PlainString(),
+				)
 			}
+
 			result := fmt.Sprintf("%s", h)
 			if result != test.expectHash {
 				t.Errorf(`expected %%s fmt result %q, got %q`, test.expectHash, result)
 			}
+
 			result = fmt.Sprintf("%v", h)
 			if result != test.expectHash {
 				t.Errorf(`expected %%v fmt result %q, got %q`, test.expectHash, result)
 			}
+
 			result = fmt.Sprintf("%+v", h)
 			if result != test.expectHash {
 				t.Errorf(`expected %%+v fmt result %q, got %q`, test.expectHash, result)
 			}
+
 			result = fmt.Sprintf("%#v", h)
 			if result != test.expectHash {
 				t.Errorf(`expected %%#v fmt result %q, got %q`, test.expectHash, result)
@@ -222,27 +249,38 @@ func TestHide_hideAConcealer(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			h := Hide(test.input)
+
 			if h.Conceal() != test.expectHash {
 				t.Errorf(`expected Conceal() result %q, got %q`, test.expectHash, h.Conceal())
 			}
+
 			if h.String() != test.expectHash {
 				t.Errorf(`expected String() result %q, got %q`, test.expectHash, h.String())
 			}
+
 			if h.PlainString() != test.expectPlain {
-				t.Errorf(`expected PlainString() result %q, got %q`, test.expectPlain, h.PlainString())
+				t.Errorf(
+					`expected PlainString() result %q, got %q`,
+					test.expectPlain,
+					h.PlainString(),
+				)
 			}
+
 			result := fmt.Sprintf("%s", h)
 			if result != test.expectHash {
 				t.Errorf(`expected %%s fmt result %q, got %q`, test.expectHash, result)
 			}
+
 			result = fmt.Sprintf("%v", h)
 			if result != test.expectHash {
 				t.Errorf(`expected %%v fmt result %q, got %q`, test.expectHash, result)
 			}
+
 			result = fmt.Sprintf("%+v", h)
 			if result != test.expectHash {
 				t.Errorf(`expected %%+v fmt result %q, got %q`, test.expectHash, result)
 			}
+
 			result = fmt.Sprintf("%#v", h)
 			if result != test.expectHash {
 				t.Errorf(`expected %%#v fmt result %q, got %q`, test.expectHash, result)
@@ -292,9 +330,11 @@ func TestHideAll(t *testing.T) {
 				if h.Conceal() != expectHash {
 					t.Errorf(`expected Conceal() result %q, got %q`, expectHash, h.Conceal())
 				}
+
 				if h.String() != expectHash {
 					t.Errorf(`expected String() result %q, got %q`, expectHash, h.String())
 				}
+
 				if h.PlainString() != test.expectPlain[i] {
 					t.Errorf(`expected PlainString() result %q, got %q`, test.expectPlain[i], h.String())
 				}

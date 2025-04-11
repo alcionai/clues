@@ -3,8 +3,7 @@ package clog
 import (
 	"os"
 	"path/filepath"
-
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"github.com/alcionai/clues/cecrets"
 	"github.com/alcionai/clues/cluerr"
@@ -130,8 +129,14 @@ func (s Settings) EnsureDefaults() Settings {
 		set.Format = FormatForHumans
 	}
 
-	algs := []sensitiveInfoHandlingAlgo{ShowSensitiveInfoInPlainText, MaskSensitiveInfo, HashSensitiveInfo}
-	if len(set.SensitiveInfoHandling) == 0 || !slices.Contains(algs, set.SensitiveInfoHandling) {
+	algs := []sensitiveInfoHandlingAlgo{
+		ShowSensitiveInfoInPlainText,
+		MaskSensitiveInfo,
+		HashSensitiveInfo,
+	}
+
+	if len(set.SensitiveInfoHandling) == 0 ||
+		!slices.Contains(algs, set.SensitiveInfoHandling) {
 		set.SensitiveInfoHandling = ShowSensitiveInfoInPlainText
 	}
 
