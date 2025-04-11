@@ -2,7 +2,7 @@ package ctats
 
 import (
 	"context"
-	"fmt"
+	"log"
 
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
@@ -24,7 +24,7 @@ func getOrCreateHistogram(
 	var hist recorder
 
 	if b != nil {
-		hist = b.getHistogram(ctx, id)
+		hist = b.getHistogram(id)
 		if hist != nil {
 			return hist, nil
 		}
@@ -58,7 +58,8 @@ func RegisterHistogram(
 	id string,
 	// (optional) the unit of measurement.  Ex: "byte", "kB", "fnords"
 	unit string,
-	// (optional) a short description about the metric.  Ex: "number of times we saw the fnords".
+	// (optional) a short description about the metric.
+	// Ex: "number of times we saw the fnords".
 	description string,
 ) (context.Context, error) {
 	id = formatID(id)
@@ -70,7 +71,7 @@ func RegisterHistogram(
 
 	var hist recorder
 
-	hist = b.getHistogram(ctx, id)
+	hist = b.getHistogram(id)
 	if hist != nil {
 		return ctx, nil
 	}
@@ -127,7 +128,7 @@ func (n noopRecorder) Record(context.Context, float64, ...metric.RecordOption) {
 func (c histogram[number]) Record(ctx context.Context, n number) {
 	hist, err := getOrCreateHistogram(ctx, c.getID())
 	if err != nil {
-		fmt.Printf("err getting histogram: %+v\n", err)
+		log.Printf("err getting histogram: %+v\n", err)
 		return
 	}
 

@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // ---------------------------------------------------------------------------

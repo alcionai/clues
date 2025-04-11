@@ -10,8 +10,8 @@ import (
 )
 
 func MapEquals(
-	t *testing.T,
 	ctx context.Context,
+	t *testing.T,
 	expect MSA,
 	expectCluesTrace bool,
 ) {
@@ -35,6 +35,7 @@ func MustEquals[K comparable, V any](
 				"expected map to contain key [clues_trace]\ngot: %+v",
 				g)
 		}
+
 		delete(g, "clues_trace")
 	}
 
@@ -44,6 +45,7 @@ func MustEquals[K comparable, V any](
 				"expected map to contain key [clues_trace]\ngot: %+v",
 				g)
 		}
+
 		delete(g, "clues_trace")
 	}
 
@@ -128,12 +130,14 @@ func (s SA) equals(t *testing.T, other []any) {
 
 	for _, v := range s {
 		var found bool
+
 		for _, o := range other {
 			if v == o {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			t.Errorf("expected slice to contain [%v]\n%s", v, s.stringWith(other))
 		}
@@ -141,12 +145,14 @@ func (s SA) equals(t *testing.T, other []any) {
 
 	for _, o := range other {
 		var found bool
+
 		for _, v := range s {
 			if v == o {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			t.Errorf("did not expect slice to contain [%v]\n%s", o, s.stringWith(other))
 		}
@@ -154,8 +160,8 @@ func (s SA) equals(t *testing.T, other []any) {
 }
 
 func AssertEq(
-	t *testing.T,
 	ctx context.Context,
+	t *testing.T,
 	ns string,
 	eM, eMns MSA,
 	eS, eSns SA,
@@ -166,8 +172,8 @@ func AssertEq(
 }
 
 func AssertMSA(
-	t *testing.T,
 	ctx context.Context,
+	t *testing.T,
 	ns string,
 	eM, eMns MSA,
 	eS, eSns SA,

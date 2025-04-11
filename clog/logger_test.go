@@ -3,22 +3,12 @@ package clog_test
 import (
 	"testing"
 
-	"github.com/alcionai/clues/clog"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+
+	"github.com/alcionai/clues/clog"
 )
 
-type LoggerUnitSuite struct {
-	suite.Suite
-}
-
-func TestLoggerUnitSuite(t *testing.T) {
-	suite.Run(t, new(LoggerUnitSuite))
-}
-
-func (suite *LoggerUnitSuite) TestSettings_ensureDefaults() {
-	t := suite.T()
-
+func TestSettings_ensureDefaults(t *testing.T) {
 	s := clog.Settings{}
 	require.Empty(t, s.Level, "level")
 	require.Empty(t, s.Format, "format")

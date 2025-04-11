@@ -3,17 +3,17 @@ package node
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
-	"github.com/alcionai/clues/internal/stringify"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/log"
+	otelLog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/log/global"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
@@ -25,6 +25,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/alcionai/clues/internal/stringify"
 )
 
 // ------------------------------------------------------------
@@ -36,7 +38,7 @@ type OTELClient struct {
 	grpcConn    *grpc.ClientConn
 
 	LoggerProvider *sdkLog.LoggerProvider
-	Logger         log.Logger
+	Logger         otelLog.Logger
 
 	MeterProvider *sdkMetric.MeterProvider
 	Meter         metric.Meter
@@ -53,7 +55,7 @@ func (cli *OTELClient) Close(ctx context.Context) error {
 	if cli.MeterProvider != nil {
 		err := cli.MeterProvider.ForceFlush(ctx)
 		if err != nil {
-			fmt.Println("forcing meter provider flush:", err)
+			log.Println("forcing meter provider flush:", err)
 		}
 
 		err = cli.MeterProvider.Shutdown(ctx)
@@ -65,10 +67,10 @@ func (cli *OTELClient) Close(ctx context.Context) error {
 	if cli.LoggerProvider != nil {
 		err := cli.LoggerProvider.ForceFlush(ctx)
 		if err != nil {
-			fmt.Println("forcing trace provider flush:", err)
+			log.Println("forcing trace provider flush:", err)
 		}
 
-		cli.LoggerProvider.Shutdown(ctx)
+		err = cli.LoggerProvider.Shutdown(ctx)
 		if err != nil {
 			return fmt.Errorf("shutting down otel logger provider: %w", err)
 		}
@@ -77,7 +79,7 @@ func (cli *OTELClient) Close(ctx context.Context) error {
 	if cli.TracerProvider != nil {
 		err := cli.TracerProvider.ForceFlush(ctx)
 		if err != nil {
-			fmt.Println("forcing trace provider flush:", err)
+			log.Println("forcing trace provider flush:", err)
 		}
 
 		err = cli.TracerProvider.Shutdown(ctx)
@@ -156,7 +158,7 @@ func NewOTELClient(
 	closeClient := func() {
 		err := client.Close(ctx)
 		if err != nil {
-			fmt.Println("err closing client: %w", err)
+			log.Printf("err closing client: %v\n", err)
 		}
 	}
 
@@ -351,23 +353,23 @@ func (a Annotation) IsAttribute() bool {
 	return a.kind == "attribute"
 }
 
-func (a Annotation) KV() log.KeyValue {
+func (a Annotation) KV() otelLog.KeyValue {
 	if a.kind != "attribute" {
-		return log.KeyValue{}
+		return otelLog.KeyValue{}
 	}
 
 	// FIXME: needs extensive type support
 	switch a.v.(type) {
 	case int:
-		return log.Int(a.k, a.v.(int))
+		return otelLog.Int(a.k, a.v.(int))
 	case int64:
-		return log.Int64(a.k, a.v.(int64))
+		return otelLog.Int64(a.k, a.v.(int64))
 	case string:
-		return log.String(a.k, a.v.(string))
+		return otelLog.String(a.k, a.v.(string))
 	case bool:
-		return log.Bool(a.k, a.v.(bool))
+		return otelLog.Bool(a.k, a.v.(bool))
 	default: // everything else gets stringified
-		return log.String(a.k, stringify.Marshal(a.v, false))
+		return otelLog.String(a.k, stringify.Marshal(a.v, false))
 	}
 }
 
@@ -493,7 +495,7 @@ func (dn *Node) AddSpanAttributes(
 
 // logger gets the otel logger instance from the otel client.
 // Returns nil if otel wasn't initialized.
-func (dn *Node) OTELLogger() log.Logger {
+func (dn *Node) OTELLogger() otelLog.Logger {
 	if dn == nil || dn.OTEL == nil {
 		return nil
 	}

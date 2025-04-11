@@ -400,6 +400,7 @@ func makeStack(
 	errs ...error,
 ) *Err {
 	filtered := []error{}
+
 	for _, err := range errs {
 		if !isNilErrIface(err) {
 			filtered = append(filtered, err)

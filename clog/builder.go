@@ -3,24 +3,25 @@ package clog
 import (
 	"context"
 	"fmt"
+	"maps"
 	"reflect"
+
+	otellog "go.opentelemetry.io/otel/log"
+	"go.uber.org/zap"
 
 	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
-	otellog "go.opentelemetry.io/otel/log"
-	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
 )
 
-// ------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // builder is the primary logging handler
 // most funcs that people would use in the daily drive are going
 // to modfiy and/or return a builder instance.  The builder aggregates
 // data passed to it until a log func is called (debug, info, or error).
 // At that time it consumes all of the gathered data to send the log message.
-// ------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
 type builder struct {
 	ctx             context.Context
@@ -241,6 +242,7 @@ func (b *builder) With(vs ...any) *builder {
 
 	for i := 0; i < len(vs); i += 2 {
 		k := vs[i]
+
 		var v any
 
 		if (i + 1) < len(vs) {
@@ -325,9 +327,9 @@ func (b builder) Errorw(msg string, keyValues ...any) {
 	b.With(keyValues...).log(LevelError, msg)
 }
 
-// ------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // wrapper: io.writer
-// ------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
 // Writer is a wrapper that turns the logger embedded in
 // the given ctx into an io.Writer.  All logs are currently

@@ -2,7 +2,6 @@ package stringify
 
 import (
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +26,7 @@ type aConcealer struct {
 }
 
 func (a aConcealer) Conceal() string                { return "***" }
-func (a aConcealer) Format(fs fmt.State, verb rune) { io.WriteString(fs, "***") }
+func (a aConcealer) Format(fs fmt.State, verb rune) { fmt.Fprint(fs, "***") }
 func (a aConcealer) PlainString() string            { return fmt.Sprintf("%v", a.v) }
 
 type aPtrStruct struct {
@@ -43,7 +42,7 @@ type aFormatter struct {
 	v *string
 }
 
-func (a aFormatter) Format(fs fmt.State, verb rune) { io.WriteString(fs, "formatted") }
+func (a aFormatter) Format(fs fmt.State, verb rune) { fmt.Fprint(fs, "formatted") }
 
 func TestFmt(t *testing.T) {
 	ptrTestString := "ptrString"
@@ -89,7 +88,7 @@ func TestFmt(t *testing.T) {
 		{
 			name: "map",
 			input: []any{map[string]struct{}{
-				"fisher flannigan fitzbog": struct{}{},
+				"fisher flannigan fitzbog": {},
 			}},
 			expect: []string{`map[fisher flannigan fitzbog:{}]`},
 		},
@@ -185,7 +184,7 @@ func TestNormalize(t *testing.T) {
 			name: "map",
 			input: []any{
 				map[string]struct{}{
-					"fisher flannigan fitzbog": struct{}{},
+					"fisher flannigan fitzbog": {},
 				},
 				map[int]int{},
 			},

@@ -2,7 +2,7 @@ package ctats
 
 import (
 	"context"
-	"fmt"
+	"log"
 
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
@@ -59,7 +59,8 @@ func RegisterCounter(
 	id string,
 	// (optional) the unit of measurement.  Ex: "byte", "kB", "fnords"
 	unit string,
-	// (optional) a short description about the metric.  Ex: "number of times we saw the fnords".
+	// (optional) a short description about the metric.
+	// Ex: "number of times we saw the fnords".
 	description string,
 ) (context.Context, error) {
 	id = formatID(id)
@@ -128,7 +129,7 @@ func (n noopAdder) Add(context.Context, float64, ...metric.AddOption) {}
 func (c counter[number]) Add(ctx context.Context, n number) {
 	ctr, err := getOrCreateCounter(ctx, c.getID())
 	if err != nil {
-		fmt.Printf("err getting counter: %+v\n", err)
+		log.Printf("err getting counter: %+v\n", err)
 		return
 	}
 
@@ -139,7 +140,7 @@ func (c counter[number]) Add(ctx context.Context, n number) {
 func (c counter[number]) Inc(ctx context.Context) {
 	ctr, err := getOrCreateCounter(ctx, c.getID())
 	if err != nil {
-		fmt.Printf("err getting counter: %+v\n", err)
+		log.Printf("err getting counter: %+v\n", err)
 		return
 	}
 
@@ -150,7 +151,7 @@ func (c counter[number]) Inc(ctx context.Context) {
 func (c counter[number]) Dec(ctx context.Context) {
 	ctr, err := getOrCreateCounter(ctx, c.getID())
 	if err != nil {
-		fmt.Printf("err getting counter: %+v\n", err)
+		log.Printf("err getting counter: %+v\n", err)
 		return
 	}
 

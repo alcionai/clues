@@ -1,6 +1,6 @@
 package cluerr
 
-import "golang.org/x/exp/maps"
+import "maps"
 
 // ------------------------------------------------------------
 // labels

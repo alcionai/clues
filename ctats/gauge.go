@@ -2,7 +2,7 @@ package ctats
 
 import (
 	"context"
-	"fmt"
+	"log"
 
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
@@ -24,7 +24,7 @@ func getOrCreateGauge(
 	var gauge recorder
 
 	if b != nil {
-		gauge = b.getGauge(ctx, id)
+		gauge = b.getGauge(id)
 		if gauge != nil {
 			return gauge, nil
 		}
@@ -58,7 +58,8 @@ func RegisterGauge(
 	id string,
 	// (optional) the unit of measurement.  Ex: "byte", "kB", "fnords"
 	unit string,
-	// (optional) a short description about the metric.  Ex: "number of times we saw the fnords".
+	// (optional) a short description about the metric.
+	// Ex: "number of times we saw the fnords".
 	description string,
 ) (context.Context, error) {
 	id = formatID(id)
@@ -70,7 +71,7 @@ func RegisterGauge(
 
 	var gauge recorder
 
-	gauge = b.getGauge(ctx, id)
+	gauge = b.getGauge(id)
 	if gauge != nil {
 		return ctx, nil
 	}
@@ -119,7 +120,7 @@ type gauge[N number] struct {
 func (c gauge[number]) Set(ctx context.Context, n number) {
 	gauge, err := getOrCreateGauge(ctx, c.getID())
 	if err != nil {
-		fmt.Printf("err getting gauge: %+v\n", err)
+		log.Printf("err getting gauge: %+v\n", err)
 		return
 	}
 

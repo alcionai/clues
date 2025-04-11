@@ -1,0 +1,50 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Golang with cache
+        uses: magnetikonline/action-golang-cache@v4
+        with:
+          go-version-file: go.mod
+
+      - run: mkdir testlog
+
+      # Install gotestfmt
+      - name: Set up gotestfmt
+        run: go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+
+      # run the tests
+      - name: Unit Tests
+        run: |
+          set -euo pipefail
+          go test       \
+          -tags testing \
+          -json         \
+          -v            \
+          -p 1          \
+          -timeout 20m  \
+          ./... \
+          2>&1 | tee ./testlog/gotest-unit.log | gotestfmt -hide successful-tests
+
+      # Upload the original go test output as an artifact for later review.
+      - name: Upload test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-log
+          path: testlog/*
+          if-no-files-found: error
+          retention-days: 14

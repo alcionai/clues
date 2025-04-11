@@ -1,0 +1,21 @@
+[rules.standard-name-for-test-suite]
+language = "go"
+message = "use 'suite' as the receiver name for {}"
+query = '''
+((method_declaration
+  (parameter_list
+   (parameter_declaration (identifier) @name
+                          (pointer_type) @type))
+  (field_identifier) @region)
+ (#not-eq? @name "suite")
+ (#match? @type "Suite$")
+ (#match? @region "^Test"))
+'''
+
+[rules.clues-no-trace]
+language = "go"
+message = "use .NoTrace when declaring clues.New separately"
+query = '''((var_declaration (var_spec value: (expression_list
+(call_expression (selector_expression) @region))))
+(#eq? @region "clues.New"))
+'''

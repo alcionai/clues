@@ -70,7 +70,6 @@ func (b bus) getCounter(
 // in the context.  If the ctx has no metrics bus, or if the bus does
 // not have a gauge for the provided ID, returns nil.
 func (b bus) getGauge(
-	ctx context.Context,
 	id string,
 ) recorder {
 	if b.initializedToNoop {
@@ -91,7 +90,6 @@ func (b bus) getGauge(
 // in the context.  If the ctx has no metrics bus, or if the bus does
 // not have a histogram for the provided ID, returns nil.
 func (b bus) getHistogram(
-	ctx context.Context,
 	id string,
 ) recorder {
 	if b.initializedToNoop {
