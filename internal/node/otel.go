@@ -450,12 +450,13 @@ func (dn *Node) ReceiveTrace(
 func (dn *Node) AddSpan(
 	ctx context.Context,
 	name string,
+	opts ...trace.SpanStartOption,
 ) (context.Context, *Node) {
 	if dn == nil || dn.OTEL == nil {
 		return ctx, dn
 	}
 
-	ctx, span := dn.OTEL.Tracer.Start(ctx, name)
+	ctx, span := dn.OTEL.Tracer.Start(ctx, name, opts...)
 
 	spawn := dn.SpawnDescendant()
 	spawn.Span = span
