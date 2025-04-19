@@ -98,6 +98,7 @@ func (b builder) log(l logLevel, msg string) {
 	}
 
 	// check the context for any otel baggage
+	//nolint:lll
 	// https://opentelemetry.io/docs/concepts/signals/baggage/#baggage-is-not-the-same-as-attributes
 	bags := map[string]string{}
 
