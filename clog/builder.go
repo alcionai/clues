@@ -6,6 +6,7 @@ import (
 	"maps"
 	"reflect"
 
+	"go.opentelemetry.io/otel/baggage"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.uber.org/zap"
 
@@ -94,6 +95,18 @@ func (b builder) log(l logLevel, msg string) {
 
 	if len(b.comments) > 0 {
 		cv["clog_comments"] = maps.Keys(b.comments)
+	}
+
+	// check the context for any otel baggage
+	// https://opentelemetry.io/docs/concepts/signals/baggage/#baggage-is-not-the-same-as-attributes
+	bags := map[string]string{}
+
+	for _, bag := range baggage.FromContext(b.ctx).Members() {
+		bags[bag.Key()] = bag.Value()
+	}
+
+	if len(bags) > 0 {
+		cv["otel_baggage"] = bags
 	}
 
 	if b.skipCallerJumps > 0 {
