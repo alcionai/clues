@@ -32,6 +32,7 @@ jobs:
           set -euo pipefail
           go test       \
           -tags testing \
+          -race         \
           -json         \
           -v            \
           -p 1          \
