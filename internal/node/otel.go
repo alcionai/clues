@@ -452,7 +452,11 @@ func (dn *Node) AddSpan(
 	name string,
 	opts ...trace.SpanStartOption,
 ) (context.Context, *Node) {
-	if dn == nil || dn.OTEL == nil {
+	if dn == nil {
+		return ctx, dn
+	}
+
+	if dn.OTEL == nil {
 		// Create a new node so that it can have its properties set separately.
 		return ctx, dn.SpawnDescendant()
 	}
