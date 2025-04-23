@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/alcionai/clues"
@@ -126,6 +129,65 @@ func TestAddMap(t *testing.T) {
 				test.expectM, tester.MSA{},
 				test.expectS, tester.SA{},
 			)
+		})
+	}
+}
+
+// TestAddSpan_Uninitialized ensures nothing panics if AddSpan is called and
+// neither clues nor OTEL is initialized.
+func TestAddSpan_Uninitialized(t *testing.T) {
+	assert.NotPanics(
+		t,
+		func() {
+			clues.AddSpan(t.Context(), "test span")
+		},
+	)
+}
+
+// TestAddSpan_Uninitialized_Concurrent ensures that even if OTEL isn't
+// initialized there's no race condition when attempting to add spans to a
+// parent context concurrently.
+func TestAddSpan_Uninitialized_Concurrent(t *testing.T) {
+	table := []struct {
+		name  string
+		attrs []any
+	}{
+		{
+			name: "NoAttributes",
+		},
+		{
+			name:  "Attributes",
+			attrs: []any{"key", "value"},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				wg sync.WaitGroup
+				c  = make(chan struct{})
+			)
+
+			ctx := clues.AddSpan(t.Context(), "parent span", "some", "value")
+
+			for range 5 {
+				wg.Add(1)
+
+				go func() {
+					defer wg.Done()
+
+					<-c
+
+					ctx := clues.AddSpan(ctx, "worker span", test.attrs...)
+					defer clues.CloseSpan(ctx)
+				}()
+			}
+
+			time.Sleep(500 * time.Millisecond)
+
+			close(c)
+
+			wg.Wait()
 		})
 	}
 }
