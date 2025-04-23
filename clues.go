@@ -155,6 +155,9 @@ func AddSpan(
 	kvs ...any,
 ) context.Context {
 	nc := node.FromCtx(ctx)
+	if nc == nil {
+		return ctx
+	}
 
 	var spanned *node.Node
 
