@@ -7,11 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
-	"github.com/alcionai/clues"
 )
 
 // Yes, we just hijack zap for our logging needs here.
@@ -23,9 +20,8 @@ var (
 )
 
 type clogger struct {
-	otel log.Logger
-	zsl  *zap.SugaredLogger
-	set  Settings
+	zsl *zap.SugaredLogger
+	set Settings
 }
 
 // ---------------------------------------------------------------------------
@@ -153,12 +149,6 @@ func singleton(ctx context.Context, set Settings) *clogger {
 	cloggerton = &clogger{
 		zsl: zsl,
 		set: set,
-	}
-
-	node := clues.In(ctx)
-
-	if node.OTELLogger() != nil {
-		cloggerton.otel = node.OTELLogger()
 	}
 
 	return cloggerton
