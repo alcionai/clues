@@ -133,7 +133,7 @@ func setLevel(cfg zap.Config, level logLevel) zap.Config {
 
 // singleton is the constructor and getter in one. Since we manage a global
 // singleton for each instance, we only ever want one alive at any given time.
-func singleton(ctx context.Context, set Settings) *clogger {
+func singleton(set Settings) *clogger {
 	singleMu.Lock()
 	defer singleMu.Unlock()
 
@@ -169,7 +169,7 @@ const ctxKey loggingKey = "clog_logger"
 // with the default values.  If you need to configure your logs,
 // make sure to embed this first.
 func Init(ctx context.Context, set Settings) context.Context {
-	clogged := singleton(ctx, set)
+	clogged := singleton(set)
 	clogged.zsl.Debugw("seeding logger", "logger_settings", set)
 
 	return plantLoggerInCtx(ctx, clogged)
@@ -199,7 +199,7 @@ func plantLoggerInCtx(
 // ctx, it returns the global singleton.
 func fromCtx(ctx context.Context) (*clogger, bool) {
 	if ctx == nil {
-		return singleton(ctx, Settings{}.EnsureDefaults()), false
+		return singleton(Settings{}.EnsureDefaults()), false
 	}
 
 	found := true
@@ -208,7 +208,7 @@ func fromCtx(ctx context.Context) (*clogger, bool) {
 	// if l is still nil, we need to grab the global singleton or construct a singleton.
 	if l == nil {
 		found = false
-		l = singleton(ctx, Settings{}.EnsureDefaults())
+		l = singleton(Settings{}.EnsureDefaults())
 	}
 
 	return l.(*clogger), found
