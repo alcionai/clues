@@ -20,6 +20,10 @@ var (
 )
 
 type clogger struct {
+	// zsl is the underlying zap logger that was configured for the system. We
+	// don't hold a reference to OTEL even though it may have been configured
+	// because OTEL can be closed and re-opened. If that happens, we want to make
+	// sure logs are sent to the new OTEL instance instead of turning into noops.
 	zsl *zap.SugaredLogger
 	set Settings
 }

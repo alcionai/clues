@@ -38,11 +38,11 @@ type builder struct {
 
 func newBuilder(ctx context.Context) *builder {
 	clgr, _ := fromCtx(ctx)
-	nd := clues.In(ctx)
+	ctxNode := clues.In(ctx)
 
 	return &builder{
 		ctx:      ctx,
-		otel:     nd.OTELLogger(),
+		otel:     ctxNode.OTELLogger(),
 		zsl:      clgr.zsl,
 		with:     map[any]any{},
 		labels:   map[string]struct{}{},
