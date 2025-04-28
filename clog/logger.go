@@ -7,11 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
-	"github.com/alcionai/clues"
 )
 
 // Yes, we just hijack zap for our logging needs here.
@@ -23,9 +20,12 @@ var (
 )
 
 type clogger struct {
-	otel log.Logger
-	zsl  *zap.SugaredLogger
-	set  Settings
+	// zsl is the underlying zap logger that was configured for the system. We
+	// don't hold a reference to OTEL even though it may have been configured
+	// because OTEL can be closed and re-opened. If that happens, we want to make
+	// sure logs are sent to the new OTEL instance instead of turning into noops.
+	zsl *zap.SugaredLogger
+	set Settings
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ func setLevel(cfg zap.Config, level logLevel) zap.Config {
 
 // singleton is the constructor and getter in one. Since we manage a global
 // singleton for each instance, we only ever want one alive at any given time.
-func singleton(ctx context.Context, set Settings) *clogger {
+func singleton(set Settings) *clogger {
 	singleMu.Lock()
 	defer singleMu.Unlock()
 
@@ -153,12 +153,6 @@ func singleton(ctx context.Context, set Settings) *clogger {
 	cloggerton = &clogger{
 		zsl: zsl,
 		set: set,
-	}
-
-	node := clues.In(ctx)
-
-	if node.OTELLogger() != nil {
-		cloggerton.otel = node.OTELLogger()
 	}
 
 	return cloggerton
@@ -179,7 +173,7 @@ const ctxKey loggingKey = "clog_logger"
 // with the default values.  If you need to configure your logs,
 // make sure to embed this first.
 func Init(ctx context.Context, set Settings) context.Context {
-	clogged := singleton(ctx, set)
+	clogged := singleton(set)
 	clogged.zsl.Debugw("seeding logger", "logger_settings", set)
 
 	return plantLoggerInCtx(ctx, clogged)
@@ -209,7 +203,7 @@ func plantLoggerInCtx(
 // ctx, it returns the global singleton.
 func fromCtx(ctx context.Context) (*clogger, bool) {
 	if ctx == nil {
-		return singleton(ctx, Settings{}.EnsureDefaults()), false
+		return singleton(Settings{}.EnsureDefaults()), false
 	}
 
 	found := true
@@ -218,7 +212,7 @@ func fromCtx(ctx context.Context) (*clogger, bool) {
 	// if l is still nil, we need to grab the global singleton or construct a singleton.
 	if l == nil {
 		found = false
-		l = singleton(ctx, Settings{}.EnsureDefaults())
+		l = singleton(Settings{}.EnsureDefaults())
 	}
 
 	return l.(*clogger), found
