@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"runtime"
 
 	"go.opentelemetry.io/otel/baggage"
 	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/semconv/v1.32.0"
 	"go.uber.org/zap"
 
 	"github.com/alcionai/clues"
@@ -164,9 +166,35 @@ func (b builder) log(l logLevel, msg string) {
 
 	checkOTELSeverity := otellog.EnabledParameters{Severity: toOTELSeverity(l)}
 
-	if otelLogger != nil && otelLogger.Enabled(b.ctx, checkOTELSeverity) {
-		otelLogger.Emit(b.ctx, record)
+	if otelLogger == nil || !otelLogger.Enabled(b.ctx, checkOTELSeverity) {
+		return
 	}
+
+	// Add line number info to OTEL log.
+	callerSkip := b.skipCallerJumps
+	if callerSkip < 0 {
+		callerSkip = 0
+	}
+
+	// This function is currently only called by other functions in this file. A
+	// skip of 2 here allows the system to get the stackframe of the function in
+	// the caller of clog. If the order of functions in this file is re-arranged,
+	// the offset here may need to be adjusted.
+	pc, file, lineno, ok := runtime.Caller(callerSkip + 2)
+	if ok {
+		record.AddAttributes(
+			otellog.KeyValueFromAttribute(semconv.CodeFilePath(file)),
+			otellog.KeyValueFromAttribute(semconv.CodeLineNumber(lineno)),
+		)
+
+		if f := runtime.FuncForPC(pc); f != nil {
+			record.AddAttributes(
+				otellog.KeyValueFromAttribute(semconv.CodeFunctionName(f.Name())),
+			)
+		}
+	}
+
+	otelLogger.Emit(b.ctx, record)
 }
 
 // Err attaches the error to the builder.
