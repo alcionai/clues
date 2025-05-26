@@ -6,6 +6,8 @@ import (
 	"maps"
 	"reflect"
 	"runtime"
+	"strconv"
+	"strings"
 
 	"go.opentelemetry.io/otel/baggage"
 	otellog "go.opentelemetry.io/otel/log"
@@ -185,6 +187,17 @@ func (b builder) log(l logLevel, msg string) {
 		record.AddAttributes(
 			otellog.KeyValueFromAttribute(semconv.CodeFilePath(file)),
 			otellog.KeyValueFromAttribute(semconv.CodeLineNumber(lineno)),
+			otellog.String(
+				"log.caller",
+				strings.Join(
+					[]string{
+						file,
+						":",
+						strconv.Itoa(lineno),
+					},
+					"",
+				),
+			),
 		)
 
 		if f := runtime.FuncForPC(pc); f != nil {
