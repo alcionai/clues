@@ -3,12 +3,13 @@ package node
 import (
 	"context"
 	"fmt"
-	"go.opentelemetry.io/contrib/processors/baggagecopy"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/alcionai/clues/internal/stringify"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/processors/baggagecopy"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
@@ -26,8 +27,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	"github.com/alcionai/clues/internal/stringify"
 )
 
 // ------------------------------------------------------------

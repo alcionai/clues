@@ -2,12 +2,11 @@ package clues
 
 import (
 	"errors"
-	"go.opentelemetry.io/contrib/processors/baggagecopy"
-	"go.opentelemetry.io/otel/baggage"
-
-	"go.opentelemetry.io/otel/sdk/resource"
 
 	"github.com/alcionai/clues/internal/node"
+	"go.opentelemetry.io/contrib/processors/baggagecopy"
+	"go.opentelemetry.io/otel/baggage"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 var ErrMissingOtelGRPCEndpoint = errors.New("missing otel grpc endpoint")
