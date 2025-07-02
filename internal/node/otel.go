@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/processors/baggagecopy"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
@@ -121,6 +122,10 @@ type OTELConfig struct {
 	// ex: localhost:4317
 	// ex: 0.0.0.0:4317
 	GRPCEndpoint string
+
+	// Filter contains the filter used when copying baggage to a span, by adding span
+	// attributes. If no filter is specified, all baggage is copied over to a span.
+	Filter baggagecopy.Filter
 }
 
 // ------------------------------------------------------------
@@ -174,7 +179,10 @@ func NewOTELClient(
 
 	// -- Tracing
 
-	client.TracerProvider, err = newTracerProvider(ctx, client.grpcConn, server)
+	client.TracerProvider, err = newTracerProvider(ctx,
+		client.grpcConn,
+		server,
+		config.Filter)
 	if err != nil {
 		closeClient()
 		return nil, errors.Wrap(err, "generating a tracer provider")
@@ -221,6 +229,7 @@ func newTracerProvider(
 	ctx context.Context,
 	conn *grpc.ClientConn,
 	server *resource.Resource,
+	filter baggagecopy.Filter,
 ) (*sdkTrace.TracerProvider, error) {
 	if ctx == nil {
 		return nil, errors.New("nil ctx")
@@ -239,6 +248,8 @@ func newTracerProvider(
 	// span processor to aggregate spans before export.
 	batchSpanProcessor := sdkTrace.NewBatchSpanProcessor(exporter)
 
+	baggageCopySpanProcessor := baggagecopy.NewSpanProcessor(filter)
+
 	tracerProvider := sdkTrace.NewTracerProvider(
 		sdkTrace.WithResource(server),
 		// FIXME: need to investigate other options...
@@ -248,6 +259,7 @@ func newTracerProvider(
 		// FIXME: need to refine trace sampling.
 		sdkTrace.WithSampler(sdkTrace.AlwaysSample()),
 		sdkTrace.WithSpanProcessor(batchSpanProcessor),
+		sdkTrace.WithSpanProcessor(baggageCopySpanProcessor),
 		sdkTrace.WithRawSpanLimits(sdkTrace.SpanLimits{
 			AttributeValueLengthLimit:   -1,
 			AttributeCountLimit:         -1,

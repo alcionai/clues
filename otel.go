@@ -3,6 +3,8 @@ package clues
 import (
 	"errors"
 
+	"go.opentelemetry.io/contrib/processors/baggagecopy"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/sdk/resource"
 
 	"github.com/alcionai/clues/internal/node"
@@ -34,6 +36,10 @@ type OTELConfig struct {
 	// ex: 0.0.0.0:4317
 	// ex: opentelemetry-collector.monitoring.svc.cluster.local:4317
 	GRPCEndpoint string
+
+	// Filter contains the filter used when copying baggage to a span, by adding span
+	// attributes. If no filter is specified, all baggage is copied over to a span.
+	Filter baggagecopy.Filter
 }
 
 // clues.OTELConfig is a passthrough to the internal otel config.
@@ -41,5 +47,14 @@ func (oc OTELConfig) toInternalConfig() node.OTELConfig {
 	return node.OTELConfig{
 		Resource:     oc.Resource,
 		GRPCEndpoint: oc.GRPCEndpoint,
+		Filter:       oc.Filter,
 	}
 }
+
+// BlockAllBaggage is a filter which blocks copying of all members of
+// baggage to a span.
+var BlockAllBaggage baggagecopy.Filter = func(baggage.Member) bool { return false }
+
+// AllowAllBaggage is a filter which allows copying of all members of
+// baggage to a span.
+var AllowAllBaggage baggagecopy.Filter = func(baggage.Member) bool { return true }
