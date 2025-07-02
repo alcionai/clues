@@ -3,10 +3,11 @@ package clues
 import (
 	"errors"
 
-	"github.com/alcionai/clues/internal/node"
 	"go.opentelemetry.io/contrib/processors/baggagecopy"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/sdk/resource"
+
+	"github.com/alcionai/clues/internal/node"
 )
 
 var ErrMissingOtelGRPCEndpoint = errors.New("missing otel grpc endpoint")
@@ -36,8 +37,8 @@ type OTELConfig struct {
 	// ex: opentelemetry-collector.monitoring.svc.cluster.local:4317
 	GRPCEndpoint string
 
-	// Filter contains the filter used when copying baggage to a span, by adding span attributes.
-	// If no filter is specified, all baggage is copied over to a span.
+	// Filter contains the filter used when copying baggage to a span, by adding span
+	// attributes. If no filter is specified, all baggage is copied over to a span.
 	Filter baggagecopy.Filter
 }
 

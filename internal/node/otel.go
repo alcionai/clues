@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/alcionai/clues/internal/stringify"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/contrib/processors/baggagecopy"
 	"go.opentelemetry.io/otel"
@@ -27,6 +26,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/alcionai/clues/internal/stringify"
 )
 
 // ------------------------------------------------------------
@@ -122,8 +123,8 @@ type OTELConfig struct {
 	// ex: 0.0.0.0:4317
 	GRPCEndpoint string
 
-	// Filter contains the filter used when copying baggage to a span, by adding span attributes.
-	// If no filter is specified, all baggage is copied over to a span.
+	// Filter contains the filter used when copying baggage to a span, by adding span
+	// attributes. If no filter is specified, all baggage is copied over to a span.
 	Filter baggagecopy.Filter
 }
 
@@ -178,7 +179,10 @@ func NewOTELClient(
 
 	// -- Tracing
 
-	client.TracerProvider, err = newTracerProvider(ctx, client.grpcConn, server, config.Filter)
+	client.TracerProvider, err = newTracerProvider(ctx,
+		client.grpcConn,
+		server,
+		config.Filter)
 	if err != nil {
 		closeClient()
 		return nil, errors.Wrap(err, "generating a tracer provider")
