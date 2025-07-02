@@ -8,6 +8,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/puzpuzpuz/xsync/v4 v4.1.0
 	github.com/stretchr/testify v1.10.0
+	go.opentelemetry.io/contrib/processors/baggagecopy v0.10.0
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.13.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.37.0

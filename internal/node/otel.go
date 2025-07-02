@@ -3,7 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/alcionai/clues/internal/baggagecopy"
+	"go.opentelemetry.io/contrib/processors/baggagecopy"
 	"log"
 	"net/http"
 	"time"
