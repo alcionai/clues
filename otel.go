@@ -51,6 +51,10 @@ func (oc OTELConfig) toInternalConfig() node.OTELConfig {
 	}
 }
 
-// BlockAllMembers is a filter which blocks copying of all members of
+// BlockAllBaggage is a filter which blocks copying of all members of
 // baggage to a span.
-var BlockAllMembers baggagecopy.Filter = func(baggage.Member) bool { return false }
+var BlockAllBaggage baggagecopy.Filter = func(baggage.Member) bool { return false }
+
+// AllowAllBaggage is a filter which allows copying of all members of
+// baggage to a span.
+var AllowAllBaggage baggagecopy.Filter = func(baggage.Member) bool { return true }
