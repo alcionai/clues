@@ -199,7 +199,12 @@ func NewOTELClient(
 
 	// generate a logger provider
 	// LoggerProvider := global.GetLoggerProvider()
-	client.LoggerProvider, err = newLoggerProvider(ctx, client.grpcConn, server)
+	client.LoggerProvider, err = newLoggerProvider(
+		ctx,
+		client.grpcConn,
+		server,
+		config.Filter,
+	)
 	if err != nil {
 		closeClient()
 		return nil, errors.Wrap(err, "generating a logger provider")
@@ -317,6 +322,7 @@ func newLoggerProvider(
 	ctx context.Context,
 	conn *grpc.ClientConn,
 	server *resource.Resource,
+	filter baggagecopy.Filter,
 ) (*sdkLog.LoggerProvider, error) {
 	if ctx == nil {
 		return nil, errors.New("nil ctx")
@@ -331,14 +337,20 @@ func newLoggerProvider(
 		return nil, errors.Wrap(err, "constructing a logger exporter")
 	}
 
+	baggageCopyLogProcessor := baggagecopy.NewLogProcessor(filter)
+
 	loggerProvider := sdkLog.NewLoggerProvider(
 		sdkLog.WithResource(server),
+		// Set of processors below is order sensitive! The baggage processor must
+		// come before the exporter.
+		sdkLog.WithProcessor(baggageCopyLogProcessor),
 		// FIXME: need to investigate other options...
 		// * interval
 		// * buffer size
 		// * count limit
 		// * value length limit
-		sdkLog.WithProcessor(sdkLog.NewBatchProcessor(exporter)))
+		sdkLog.WithProcessor(sdkLog.NewBatchProcessor(exporter)),
+	)
 
 	return loggerProvider, nil
 }
