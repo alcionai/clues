@@ -1,149 +1,168 @@
 # CLUES
 
+/kluːz/
+
+_noun_
+
+1. Something that guides through an intricate procedure or maze of difficulties.
+   Specifically: a piece of evidence that leads one toward the solution of a problem.
+
+_verb_
+
+1. To give reliable information to.
+
+---
+
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/alcionai/clues)](https://pkg.go.dev/github.com/alcionai/clues) [![goreportcard](https://goreportcard.com/badge/github.com/alcionai/clues)](https://goreportcard.com/report/github.com/alcionai/clues)
 
-A golang library for tracking runtime variables via ctx, passing them upstream within errors, and retrieving context- and error-bound variables for logging.
+Clues is a golang telemetry aid designed to simplify debugging down to an O(1) operation.
+What is O(1) debugging? That's when a single event provides all the runtime
+context you need to grok what was happening in your code at that moment.
 
-## Aggregate runtime state in ctx
+Clues works in tandem with the Cluerr and Clog subpackages to produce a simple
+api that achieves this goal. By populating a context-bound cache of runtime
+variables, Cluerr can bind a cache snapshot within an error, and Clog
+extracts those variables for logging.
 
-Track runtime variables by adding them to the context.
+Need more support? Clues comes with OTEL configuration out of the box. Attributes
+added to the context are automatically added to the span, while Clog implicitly
+handles OTEL logging alongside the default stdout logger. Additional support
+packages like Ctats and Clutel help minimize the effort of engaging with those
+systems and provide a consistent interface for your telemetry production.
+
+---
+
+## How To Get A Clue
+
 ```go
 func foo(ctx context.Context, someID string) error {
-    ctx = clues.Add(ctx, "importantID", someID)
+    // Annotate the ctx with your important runtime attributes.
+    ctx = clues.Add(ctx, "important_id", someID)
     return bar(ctx, someID)
 }
 ```
 
-Keep error messages readable and augment your telemetry by packing errors with structured data.
 ```go
 func bar(ctx context.Context, someID string) error {
-    ctx = clues.Add(ctx, "importantID", someID)
-    err := errors.New("a bad happened")
-    if err != nil {
-        return clues.Stack(err).WithClues(ctx)
-    }
-    return nil
-}
-```
-
-Retrive structured data from your errors for logging and other telemetry.
-```go
-func main() {
-    err := foo(context.Background(), "importantID")
-    if err != nil {
-        logger.
-            Error("calling foo").
-            WithError(err).
-            WithAll(clues.InErr(err))
-    }
-}
-```
-
-## Track individual process flows
-
-Each clues addition traces its additions with a tree of IDs, chaining those traces into the "clues_trace" value.  This lets you quickly and easily filter logs to a specific process tree.
-```go
-func iterateOver(ctx context.Context, users []string) {
-    // automatically adds "clues_trace":"id_a"
-    ctx = clues.Add(ctx, "status", good)
-    for i, user := range users {
-        // automatically appends another id to "clues_trace": "id_a,id_n"
-        ictx := clues.Add(ctx, "currentUser", user, "iter", i)
-        err := doSomething(ictx, user)
-        if err != nil {
-            ictx = clues.Add(ictx, "status", bad)
-        }
-    }
-}
-```
-
-## Interoperable with pkg/errors
-
-Clues errors can be wrapped by pkg/errors without slicing out
-any stored data.
-```go
-func getIt(someID string) error {
-    return clues.New("oh no!").With("importantID", someID)
-}
-
-func getItWrapper(someID string) error {
-    if err := getIt(someID); err != nil {
-        return errors.Wrap(err, "getting the thing")
-    }
-
-    return nil
-}
-
-func main() {
-    err := getItWrapper("id")
-    if err != nil {
-        fmt.Println("error getting", err, "with vals", clues.InErr(err))
-    }
-}
-```
-
-## Stackable errors
-
-Error stacking lets you embed error sentinels without slicing out the current error's data or relying on err.Error() strings.
-```go
-var ErrorCommonFailure = "a common failure condition"
-
-func do() error {
-    if err := dependency.Do(); err != nil {
-        return clues.Stack(ErrorCommonFailure, err)
-    }
-    
-    return nil
-}
-
-func main() {
-    err := do()
-    if errors.Is(err, ErrCommonFailure) {
-        // true!
-    }
-}
-```
-
-## Labeling Errors
-
-Rather than build an errors.As-compliant local error to annotate downstream errors, labels allow you to categorize errors with expected qualities.
-
-Augment downstream errors with labels
-```go
-func foo(ctx context.Context, someID string) error {
     err := externalPkg.DoThing(ctx, someID)
     if err != nil {
-        return clues.Wrap(err).Label("retryable")
+        // Wrap the error with a snapshot of the current attributes
+        return clues.WrapWC(ctx, err, "doing something")
     }
     return nil
 }
 ```
 
-Check your labels upstream.
 ```go
 func main() {
     err := foo(context.Background(), "importantID")
     if err != nil {
-        if clues.HasLabel(err, "retryable")) {
-            err := foo(context.Background(), "importantID")
-        }
+        // Centralize your logging at the top
+        // without losing any low-level details.
+        clog.
+            CtxErr(ctx, err).
+            Error("calling foo")
     }
 }
 ```
 
-## Design
+---
 
-Clues is not the first of its kind: ctx-err-combo packages already exist.  Most other packages tend to couple the two notions, packing both into a single handler.  This is, in my opinion, an anti-pattern.  Errors are not context, and context are not errors.  Unifying the two can couple layers together, and your maintenance woes from handling that coupling are not worth the tradeoff in syntactical sugar.
+## Quickstart
 
-In turn, Clues maintains a clear separation between accumulating data into a context and passing data back in an error.  Both handlers operate independent of the other, so you can choose to only use the ctx (accumulate data into the context, but maybe log it instead of returning data in the err) or the err (only pack immedaite details into the error).
+The most basic setup only needs to flush the logger on exit.
 
-### References
-* [https://github.com/mvndaai/ctxerr](https://github.com/mvndaai/ctxerr)
-* [https://github.com/suzuki-shunsuke/go-errctx](https://github.com/suzuki-shunsuke/go-errctx)
+```go
+package main
 
-## Similar Art
+import (
+    "context"
 
-Fault is most similar in design to this package, and also attempts to maintain separation between errors and contexts.  The differences are largely syntactical: Fault prefers a composable interface with decorator packages.  I like to keep error production as terse as possible, thus preferring a more populated interface of methods over the decorator design.
+    "github.com/alcionai/clues/clog"
+)
+func main() {
+  ctx := clog.Init(context.Background(), clog.Settings{
+   Format: clog.FormatForHumans,
+  })
+  defer clog.Flush()
+  // And away you go!
+}
+```
 
-### References
-* [https://github.com/Southclaws/fault](https://github.com/Southclaws/fault)
+OTEL support requires its own initialization and flush.
+
+```go
+package main
+import (
+    "context"
+
+    "github.com/alcionai/clues"
+    "github.com/alcionai/clues/clog"
+)
+
+func main() {
+  ctx, err := clues.InitializeOTEL(
+    context.Background(),
+    myServiceName,
+    clues.OTELConfig{
+      GRPCEndpoint: os.GetEnv(myconsts.OTELGRPCEndpoint),
+    },
+  )
+  if err != nil {
+    panic(err)
+  }
+
+  ctx = clog.Init(ctx, clog.Settings{
+    Format: clog.FormatForHumans,
+  })
+
+  defer func() {
+    clog.Flush(ctx)
+
+    err := clues.Close(ctx)
+    if err != nil {
+      // use the standard log here since clog was already flushed
+      log.Printf("closing clues: %v\n", err)
+    }
+  }
+}
+```
+
+---
+
+## Resources
+
+- [Best Practices](https://github.com/alcionai/clues/blob/main/BEST_PRACTICES.md)
+- [Cluerr](https://github.com/alcionai/clues/blob/main/cluerr/README.md) - error api.
+- [Clog](https://github.com/alcionai/clues/blob/main/clog/README.md) - logging api.
+- [Ctats](https://github.com/alcionai/clues/blob/main/ctats/README.md) - OTEL metrics wraper.
+- [Cecrets](https://github.com/alcionai/clues/blob/main/cecrets/README.md) - pii-in-telemetry obfuscation.
+
+---
+
+## Why Not {my favorite logging package}?
+
+Many logging packages let you build attributes within the context, handing
+in down the layers of your runtime stack. But that's often as far as they go.
+In order to utilize those built-up attributes, you have to push all of your
+logging to the leaves of your process tree. This adds considerable boilerplate,
+not to mention cognitive burden, to your telemetry surface area.
+
+Providing an interface that hooks into both downward (ctx) and upward (error)
+data transmission, clues helps you minimize the amount of logging you do to
+only those necessary occurrences.
+
+As for your favorite logger: look forward for more robust logger support in
+clog in the future.
+
+## Why Not Just OTEL?
+
+OTEL is awesome. We love OTEL 'round here. We do not, however, love the effort
+it takes to set it up. And we think the apis are awful clunky.
+
+If your codebase is already OTEL-enabled and decked out, then there isn't much
+clues can offer except for nicer, cleaner code and happier devs.
+
+But if you're on a new project, prototyping a new feature, or switching to
+OTEL from some other paradigm, then Clues can get your telemetry bootstrapped
+and running in, well, less time that it took you to read this far.
