@@ -1,37 +1,88 @@
-# The Clues Logger
+# Clog
 
-## Regular logging
+/ˈklȯg/
 
-Infow/Debugw/Errorw are also supported.  
-So are the \*f variations. Because I'm trying to be nice.  
-Warn is not included. Because I'm not _that_ nice.
+_verb_
+
+1. To become filled with extraneous matter.
+2. To unite in a mass.
+
+---
+
+## How to Clog your code
+
+Clog is an opinionated logging wrapper backed by Zap and OTEL
+under the hood. It provides an api for easy interaction with
+Clues ctx and Cluerr errors, among a host of other supporting features.
+
+Clog is built around three ideals:
+
+1. Log messages should be small and easy to read.
+2. Structured data in logs should provide expansive and exhaustive
+   context for debugging.
+3. Interoperable with other Clues packages without preventing
+   interoperability with non-Clues packages.
+
+Adding logs is simple:
 
 ```go
-clog.Ctx(ctx).Info("information")
-clog.Ctx(ctx).Label(clog.ExampleDebugLabel).Debug("debugging")
-clog.Ctx(ctx).Err(err).Error("badness")
+func foo(ctx context.Context) {
+  ctx := clues.Add(ctx, "important_id", someID)
+  bar(ctx, someID, 1)
+}
+
+func bar(ctx context.Context, someID string, count int) {
+  // attributes in the ctx are automatically added to the log
+  clog.Ctx(ctx).
+    // or you can extend the log with local attributes
+    With("count", count).
+    Info("baring")
+}
 ```
 
-## Labeling your logs
+## Other Features
 
-Labeling is intended to make _categorical_ lookup of logs much easier.
+### Labels
 
-Many times we build unintentional colloquialisms into our log vocabulary
-and try to filter on those when looking for info. Ex: logs that say
-"recoverable error" are "the important error logs". No, none of that.
+Labeling has two benefits.
 
-If you have a set of logging that you always want to include or exclude, put
-a label on it.
-"How was this run configured?" -> filter clabel like /clabel_configuration/
-"What caused the process to fail?" -> filter clabel like /clabel_error_origin/
+First, it provides a simple and concrete way to plan out logging
+categorization. Why categorize logs? Because the first step in debugging
+is often to reach the right set of logs. The faster and more reliably
+you can do that, the faster you can debug.
 
 ```go
 clog.CtxErr(ctx, err).
-  Label(clog.LStartOfRun, clog.LFailureSource).
-  Info("couldn't start up process")
+  Label(myconsts.UserReq, myconsts.Failures).
+  Error("creating user")
+
+// in your log viewer
+*-logs*
+| where attrs.labels contains "user_req"
 ```
 
-## Commenting your logs
+Second, labels provide fine grained control over debug logging. No more
+"inclusion by debug-level" or similar nonsense. Just say what debug logs
+you want to include, and the rest get filtered out.
+
+```go
+set := clog.Settings{
+  Format: clog.FormatForHumans,
+  Level: clog.LevelDebug,
+  OnlyLogDebugIfContainsLabel: []string{clog.APIReq},
+}
+ctx := clog.Init(ctx, set)
+
+clog.Ctx(ctx).
+  Label(clog.APIReq).
+  Debug("this log will be included in debug output")
+
+clog.Ctx(ctx).
+  Label(clog.DBReq).
+  Debug("this log will not")
+```
+
+## Comments
 
 ```go
 clog.Ctx(ctx).
@@ -42,49 +93,7 @@ clog.Ctx(ctx).
   Info("information")
 ```
 
-## Automatically adds structured data from clues
+## Automatic OTEL Integration
 
-```go
-ctx := clues.Add(ctx, "foo", "bar")
-err := clues.New("a bad happened").With("fnords", "smarf")
-
-clog.CtxErr(ctx, err).
-  With("beaux", "regarde").
-  Debug("all the info!")
-
-// this produces a log containing:
-// {
-//  "msg": "all the info!",
-//  "foo": "bar",
-//  "fnords": "smarf",
-//  "beaux": "regarde",
-// }
-```
-
-## Setting up logs
-
-```go
-set := clog.Settings{
-  Format: clog.FormatForHumans,
-  Level: clog.LevelInfo,
-}
-
-ctx := clog.Init(ctx, set)
-```
-
-## Filtering Debug Logs (aka, improved debug levels)
-
-You're using labels to categorize your logs, right? Right?
-Well then you've already built out your debug logging levels!
-Want to only include a certain set of your very noisy debug logs?
-Just specify which label you want included in the debug level.
-
-```go
-set := clog.Settings{
-  Format: clog.FormatForHumans,
-  Level: clog.LevelDebug,
-  OnlyLogDebugIfContainsLabel: []string{clog.APICall},
-}
-
-ctx := clog.Init(ctx, set)
-```
+If you've initialized OTEL through Clues, Clog will automatically
+push all logs to the OTEL logger. No extra work required!
