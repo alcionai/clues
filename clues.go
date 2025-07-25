@@ -143,6 +143,7 @@ func ReceiveTrace[C node.TraceMapCarrierBase](
 		ReceiveTrace(ctx, node.AsTraceMapCarrier(mapCarrier))
 }
 
+// deprecated: use clutel.StartSpan instead.
 // AddSpan stacks a clues node onto this context and uses the provided
 // name for the trace id, instead of a randomly generated hash. AddSpan
 // can be called without additional values if you only want to add a trace
@@ -173,6 +174,7 @@ func AddSpan(
 	return node.EmbedInCtx(ctx, spanned)
 }
 
+// deprecated: use clutel.EndSpan instead.
 // CloseSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
 func CloseSpan(ctx context.Context) context.Context {
