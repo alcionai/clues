@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/alcionai/clues/internal/stringify"
@@ -91,16 +92,61 @@ func (dn *Node) SpawnDescendant() *Node {
 // setters
 // ---------------------------------------------------------------------------
 
+type addAttrConfig struct {
+	doNotAddToSpan       bool
+	addToOTELHTTPLabeler bool
+	otelHTTPLabeler      otelHTTPLabeler
+}
+
+type addAttrOptions func(*addAttrConfig)
+
+func makeAddAttrConfig(opts ...addAttrOptions) addAttrConfig {
+	cfg := addAttrConfig{}
+
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	return cfg
+}
+
+func DoNotAddToSpan() addAttrOptions {
+	return func(cfg *addAttrConfig) {
+		cfg.doNotAddToSpan = true
+	}
+}
+
+func AddToOTELHTTPLabeler(ctx context.Context) addAttrOptions {
+	return func(cfg *addAttrConfig) {
+		cfg.addToOTELHTTPLabeler = true
+
+		// cannot be nil, by contract of the otelhttp package.
+		cfg.otelHTTPLabeler, _ = otelhttp.LabelerFromContext(ctx)
+	}
+}
+
 // AddValues adds all entries in the map to the node's values.
 // automatically propagates values onto the current span.
-func (dn *Node) AddValues(m map[string]any) *Node {
+func (dn *Node) AddValues(
+	m map[string]any,
+	opts ...addAttrOptions,
+) *Node {
 	if m == nil {
 		m = map[string]any{}
 	}
 
+	cfg := makeAddAttrConfig(opts...)
+
 	spawn := dn.SpawnDescendant()
 	spawn.SetValues(m)
-	spawn.AddSpanAttributes(m)
+
+	if cfg.doNotAddToSpan {
+		spawn.AddSpanAttributes(m)
+	}
+
+	if cfg.addToOTELHTTPLabeler {
+		spawn.AddToOTELHTTPLabeler(cfg.otelHTTPLabeler, m)
+	}
 
 	return spawn
 }
