@@ -109,12 +109,16 @@ func makeAddAttrConfig(opts ...addAttrOptions) addAttrConfig {
 	return cfg
 }
 
+// DoNotAddToSpan prevents the values from being added to the current span.
 func DoNotAddToSpan() addAttrOptions {
 	return func(cfg *addAttrConfig) {
 		cfg.doNotAddToSpan = true
 	}
 }
 
+// AddToOTELHTTPLabeler adds the values to the otelHTTPLabeler, which will
+// hold the values in reserve until the next span creation.  Naturally, the
+// values will not be added to the current span.
 func AddToOTELHTTPLabeler(labeler otelHTTPLabeler) addAttrOptions {
 	return func(cfg *addAttrConfig) {
 		cfg.addToOTELHTTPLabeler = true
@@ -142,7 +146,7 @@ func (dn *Node) AddValues(
 		spawn.AddToOTELHTTPLabeler(cfg.otelHTTPLabeler, m)
 	}
 
-	if cfg.doNotAddToSpan || cfg.addToOTELHTTPLabeler {
+	if !cfg.doNotAddToSpan && !cfg.addToOTELHTTPLabeler {
 		spawn.AddSpanAttributes(m)
 	}
 
@@ -161,18 +165,6 @@ func (dn *Node) SetValues(m map[string]any) {
 	}
 
 	maps.Copy(dn.Values, m)
-}
-
-// AppendToTree adds a new leaf with the provided name.
-func (dn *Node) AppendToTree(name string) *Node {
-	if name == "" {
-		name = randomNodeID()
-	}
-
-	spawn := dn.SpawnDescendant()
-	spawn.ID = name
-
-	return spawn
 }
 
 // ---------------------------------------------------------------------------

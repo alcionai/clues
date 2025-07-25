@@ -483,13 +483,17 @@ func (dn *Node) AddSpan(
 
 	if dn.OTEL == nil {
 		// Create a new node so that it can have its properties set separately.
-		return ctx, dn.SpawnDescendant()
+		spawn := dn.SpawnDescendant()
+		spawn.ID = name
+
+		return ctx, spawn
 	}
 
 	ctx, span := dn.OTEL.Tracer.Start(ctx, name, opts...)
 
 	spawn := dn.SpawnDescendant()
 	spawn.Span = span
+	spawn.ID = name
 
 	return ctx, spawn
 }
