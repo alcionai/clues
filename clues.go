@@ -99,7 +99,7 @@ func In(ctx context.Context) *node.Node {
 // Add adds all key-value pairs to the clues.
 func Add(ctx context.Context, kvs ...any) context.Context {
 	nc := node.FromCtx(ctx)
-	return node.EmbedInCtx(ctx, nc.AddValues(stringify.Normalize(kvs...)))
+	return node.EmbedInCtx(ctx, nc.AddValues(ctx, stringify.Normalize(kvs...)))
 }
 
 // AddMap adds a shallow clone of the map to a namespaced set of clues.
@@ -108,7 +108,7 @@ func AddMap[K comparable, V any](
 	m map[K]V,
 ) context.Context {
 	nc := node.FromCtx(ctx)
-	return node.EmbedInCtx(ctx, nc.AddValues(stringify.NormalizeMap(m)))
+	return node.EmbedInCtx(ctx, nc.AddValues(ctx, stringify.NormalizeMap(m)))
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ func AddSpan(
 	if len(kvs) > 0 {
 		ctx, spanned = nc.AddSpan(ctx, name)
 		spanned.ID = name
-		spanned = spanned.AddValues(stringify.Normalize(kvs...))
+		spanned = spanned.AddValues(ctx, stringify.Normalize(kvs...))
 	} else {
 		ctx, spanned = nc.AddSpan(ctx, name)
 		spanned = spanned.AppendToTree(name)

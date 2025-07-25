@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/contrib/processors/baggagecopy"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -520,6 +521,49 @@ func (dn *Node) AddSpanAttributes(
 
 	for k, v := range values {
 		dn.Span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
+	}
+}
+
+type otelHTTPLabeler interface {
+	// Add adds the attributes to the labeler.
+	Add(attrs ...attribute.KeyValue)
+}
+
+// OTELHTTPLabelerFromCtx retrieves the current otel http labeler from the context.
+// If no labeler is present, it will create a new one and add it to the context.
+func OTELHTTPLabelerFromCtx(ctx context.Context) (context.Context, otelHTTPLabeler) {
+	// cannot be nil, by contract of the otelhttp package.
+	labeler, hasLabeler := otelhttp.LabelerFromContext(ctx)
+	if !hasLabeler {
+		labeler := &otelhttp.Labeler{}
+		ctx = otelhttp.ContextWithLabeler(ctx, labeler)
+	}
+
+	return ctx, labeler
+}
+
+// AddToOTELHTTPLabeler adds the values to the current otel http labeler.
+// If the labeler was not initialized, this call no-ops, but will not
+// panic (by guarantees of the otelhttp package).
+//
+// The labeler will defer the addition of these attrs until the next time
+// that the otelhttp transport runs a request.
+func (dn *Node) AddToOTELHTTPLabeler(
+	labeler otelHTTPLabeler,
+	m map[string]any,
+) {
+	if dn == nil || dn.OTEL == nil {
+		return
+	}
+
+	for k, v := range m {
+		labeler.Add(
+			// TODO: complete otel labeling type support.
+			attribute.String(
+				k,
+				stringify.Marshal(v, false),
+			),
+		)
 	}
 }
 

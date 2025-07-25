@@ -91,16 +91,60 @@ func (dn *Node) SpawnDescendant() *Node {
 // setters
 // ---------------------------------------------------------------------------
 
+type addAttrConfig struct {
+	doNotAddToSpan       bool
+	addToOTELHTTPLabeler bool
+	otelHTTPLabeler      otelHTTPLabeler
+}
+
+type addAttrOptions func(*addAttrConfig)
+
+func makeAddAttrConfig(opts ...addAttrOptions) addAttrConfig {
+	cfg := addAttrConfig{}
+
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	return cfg
+}
+
+func DoNotAddToSpan() addAttrOptions {
+	return func(cfg *addAttrConfig) {
+		cfg.doNotAddToSpan = true
+	}
+}
+
+func AddToOTELHTTPLabeler(labeler otelHTTPLabeler) addAttrOptions {
+	return func(cfg *addAttrConfig) {
+		cfg.addToOTELHTTPLabeler = true
+		cfg.otelHTTPLabeler = labeler
+	}
+}
+
 // AddValues adds all entries in the map to the node's values.
 // automatically propagates values onto the current span.
-func (dn *Node) AddValues(m map[string]any) *Node {
+func (dn *Node) AddValues(
+	ctx context.Context,
+	m map[string]any,
+	opts ...addAttrOptions,
+) *Node {
 	if m == nil {
 		m = map[string]any{}
 	}
 
+	cfg := makeAddAttrConfig(opts...)
+
 	spawn := dn.SpawnDescendant()
 	spawn.SetValues(m)
-	spawn.AddSpanAttributes(m)
+
+	if cfg.addToOTELHTTPLabeler {
+		spawn.AddToOTELHTTPLabeler(cfg.otelHTTPLabeler, m)
+	}
+
+	if cfg.doNotAddToSpan || cfg.addToOTELHTTPLabeler {
+		spawn.AddSpanAttributes(m)
+	}
 
 	return spawn
 }

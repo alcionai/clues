@@ -20,7 +20,7 @@ func AddSpanWithOpts(
 
 	if len(kvs) > 0 {
 		spanned.ID = name
-		spanned = spanned.AddValues(stringify.Normalize(kvs...))
+		spanned = spanned.AddValues(ctx, stringify.Normalize(kvs...))
 	} else {
 		spanned = spanned.AppendToTree(name)
 	}
