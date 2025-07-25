@@ -523,6 +523,36 @@ func (dn *Node) AddSpanAttributes(
 	}
 }
 
+type otelHTTPLabeler interface {
+	// Add adds the attributes to the labeler.
+	Add(attrs ...attribute.KeyValue)
+}
+
+// AddToOTELHTTPLabeler adds the values to the current otel http labeler.
+// If the labeler was not initialized, this call no-ops, but will not
+// panic (by guarantees of the otelhttp package).
+//
+// The labeler will defer the addition of these attrs until the next time
+// that the otelhttp transport runs a request.
+func (dn *Node) AddToOTELHTTPLabeler(
+	labeler otelHTTPLabeler,
+	m map[string]any,
+) {
+	if dn == nil || dn.OTEL == nil {
+		return
+	}
+
+	for k, v := range m {
+		labeler.Add(
+			// TODO: complete otel labeling type support.
+			attribute.String(
+				k,
+				stringify.Marshal(v, false),
+			),
+		)
+	}
+}
+
 // logger gets the otel logger instance from the otel client.
 // Returns nil if otel wasn't initialized.
 func (dn *Node) OTELLogger() otelLog.Logger {
