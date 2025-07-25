@@ -67,7 +67,10 @@ func (tb *tryBuilder) With(kvs ...any) *tryBuilder {
 
 	tb.ctx = node.EmbedInCtx(
 		tb.ctx,
-		nc.AddValues(stringify.Normalize(kvs...)),
+		nc.AddValues(
+			tb.ctx,
+			stringify.Normalize(kvs...),
+		),
 	)
 
 	tb.logBuilder.With(kvs...)
