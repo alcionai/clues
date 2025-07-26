@@ -8,6 +8,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// ---------------------------------------------------------------------------
+// spans
+// ---------------------------------------------------------------------------
+
 // AddToOTELHTTPLabeler adds key-value pairs to both the current
 // context and the OpenTelemetry HTTP labeler, but not the current
 // span.  The labeler will hold onto these values until the next
@@ -119,4 +123,36 @@ func StartSpan(
 // following a `clues.AddSpan()` call.
 func EndSpan(ctx context.Context) {
 	node.FromCtx(ctx).CloseSpan(ctx)
+}
+
+// ---------------------------------------------------------------------------
+// traces
+// ---------------------------------------------------------------------------
+
+// InjectTrace adds the current trace details to the provided
+// headers.  If otel is not initialized, no-ops.
+//
+// The mapCarrier is mutated by this request.  The passed
+// reference is returned mostly as a quality-of-life step
+// so that callers don't need to declare the map outside of
+// this call.
+func InjectTrace[C node.TraceMapCarrierBase](
+	ctx context.Context,
+	mapCarrier C,
+) C {
+	node.FromCtx(ctx).
+		InjectTrace(ctx, node.AsTraceMapCarrier(mapCarrier))
+
+	return mapCarrier
+}
+
+// ReceiveTrace extracts the current trace details from the
+// headers and adds them to the context.  If otel is not
+// initialized, no-ops.
+func ReceiveTrace[C node.TraceMapCarrierBase](
+	ctx context.Context,
+	mapCarrier C,
+) context.Context {
+	return node.FromCtx(ctx).
+		ReceiveTrace(ctx, node.AsTraceMapCarrier(mapCarrier))
 }

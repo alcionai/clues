@@ -108,6 +108,7 @@ func AddMap[K comparable, V any](
 // spans and traces
 // ---------------------------------------------------------------------------
 
+// deprecated: use clutel.InjectTrace instead.
 // InjectTrace adds the current trace details to the provided
 // headers.  If otel is not initialized, no-ops.
 //
@@ -125,6 +126,7 @@ func InjectTrace[C node.TraceMapCarrierBase](
 	return mapCarrier
 }
 
+// deprecated: use clutel.ReceiveTrace instead.
 // ReceiveTrace extracts the current trace details from the
 // headers and adds them to the context.  If otel is not
 // initialized, no-ops.
