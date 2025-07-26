@@ -112,9 +112,6 @@ func StartSpan(
 
 // EndSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
-func EndSpan(ctx context.Context) context.Context {
-	return node.EmbedInCtx(
-		ctx,
-		node.FromCtx(ctx).CloseSpan(ctx),
-	)
+func EndSpan(ctx context.Context) {
+	node.FromCtx(ctx).CloseSpan(ctx)
 }
