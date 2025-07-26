@@ -107,6 +107,24 @@ func Normalize(kvs ...any) map[string]any {
 	return norm
 }
 
+// Stringalize is a convenience function that does the exact same thing as
+// Normalize, but it casts all values to string instead of any.
+func Stringalize(kvs ...any) map[string]string {
+	norm := Normalize(kvs...)
+	stringy := make(map[string]string, len(norm))
+
+	for k, v := range norm {
+		sv, ok := v.(string)
+		if !ok {
+			sv = Marshal(v, false)
+		}
+
+		stringy[k] = sv
+	}
+
+	return stringy
+}
+
 func NormalizeMap[K comparable, V any](m map[K]V) map[string]any {
 	kvs := make([]any, 0, len(m)*2)
 
