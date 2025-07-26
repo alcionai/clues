@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -65,11 +63,6 @@ func Inherit(
 
 	if to == nil {
 		to = context.Background()
-	} else if toNode.Span == nil {
-		// A span may already exist in the 'to' context thanks to otel package integration.
-		// Likewise, the 'from' ctx is not expected to contain a span, so we only want to
-		// maintain the span information that's currently live.
-		toNode.Span = trace.SpanFromContext(to)
 	}
 
 	// if we have no fromNode OTEL, or are not clobbering, return the toNode.
@@ -99,7 +92,7 @@ func In(ctx context.Context) *node.Node {
 // Add adds all key-value pairs to the clues.
 func Add(ctx context.Context, kvs ...any) context.Context {
 	nc := node.FromCtx(ctx)
-	return node.EmbedInCtx(ctx, nc.AddValues(stringify.Normalize(kvs...)))
+	return node.EmbedInCtx(ctx, nc.AddValues(ctx, stringify.Normalize(kvs...)))
 }
 
 // AddMap adds a shallow clone of the map to a namespaced set of clues.
@@ -108,7 +101,7 @@ func AddMap[K comparable, V any](
 	m map[K]V,
 ) context.Context {
 	nc := node.FromCtx(ctx)
-	return node.EmbedInCtx(ctx, nc.AddValues(stringify.NormalizeMap(m)))
+	return node.EmbedInCtx(ctx, nc.AddValues(ctx, stringify.NormalizeMap(m)))
 }
 
 // ---------------------------------------------------------------------------
@@ -156,18 +149,12 @@ func AddSpan(
 	kvs ...any,
 ) context.Context {
 	nc := node.FromCtx(ctx)
-	if nc == nil {
-		return ctx
-	}
-
-	var spanned *node.Node
+	ctx, spanned := nc.AddSpan(ctx, name)
 
 	if len(kvs) > 0 {
-		ctx, spanned = nc.AddSpan(ctx, name)
 		spanned.ID = name
-		spanned = spanned.AddValues(stringify.Normalize(kvs...))
+		spanned = spanned.AddValues(ctx, stringify.Normalize(kvs...))
 	} else {
-		ctx, spanned = nc.AddSpan(ctx, name)
 		spanned = spanned.AppendToTree(name)
 	}
 
@@ -178,9 +165,8 @@ func AddSpan(
 // CloseSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
 func CloseSpan(ctx context.Context) context.Context {
-	return node.EmbedInCtx(
-		ctx,
-		node.FromCtx(ctx).CloseSpan(ctx))
+	node.FromCtx(ctx).CloseSpan(ctx)
+	return ctx
 }
 
 // ---------------------------------------------------------------------------

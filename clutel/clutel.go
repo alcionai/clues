@@ -27,6 +27,7 @@ func AddToOTELHTTPLabeler(
 	nc := node.FromCtx(ctx)
 
 	return node.EmbedInCtx(ctx, nc.AddValues(
+		ctx,
 		stringify.Normalize(kvs...),
 		node.DoNotAddToSpan(),
 		node.AddToOTELHTTPLabeler(ctx),
@@ -84,7 +85,7 @@ func (sb *spanBuilder) Start(
 
 	if len(sb.kvs) > 0 {
 		spanned.ID = name
-		spanned = spanned.AddValues(sb.kvs)
+		spanned = spanned.AddValues(ctx, sb.kvs)
 	} else {
 		spanned = spanned.AppendToTree(name)
 	}
@@ -102,18 +103,12 @@ func StartSpan(
 	kvs ...any,
 ) context.Context {
 	nc := node.FromCtx(ctx)
-	if nc == nil {
-		return ctx
-	}
-
-	var spanned *node.Node
+	ctx, spanned := nc.AddSpan(ctx, name)
 
 	if len(kvs) > 0 {
-		ctx, spanned = nc.AddSpan(ctx, name)
 		spanned.ID = name
-		spanned = spanned.AddValues(stringify.Normalize(kvs...))
+		spanned = spanned.AddValues(ctx, stringify.Normalize(kvs...))
 	} else {
-		ctx, spanned = nc.AddSpan(ctx, name)
 		spanned = spanned.AppendToTree(name)
 	}
 
@@ -122,9 +117,6 @@ func StartSpan(
 
 // EndSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
-func EndSpan(ctx context.Context) context.Context {
-	return node.EmbedInCtx(
-		ctx,
-		node.FromCtx(ctx).CloseSpan(ctx),
-	)
+func EndSpan(ctx context.Context) {
+	node.FromCtx(ctx).CloseSpan(ctx)
 }

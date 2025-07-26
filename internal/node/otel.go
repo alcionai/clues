@@ -485,41 +485,38 @@ func (dn *Node) AddSpan(
 		return ctx, dn.SpawnDescendant()
 	}
 
-	ctx, span := dn.OTEL.Tracer.Start(ctx, name, opts...)
+	ctx, _ = dn.OTEL.Tracer.Start(ctx, name, opts...)
 
 	spawn := dn.SpawnDescendant()
-	spawn.Span = span
 
 	return ctx, spawn
 }
 
 // CloseSpan closes the otel span and removes it span from the data node.
 // If no span is present, no ops.
-func (dn *Node) CloseSpan(ctx context.Context) *Node {
-	if dn == nil || dn.Span == nil {
-		return dn
+func (dn *Node) CloseSpan(ctx context.Context) {
+	if dn == nil || dn.OTEL == nil {
+		return
 	}
 
-	dn.Span.End()
-
-	spawn := dn.SpawnDescendant()
-	spawn.Span = nil
-
-	return spawn
+	trace.SpanFromContext(ctx).End()
 }
 
 // AddSpanAttributes adds the values to the current span.  If the span
 // is nil (such as if otel wasn't initialized or no span has been generated),
 // this call no-ops.
 func (dn *Node) AddSpanAttributes(
+	ctx context.Context,
 	values map[string]any,
 ) {
-	if dn == nil || dn.Span == nil {
+	if dn == nil || dn.OTEL == nil {
 		return
 	}
 
+	span := trace.SpanFromContext(ctx)
+
 	for k, v := range values {
-		dn.Span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
+		span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
 	}
 }
 
