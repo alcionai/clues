@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alcionai/clues"
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/clutel"
 	"github.com/alcionai/clues/internal/tester"
 	"github.com/stretchr/testify/assert"
@@ -279,5 +280,123 @@ func TestNewSpan(t *testing.T) {
 				)
 			})
 		}
+	}
+}
+
+func TestAddBaggage(t *testing.T) {
+	table := []struct {
+		name    string
+		kvs     tester.SA
+		expectM tester.MSA
+		expectS tester.SA
+	}{
+		{
+			"empty",
+			nil,
+			tester.MSA{},
+			tester.SA{},
+		},
+		{
+			"with_attrs",
+			tester.SA{"k", "v"},
+			tester.MSA{"k": "v"},
+			tester.SA{"k", "v"},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, err := clutel.AddBaggage(t.Context(), test.kvs...)
+			require.NoError(t, err, cluerr.ToCore(err))
+
+			tester.AssertEq(
+				ctx,
+				t,
+				"",
+				test.expectM, tester.MSA{},
+				test.expectS, tester.SA{},
+			)
+
+			// TODO: need to establush a live otel connection to test this
+			// bags := baggage.FromContext(ctx)
+			// kvs := tester.MSA{}
+			//
+			// for _, member := range bags.Members() {
+			// 	kvs[member.Key()] = member.Value()
+			// }
+			//
+			// assert.Equal(t, test.expectM, kvs, "baggage member k:values should match")
+		})
+	}
+}
+
+func TestNewBaggageProps(t *testing.T) {
+	table := []struct {
+		name    string
+		input   clutel.BaggageProps
+		expectM tester.MSA
+		expectS tester.SA
+	}{
+		{
+			"empty",
+			clutel.BaggageProps{},
+			tester.MSA{},
+			tester.SA{},
+		},
+		{
+			"only_member_values",
+			clutel.NewBaggageProps("k", "v"),
+			tester.MSA{"k": "v"},
+			tester.SA{"k", "v"},
+		},
+		{
+			"member_and_properties",
+			clutel.NewBaggageProps("k", "v", "fnord", "smarf"),
+			tester.MSA{
+				"k":       "v",
+				"k_props": map[string]any{"fnord": "smarf"},
+			},
+			tester.SA{
+				"k", "v",
+				"k_props", map[string]any{"fnord": "smarf"},
+			},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, err := clutel.AddBaggageProps(t.Context(), test.input)
+			require.NoError(t, err, cluerr.ToCore(err))
+
+			tester.AssertEq(
+				ctx,
+				t,
+				"",
+				test.expectM, tester.MSA{},
+				test.expectS, tester.SA{},
+			)
+
+			// TODO: need to establush a live otel connection to test this
+			// bags := baggage.FromContext(ctx)
+			// kvs := tester.MSA{}
+			//
+			// for _, member := range bags.Members() {
+			// 	kvs[member.Key()] = member.Value()
+			//
+			// 	props := map[string]any{}
+			//
+			// 	for _, prop := range member.Properties() {
+			// 		v, _ := prop.Value()
+			//
+			// 		props[prop.Key()] = v
+			// 	}
+			//
+			// 	if len(props) > 0 {
+			// 		kvs[member.Key()+"_props"] = props
+			// 	}
+			// }
+			//
+			// assert.Equal(t, test.expectM, kvs, "baggage member k:values should match")
+		})
 	}
 }
