@@ -9,6 +9,10 @@ import (
 	"github.com/alcionai/clues/internal/stringify"
 )
 
+// ---------------------------------------------------------------------------
+// spans
+// ---------------------------------------------------------------------------
+
 // AddToOTELHTTPLabeler adds key-value pairs to both the current
 // context and the OpenTelemetry HTTP labeler, but not the current
 // span.  The labeler will hold onto these values until the next
@@ -85,15 +89,12 @@ func (sb *spanBuilder) Start(
 		return ctx
 	}
 
-	ctx, spanned := nc.AddSpan(ctx, name, sb.opts...)
-
-	if len(sb.kvs) > 0 {
-		spanned.ID = ""
-		spanned = spanned.AddValues(ctx, sb.kvs)
-		spanned.ID = name
-	}
-
-	return node.EmbedInCtx(ctx, spanned)
+	return nc.AddSpan(
+		ctx,
+		name,
+		sb.kvs,
+		sb.opts...,
+	)
 }
 
 // StartSpan stacks a clues node onto this context and uses the provided
@@ -112,9 +113,38 @@ func StartSpan(
 
 // EndSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
-func EndSpan(ctx context.Context) context.Context {
-	return node.EmbedInCtx(
-		ctx,
-		node.FromCtx(ctx).CloseSpan(ctx),
-	)
+func EndSpan(ctx context.Context) {
+	node.CloseSpan(ctx)
+}
+
+// ---------------------------------------------------------------------------
+// traces
+// ---------------------------------------------------------------------------
+
+// InjectTrace adds the current trace details to the provided
+// headers.  If otel is not initialized, no-ops.
+//
+// The mapCarrier is mutated by this request.  The passed
+// reference is returned mostly as a quality-of-life step
+// so that callers don't need to declare the map outside of
+// this call.
+func InjectTrace[C node.TraceMapCarrierBase](
+	ctx context.Context,
+	mapCarrier C,
+) C {
+	node.FromCtx(ctx).
+		InjectTrace(ctx, node.AsTraceMapCarrier(mapCarrier))
+
+	return mapCarrier
+}
+
+// ReceiveTrace extracts the current trace details from the
+// headers and adds them to the context.  If otel is not
+// initialized, no-ops.
+func ReceiveTrace[C node.TraceMapCarrierBase](
+	ctx context.Context,
+	mapCarrier C,
+) context.Context {
+	return node.FromCtx(ctx).
+		ReceiveTrace(ctx, node.AsTraceMapCarrier(mapCarrier))
 }

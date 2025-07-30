@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -65,11 +63,6 @@ func Inherit(
 
 	if to == nil {
 		to = context.Background()
-	} else if toNode.Span == nil {
-		// A span may already exist in the 'to' context thanks to otel package integration.
-		// Likewise, the 'from' ctx is not expected to contain a span, so we only want to
-		// maintain the span information that's currently live.
-		toNode.Span = trace.SpanFromContext(to)
 	}
 
 	// if we have no fromNode OTEL, or are not clobbering, return the toNode.
@@ -115,6 +108,7 @@ func AddMap[K comparable, V any](
 // spans and traces
 // ---------------------------------------------------------------------------
 
+// deprecated: use clutel.InjectTrace instead.
 // InjectTrace adds the current trace details to the provided
 // headers.  If otel is not initialized, no-ops.
 //
@@ -132,6 +126,7 @@ func InjectTrace[C node.TraceMapCarrierBase](
 	return mapCarrier
 }
 
+// deprecated: use clutel.ReceiveTrace instead.
 // ReceiveTrace extracts the current trace details from the
 // headers and adds them to the context.  If otel is not
 // initialized, no-ops.
@@ -160,24 +155,18 @@ func AddSpan(
 		return ctx
 	}
 
-	ctx, spanned := nc.AddSpan(ctx, name)
-
-	if len(kvs) > 0 {
-		spanned.ID = ""
-		spanned = spanned.AddValues(ctx, stringify.Normalize(kvs...))
-		spanned.ID = name
-	}
-
-	return node.EmbedInCtx(ctx, spanned)
+	return nc.AddSpan(
+		ctx,
+		name,
+		stringify.Normalize(kvs...),
+	)
 }
 
 // deprecated: use clutel.EndSpan instead.
 // CloseSpan closes the current span in the clues node.  Should only be called
 // following a `clues.AddSpan()` call.
-func CloseSpan(ctx context.Context) context.Context {
-	return node.EmbedInCtx(
-		ctx,
-		node.FromCtx(ctx).CloseSpan(ctx))
+func CloseSpan(ctx context.Context) {
+	node.CloseSpan(ctx)
 }
 
 // ---------------------------------------------------------------------------
