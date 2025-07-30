@@ -6,12 +6,13 @@ import (
 	"maps"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
 	"go.opentelemetry.io/otel/baggage"
 	otellog "go.opentelemetry.io/otel/log"
-	"go.opentelemetry.io/otel/semconv/v1.32.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.32.0"
 	"go.uber.org/zap"
 
 	"github.com/alcionai/clues"
@@ -265,6 +266,11 @@ func (b *builder) Comment(cmnt string) *builder {
 func (b *builder) SkipCaller(nSkips int) *builder {
 	b.skipCallerJumps = nSkips
 	return b
+}
+
+// StackTrace adds a stack trace as an attribute with the provided key.
+func (b *builder) StackTrace(key string) *builder {
+	return b.With(key, debug.Stack())
 }
 
 // getValue will return the value if not a pointer, or the dereferenced
