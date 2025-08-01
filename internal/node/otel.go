@@ -242,6 +242,7 @@ func newTracerProvider(
 	}
 
 	var cancel context.CancelFunc
+
 	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -290,6 +291,7 @@ func newMeterProvider(
 	}
 
 	var cancel context.CancelFunc
+
 	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -330,6 +332,7 @@ func newLoggerProvider(
 	}
 
 	var cancel context.CancelFunc
+
 	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 

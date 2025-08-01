@@ -21,7 +21,12 @@ func fromCtx(ctx context.Context) *bus {
 		return nil
 	}
 
-	return dn.(*bus)
+	b, ok := dn.(*bus)
+	if !ok {
+		return nil
+	}
+
+	return b
 }
 
 func embedInCtx(ctx context.Context, b *bus) context.Context {

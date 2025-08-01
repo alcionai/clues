@@ -114,7 +114,6 @@ func TestStack(t *testing.T) {
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
 			err := test.getErr()
-
 			if test.expectNil && err != nil {
 				t.Errorf("expected nil error but got: %+v\n", err)
 			} else if !test.expectNil && err == nil {
@@ -210,7 +209,6 @@ func TestLabel(t *testing.T) {
 			}
 
 			ref := err.Label("bar")
-
 			if !cluerr.HasLabel(err, "bar") {
 				t.Error("expected error to have label [bar]")
 			}

@@ -215,7 +215,12 @@ func fromCtx(ctx context.Context) (*clogger, bool) {
 		l = singleton(Settings{}.EnsureDefaults())
 	}
 
-	return l.(*clogger), found
+	cl, ok := l.(*clogger)
+	if !ok {
+		return singleton(Settings{}.EnsureDefaults()), false
+	}
+
+	return cl, found
 }
 
 // Ctx retrieves the logger embedded in the context.
