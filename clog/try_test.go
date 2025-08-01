@@ -54,6 +54,7 @@ func TestTryCatch(t *testing.T) {
 						require.ErrorIs(t, r.(error), assert.AnError)
 					},
 				)
+
 				panic(assert.AnError)
 			})
 

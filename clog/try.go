@@ -146,10 +146,6 @@ func (tb *tryBuilder) Catch(handler catchHandler) {
 		StackTrace("exception.stacktrace").
 		Comment(msg)
 
-	if handler != nil {
-		handler(tb.ctx, r)
-	}
-
 	if tb.setSpanErr {
 		span := trace.SpanFromContext(tb.ctx)
 
@@ -160,5 +156,9 @@ func (tb *tryBuilder) Catch(handler catchHandler) {
 				trace.WithStackTrace(true),
 			)
 		}
+	}
+
+	if handler != nil {
+		handler(tb.ctx, r)
 	}
 }

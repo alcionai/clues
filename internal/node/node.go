@@ -303,7 +303,12 @@ func FromCtx(ctx context.Context) *Node {
 		return &Node{}
 	}
 
-	return dn.(*Node)
+	n, ok := dn.(*Node)
+	if !ok {
+		return &Node{}
+	}
+
+	return n
 }
 
 // EmbedInCtx adds the node in the context, and returns the updated context.
