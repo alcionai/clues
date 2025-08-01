@@ -226,7 +226,7 @@ func (err *Err) With(kvs ...any) *Err {
 	}
 
 	if len(kvs) > 0 {
-		err.data = err.data.AddValues(stringify.Normalize(kvs...))
+		err.data = err.data.AddValues(context.Background(), stringify.Normalize(kvs...))
 	}
 
 	return err
@@ -239,7 +239,7 @@ func (err *Err) WithMap(m map[string]any) *Err {
 	}
 
 	if len(m) > 0 {
-		err.data = err.data.AddValues(stringify.NormalizeMap(m))
+		err.data = err.data.AddValues(context.Background(), stringify.NormalizeMap(m))
 	}
 
 	return err
