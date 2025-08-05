@@ -193,7 +193,6 @@ func ContainsLabels(
 	}
 
 	labels := cluerr.Labels(err)
-
 	if err == nil {
 		if len(expected) > 0 {
 			t.Error("expected labels, but error is nil")

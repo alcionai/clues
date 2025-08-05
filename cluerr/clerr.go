@@ -140,7 +140,6 @@ func Stack(errs ...error) *Err {
 // be nil.
 func StackWC(ctx context.Context, errs ...error) *Err {
 	err := makeStack(1, errs...)
-
 	if isNilErrIface(err) {
 		return nil
 	}
@@ -186,7 +185,6 @@ func StackWrapWC(
 	msg string,
 ) *Err {
 	err := makeStackWrap(1, sentinel, wrapped, msg)
-
 	if isNilErrIface(err) {
 		return nil
 	}

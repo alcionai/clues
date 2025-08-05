@@ -83,7 +83,6 @@ func stackAncestorsOntoSelf(err error) []error {
 	}
 
 	unwrapped := unwrap(err)
-
 	if unwrapped != nil {
 		errs = append(errs, stackAncestorsOntoSelf(unwrapped)...)
 	}
