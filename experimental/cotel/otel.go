@@ -16,13 +16,16 @@ func AddSpanWithOpts(
 	opts ...trace.SpanStartOption,
 ) context.Context {
 	nc := node.FromCtx(ctx)
+	if nc == nil {
+		return ctx
+	}
+
 	ctx, spanned := nc.AddSpan(ctx, name, opts...)
 
 	if len(kvs) > 0 {
-		spanned.ID = name
+		spanned.ID = ""
 		spanned = spanned.AddValues(ctx, stringify.Normalize(kvs...))
-	} else {
-		spanned = spanned.AppendToTree(name)
+		spanned.ID = name
 	}
 
 	return node.EmbedInCtx(ctx, spanned)
