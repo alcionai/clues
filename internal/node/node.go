@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -37,12 +36,6 @@ type Node struct {
 	// OTEL contains the client instance for the in memory OTEL runtime.  It is only
 	// present if the end user calls the clues initialization step.
 	OTEL *OTELClient
-
-	// Span is the current otel Span.
-	// Spans are kept separately from the otelClient because we want the client to
-	// maintain a consistent reference to otel initialization, while the Span can
-	// get replaced at arbitrary points.
-	Span trace.Span
 
 	// ids are optional and are used primarily as tracing markers.
 	// if empty, the trace for that node will get skipped when building the
@@ -82,7 +75,6 @@ func (dn *Node) SpawnDescendant() *Node {
 	return &Node{
 		Parent: dn,
 		OTEL:   dn.OTEL,
-		Span:   dn.Span,
 		Agents: agents,
 	}
 }
@@ -147,7 +139,7 @@ func (dn *Node) AddValues(
 	}
 
 	if !cfg.doNotAddToSpan && !cfg.addToOTELHTTPLabeler {
-		spawn.AddSpanAttributes(m)
+		AddSpanAttributes(getSpan(ctx), m)
 	}
 
 	return spawn

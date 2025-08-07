@@ -470,64 +470,62 @@ func (dn *Node) ReceiveTrace(
 	return otel.GetTextMapPropagator().Extract(ctx, carrier)
 }
 
-// AddSpan adds a new otel span.  If the otel client is nil, no-ops.
-// Attrs can be added to the span with addSpanAttrs.  This span will
-// continue to be used for that purpose until replaced with another
-// span, which will appear in a separate context (and thus a separate,
-// node).
+// getSpan retrieves the current otel span from the context.
+func getSpan(ctx context.Context) trace.Span {
+	return trace.SpanFromContext(ctx)
+}
+
+// AddSpan adds a new otel span in a new node.  If the otel client is
+// nil, a new node is still generated with the providede name and kvs,
+// but no otel span is created.
 func (dn *Node) AddSpan(
 	ctx context.Context,
 	name string,
+	kvs map[string]any,
 	opts ...trace.SpanStartOption,
-) (context.Context, *Node) {
+) context.Context {
 	if dn == nil {
-		return ctx, dn
+		return ctx
 	}
-
-	if dn.OTEL == nil {
-		// Create a new node so that it can have its properties set separately.
-		spawn := dn.SpawnDescendant()
-		spawn.ID = name
-
-		return ctx, spawn
-	}
-
-	ctx, span := dn.OTEL.Tracer.Start(ctx, name, opts...)
 
 	spawn := dn.SpawnDescendant()
-	spawn.Span = span
 	spawn.ID = name
+	spawn.SetValues(kvs)
 
-	return ctx, spawn
+	if dn.OTEL != nil {
+		var span trace.Span
+
+		ctx, span = dn.OTEL.Tracer.Start(ctx, name, opts...)
+
+		AddSpanAttributes(span, kvs)
+	}
+
+	return EmbedInCtx(ctx, spawn)
 }
 
-// CloseSpan closes the otel span and removes it span from the data node.
+// CloseSpan closes the otel span.
 // If no span is present, no ops.
-func (dn *Node) CloseSpan(ctx context.Context) *Node {
-	if dn == nil || dn.Span == nil {
-		return dn
+func CloseSpan(ctx context.Context) {
+	span := trace.SpanFromContext(ctx)
+
+	if span != nil {
+		span.End()
 	}
-
-	dn.Span.End()
-
-	spawn := dn.SpawnDescendant()
-	spawn.Span = nil
-
-	return spawn
 }
 
 // AddSpanAttributes adds the values to the current span.  If the span
 // is nil (such as if otel wasn't initialized or no span has been generated),
 // this call no-ops.
-func (dn *Node) AddSpanAttributes(
+func AddSpanAttributes(
+	span trace.Span,
 	values map[string]any,
 ) {
-	if dn == nil || dn.Span == nil {
+	if span == nil {
 		return
 	}
 
 	for k, v := range values {
-		dn.Span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
+		span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
 	}
 }
 

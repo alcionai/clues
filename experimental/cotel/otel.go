@@ -20,13 +20,10 @@ func AddSpanWithOpts(
 		return ctx
 	}
 
-	ctx, spanned := nc.AddSpan(ctx, name, opts...)
-
-	if len(kvs) > 0 {
-		spanned.ID = ""
-		spanned = spanned.AddValues(ctx, stringify.Normalize(kvs...))
-		spanned.ID = name
-	}
-
-	return node.EmbedInCtx(ctx, spanned)
+	return nc.AddSpan(
+		ctx,
+		name,
+		stringify.Normalize(kvs...),
+		opts...,
+	)
 }
