@@ -2,9 +2,12 @@ package clutel
 
 import (
 	"context"
+	"maps"
 
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -100,7 +103,7 @@ func (sb *spanBuilder) Start(
 // StartSpan stacks a clues node onto this context and uses the provided
 // name to generate an OTEL span name. StartSpan can be called without
 // adding attributes. Callers should always follow this addition with a
-// closing `defer clues.EndSpan(ctx)`.
+// closing `defer clutel.EndSpan(ctx)`.
 func StartSpan(
 	ctx context.Context,
 	name string,
@@ -112,7 +115,7 @@ func StartSpan(
 }
 
 // EndSpan closes the current span in the clues node.  Should only be called
-// following a `clues.AddSpan()` call.
+// following a `clutel.StartSpan()` call.
 func EndSpan(ctx context.Context) {
 	node.CloseSpan(ctx)
 }
@@ -147,4 +150,193 @@ func ReceiveTrace[C node.TraceMapCarrierBase](
 ) context.Context {
 	return node.FromCtx(ctx).
 		ReceiveTrace(ctx, node.AsTraceMapCarrier(mapCarrier))
+}
+
+// ---------------------------------------------------------------------------
+// baggage
+// ---------------------------------------------------------------------------
+
+// AddBaggage adds each key-value pair to the context as member-level
+// baggages. The values are also added to the context as clues.
+func AddBaggage(
+	ctx context.Context,
+	kvs ...any,
+) (context.Context, error) {
+	var (
+		nc   = node.FromCtx(ctx)
+		bag  = baggage.FromContext(ctx)
+		nKvs = stringify.Normalize(kvs...)
+	)
+
+	for k, v := range nKvs {
+		mem, err := baggage.NewMemberRaw(k, stringify.Marshal(v, false))
+		if err != nil {
+			return ctx, cluerr.WrapWC(ctx, err, "creating baggage member").
+				With("bag_key", k, "bag_value", v)
+		}
+
+		_, err = bag.SetMember(mem)
+		if err != nil {
+			return ctx, cluerr.WrapWC(ctx, err, "adding baggage member").
+				With("bag_key", k, "bag_value", v)
+		}
+	}
+
+	nc = nc.AddValues(ctx, nKvs, node.DoNotAddToSpan())
+	ctx = baggage.ContextWithBaggage(ctx, bag)
+
+	return node.EmbedInCtx(ctx, nc), nil
+}
+
+type BaggageProps struct {
+	memberKey   string
+	memberValue any
+	props       map[string]string
+}
+
+// NewBaggageProps transitions all the provided key-value pairs into a
+// single baggage member.  The first two values define the baggage key
+// and value.  Tuples beyond that are added to the baggage as additional
+// properties.
+func NewBaggageProps(kvs ...any) BaggageProps {
+	switch len(kvs) {
+	case 0:
+		return BaggageProps{}
+	case 1:
+		return BaggageProps{
+			memberKey:   stringify.Marshal(kvs[0], false),
+			memberValue: "<nil>",
+		}
+	case 2:
+		return BaggageProps{
+			memberKey:   stringify.Marshal(kvs[0], false),
+			memberValue: stringify.Marshal(kvs[1], false),
+		}
+	default:
+		return BaggageProps{
+			memberKey:   stringify.Marshal(kvs[0], false),
+			memberValue: stringify.Marshal(kvs[1], false),
+			props:       stringify.Stringalize(kvs[2:]...),
+		}
+	}
+}
+
+// ToMember converts the baggageProps into a baggage.Member,
+// adding all properties as baggage properties.
+func (bp BaggageProps) ToMember() (baggage.Member, bool, error) {
+	if len(bp.memberKey) == 0 {
+		return baggage.Member{}, false, nil
+	}
+
+	props := []baggage.Property{}
+
+	for k, v := range bp.props {
+		prop, err := baggage.NewKeyValuePropertyRaw(k, stringify.Marshal(v, false))
+		if err != nil {
+			return baggage.Member{}, false, cluerr.Wrap(err, "creating baggage property").
+				With("key", k, "value", v)
+		}
+
+		props = append(props, prop)
+	}
+
+	mem, err := baggage.NewMemberRaw(
+		bp.memberKey,
+		stringify.Marshal(bp.memberValue, false),
+		props...,
+	)
+	if err != nil {
+		return baggage.Member{}, false, cluerr.Wrap(err, "creating baggage member").
+			With("key", bp.memberKey, "value", bp.memberValue)
+	}
+
+	return mem, true, nil
+}
+
+// ToMapStringAny converts the baggageProps into a map[string]any
+// suitable for adding to a clues node.
+func (bp BaggageProps) ToMapStringAny() map[string]any {
+	if len(bp.memberKey) == 0 {
+		return nil
+	}
+
+	m := map[string]any{
+		bp.memberKey: bp.memberValue,
+	}
+
+	if len(bp.props) > 0 {
+		m[bp.memberKey+"_props"] = bp.props
+	}
+
+	return m
+}
+
+type BaggagePropper interface {
+	// ToMember converts the BaggagePropper into a baggage.Member.
+	ToMember() (
+		baggage.Member,
+		bool, // false if the member contains no data.
+		error,
+	)
+
+	// ToMapStringAny converts the BaggagePropper into a map[string]any
+	// suitable for adding to a clues node.
+	ToMapStringAny() map[string]any
+}
+
+// AddBaggageProps adds each BaggagePropper to the context as member-level
+// baggages. Additional properties (as provided to each BaggagePropper) are
+// included in the member.  The values are also added to the context as clues,
+// formatted according to the BaggagePropper's ToMapStringAny() method.
+func AddBaggageProps(
+	ctx context.Context,
+	bagProps ...BaggagePropper,
+) (context.Context, error) {
+	var (
+		nc       = node.FromCtx(ctx)
+		bag      = baggage.FromContext(ctx)
+		cluesKVs = map[string]any{}
+	)
+
+	for _, bp := range bagProps {
+		mem, ok, err := bp.ToMember()
+		if err != nil {
+			return ctx, cluerr.WrapWC(ctx, err, "creating baggage member")
+		}
+
+		if !ok {
+			continue
+		}
+
+		bagKVs := bp.ToMapStringAny()
+
+		_, err = bag.SetMember(mem)
+		if err != nil {
+			return ctx, cluerr.WrapWC(ctx, err, "adding baggage member").
+				With("baggage_values", bagKVs)
+		}
+
+		maps.Copy(cluesKVs, bagKVs)
+	}
+
+	nc = nc.AddValues(ctx, cluesKVs, node.DoNotAddToSpan())
+	ctx = baggage.ContextWithBaggage(ctx, bag)
+
+	return node.EmbedInCtx(ctx, nc), nil
+}
+
+func GetBaggage(
+	ctx context.Context,
+	memberKey string,
+) (baggage.Member, bool) {
+	bags := baggage.FromContext(ctx)
+	members := bags.Members()
+
+	for _, member := range members {
+		if member.Key() == memberKey {
+			return member, true
+		}
+	}
+
+	return baggage.Member{}, false
 }

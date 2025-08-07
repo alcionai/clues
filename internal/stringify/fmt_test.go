@@ -223,6 +223,80 @@ func TestNormalize(t *testing.T) {
 	}
 }
 
+func TestStringalize(t *testing.T) {
+	table := []struct {
+		name   string
+		input  []any
+		expect map[string]string
+	}{
+		{
+			name:   "nil",
+			input:  nil,
+			expect: map[string]string{},
+		},
+		{
+			name:   "any is nil",
+			input:  []any{nil},
+			expect: map[string]string{"": ""},
+		},
+		{
+			name:   "string",
+			input:  []any{"fisher flannigan", "fitzbog"},
+			expect: map[string]string{"fisher flannigan": "fitzbog"},
+		},
+		{
+			name:   "number",
+			input:  []any{-1.2345, 54321},
+			expect: map[string]string{"-1.2345": "54321"},
+		},
+		{
+			name:   "slice",
+			input:  []any{[]int{1, 2, 3, 4, 5}, []string{"a", "b"}},
+			expect: map[string]string{"[1 2 3 4 5]": "[a b]"},
+		},
+		{
+			name: "map",
+			input: []any{
+				map[string]struct{}{
+					"fisher flannigan fitzbog": {},
+				},
+				map[int]int{},
+			},
+			expect: map[string]string{`map[fisher flannigan fitzbog:{}]`: "map[]"},
+		},
+		{
+			name:   "concealer",
+			input:  []any{aConcealer{"fisher flannigan fitzbog"}},
+			expect: map[string]string{"***": ""},
+		},
+		{
+			name:   "stringer",
+			input:  []any{aStringer{"I have seen the fnords."}},
+			expect: map[string]string{"I have seen the fnords.": ""},
+		},
+		{
+			name:   "not a stringer",
+			input:  []any{notAStringer{"I have seen the fnords."}},
+			expect: map[string]string{"{v:I have seen the fnords.}": ""},
+		},
+		{
+			name:  "many values",
+			input: []any{1, "a", true, aStringer{"smarf"}},
+			expect: map[string]string{
+				"1":    "a",
+				"true": "smarf",
+			},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			result := Stringalize(test.input...)
+			assert.Equal(t, test.expect, result)
+		})
+	}
+}
+
 func TestNormalizeMap(t *testing.T) {
 	ptrTestString := "ptrString"
 	ptrString := &ptrTestString

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alcionai/clues/internal/node"
+	"github.com/alcionai/clues/internal/stringify"
 )
 
 func MapEquals(
@@ -132,7 +133,7 @@ func (s SA) equals(t *testing.T, other []any) {
 		var found bool
 
 		for _, o := range other {
-			if v == o {
+			if stringify.Marshal(v, false) == stringify.Marshal(o, false) {
 				found = true
 				break
 			}
@@ -147,7 +148,7 @@ func (s SA) equals(t *testing.T, other []any) {
 		var found bool
 
 		for _, v := range s {
-			if v == o {
+			if stringify.Marshal(v, false) == stringify.Marshal(o, false) {
 				found = true
 				break
 			}
