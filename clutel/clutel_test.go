@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/alcionai/clues"
@@ -320,6 +321,13 @@ func TestNewSpan_Uninitialized_Concurrent(t *testing.T) {
 }
 
 func TestAddBaggage(t *testing.T) {
+	ctx, err := clues.InitializeOTEL(
+		t.Context(),
+		"test",
+		clues.OTELConfig{},
+	)
+	require.NoError(t, err)
+
 	table := []struct {
 		name    string
 		kvs     tester.SA
@@ -348,7 +356,7 @@ func TestAddBaggage(t *testing.T) {
 
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, err := clutel.AddBaggage(t.Context(), test.kvs...)
+			ctx, err := clutel.AddBaggage(ctx, test.kvs...)
 			require.NoError(t, err, cluerr.ToCore(err))
 
 			tester.AssertEq(
@@ -359,20 +367,24 @@ func TestAddBaggage(t *testing.T) {
 				test.expectS, tester.SA{},
 			)
 
-			// TODO: need to establush a live otel connection to test this
-			// bags := baggage.FromContext(ctx)
-			// kvs := tester.MSA{}
-			//
-			// for _, member := range bags.Members() {
-			// 	kvs[member.Key()] = member.Value()
-			// }
-			//
-			// assert.Equal(t, test.expectM, kvs, "baggage member k:values should match")
+			bags := baggage.FromContext(ctx)
+			kvs := tester.MSA{}
+
+			for _, member := range bags.Members() {
+				kvs[member.Key()] = member.Value()
+			}
 		})
 	}
 }
 
 func TestNewBaggageProps(t *testing.T) {
+	ctx, err := clues.InitializeOTEL(
+		t.Context(),
+		"test",
+		clues.OTELConfig{},
+	)
+	require.NoError(t, err)
+
 	table := []struct {
 		name    string
 		input   clutel.BaggageProps
@@ -408,8 +420,16 @@ func TestNewBaggageProps(t *testing.T) {
 
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, err := clutel.AddBaggageProps(t.Context(), test.input)
+			ctx, err = clutel.AddBaggageProps(ctx, test.input)
 			require.NoError(t, err, cluerr.ToCore(err))
+
+			_, found := clutel.GetBaggage(ctx, test.input.MemberKey())
+
+			if test.input.MemberKey() != "" {
+				assert.Truef(t, found, "baggage member %q should be found", test.input.MemberKey())
+			} else {
+				assert.False(t, found, "empty baggage member should not be found")
+			}
 
 			tester.AssertEq(
 				ctx,

@@ -175,7 +175,7 @@ func AddBaggage(
 				With("bag_key", k, "bag_value", v)
 		}
 
-		_, err = bag.SetMember(mem)
+		bag, err = bag.SetMember(mem)
 		if err != nil {
 			return ctx, cluerr.WrapWC(ctx, err, "adding baggage member").
 				With("bag_key", k, "bag_value", v)
@@ -192,6 +192,10 @@ type BaggageProps struct {
 	memberKey   string
 	memberValue any
 	props       map[string]string
+}
+
+func (bp BaggageProps) MemberKey() string {
+	return bp.memberKey
 }
 
 // NewBaggageProps transitions all the provided key-value pairs into a
@@ -310,7 +314,7 @@ func AddBaggageProps(
 
 		bagKVs := bp.ToMapStringAny()
 
-		_, err = bag.SetMember(mem)
+		bag, err = bag.SetMember(mem)
 		if err != nil {
 			return ctx, cluerr.WrapWC(ctx, err, "adding baggage member").
 				With("baggage_values", bagKVs)
