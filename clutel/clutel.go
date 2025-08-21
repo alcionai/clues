@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/alcionai/clues/cluerr"
+	"github.com/alcionai/clues/internal/errs"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -45,6 +46,15 @@ func AddToOTELHTTPLabeler(
 // GetSpan retrieves the current OpenTelemetry span from the context.
 func GetSpan(ctx context.Context) trace.Span {
 	return trace.SpanFromContext(ctx)
+}
+
+func GetTraceID(ctx context.Context) string {
+	span := GetSpan(ctx)
+	if span == nil {
+		return ""
+	}
+
+	return span.SpanContext().TraceID().String()
 }
 
 type spanBuilder struct {
@@ -114,10 +124,42 @@ func StartSpan(
 		Start(ctx, name)
 }
 
-// EndSpan closes the current span in the clues node.  Should only be called
-// following a `clutel.StartSpan()` call.
+// EndSpan closes the current span.  Should only be called following a
+// `clutel.StartSpan()` call.
 func EndSpan(ctx context.Context) {
 	node.CloseSpan(ctx)
+}
+
+// EndSpanWithError closes the current span, setting the span status to an
+// Error, but only if the provided error is not nil.  Should only be called
+// following a `clutel.StartSpan()` call.
+func EndSpanWithError(ctx context.Context, err error) {
+	if errs.IsNilIface(err) {
+		EndSpan(ctx)
+		return
+	}
+
+	node.SetSpanError(ctx, err, "")
+}
+
+// SetSpanError sets the current span to Error, using the provided error.
+// No-ops if the error is nil.
+func SetSpanError(ctx context.Context, err error) {
+	if errs.IsNilIface(err) {
+		return
+	}
+
+	node.SetSpanError(ctx, err, "")
+}
+
+// SetSpanErrorM sets the current span to Error, using the provided error message.
+// No-ops if the message is empty.
+func SetSpanErrorM(ctx context.Context, msg string) {
+	if len(msg) == 0 {
+		return
+	}
+
+	node.SetSpanError(ctx, nil, msg)
 }
 
 // ---------------------------------------------------------------------------

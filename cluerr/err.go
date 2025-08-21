@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"reflect"
 	"strings"
 
+	"github.com/alcionai/clues/internal/errs"
 	"github.com/alcionai/clues/internal/node"
 )
 
@@ -45,7 +45,7 @@ type Err struct {
 
 // Node retrieves the node values from the error.
 func (err *Err) Node() *node.Node {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return &node.Node{}
 	}
 
@@ -72,24 +72,24 @@ func stackAncestorsOntoSelf(err error) []error {
 		return []error{}
 	}
 
-	errs := []error{}
+	errStack := []error{}
 
 	ce, ok := err.(*Err)
 
 	if ok {
 		for _, e := range ce.stack {
-			errs = append(errs, stackAncestorsOntoSelf(e)...)
+			errStack = append(errStack, stackAncestorsOntoSelf(e)...)
 		}
 	}
 
 	unwrapped := unwrap(err)
 	if unwrapped != nil {
-		errs = append(errs, stackAncestorsOntoSelf(unwrapped)...)
+		errStack = append(errStack, stackAncestorsOntoSelf(unwrapped)...)
 	}
 
-	errs = append(errs, err)
+	errStack = append(errStack, err)
 
-	return errs
+	return errStack
 }
 
 // ------------------------------------------------------------
@@ -100,7 +100,7 @@ var _ error = &Err{}
 
 // Error allows Err to be used as a standard error interface.
 func (err *Err) Error() string {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return "<nil>"
 	}
 
@@ -123,7 +123,7 @@ func (err *Err) Error() string {
 
 // format is the fallback formatting of an error
 func format(err error, s fmt.State, verb rune) {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return
 	}
 
@@ -138,7 +138,7 @@ func format(err error, s fmt.State, verb rune) {
 // For all formatting besides %+v, the error printout should closely
 // mimic that of err.Error().
 func formatReg(err *Err, s fmt.State, verb rune) {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return
 	}
 
@@ -162,7 +162,7 @@ func formatReg(err *Err, s fmt.State, verb rune) {
 // in %+v formatting, we output errors FIFO (ie, read from the
 // bottom of the stack first).
 func formatPlusV(err *Err, s fmt.State, verb rune) {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return
 	}
 
@@ -204,7 +204,7 @@ func formatPlusV(err *Err, s fmt.State, verb rune) {
 //
 //	%+v   Prints filename, function, and line number for each error in the stack.
 func (err *Err) Format(s fmt.State, verb rune) {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return
 	}
 
@@ -252,7 +252,7 @@ func write(s fmt.State, verb rune, msgs ...string) {
 // Stack() multiple error pointers without failing the otherwise linear
 // errors.Is check.
 func (err *Err) Is(target error) bool {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return false
 	}
 
@@ -274,7 +274,7 @@ func (err *Err) Is(target error) bool {
 // Stack() multiple error pointers without failing the otherwise linear
 // errors.As check.
 func (err *Err) As(target any) bool {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return false
 	}
 
@@ -301,7 +301,7 @@ func (err *Err) As(target any) bool {
 //
 // If the error does not implement Unwrap, returns the base error.
 func (err *Err) Unwrap() error {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -310,7 +310,7 @@ func (err *Err) Unwrap() error {
 
 // unwrap attempts to unwrap any generic error.
 func unwrap(err error) error {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -344,7 +344,7 @@ func unwrap(err error) error {
 // passed to the error.  WithClues must always be called first in
 // order to count labels.
 func (err *Err) WithClues(ctx context.Context) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -359,7 +359,7 @@ func (err *Err) WithClues(ctx context.Context) *Err {
 // unioned. In case of collision, lower level error data
 // take least priority.
 func CluesIn(err error) *node.Node {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return &node.Node{}
 	}
 
@@ -367,7 +367,7 @@ func CluesIn(err error) *node.Node {
 }
 
 func cluesIn(err error) map[string]any {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return map[string]any{}
 	}
 
@@ -383,7 +383,7 @@ func cluesIn(err error) map[string]any {
 // maps are unioned. In case of collision, lower level error
 // data take least priority.
 func (err *Err) Values() *node.Node {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return &node.Node{}
 	}
 
@@ -391,7 +391,7 @@ func (err *Err) Values() *node.Node {
 }
 
 func (err *Err) values() map[string]any {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return map[string]any{}
 	}
 
@@ -404,21 +404,4 @@ func (err *Err) values() map[string]any {
 	}
 
 	return vals
-}
-
-// ------------------------------------------------------------
-// helpers
-// ------------------------------------------------------------
-
-// returns true if the error is nil, or if it is a non-nil interface
-// containing a nil value.
-func isNilErrIface(err error) bool {
-	if err == nil {
-		return true
-	}
-
-	val := reflect.ValueOf(err)
-
-	return (val.Kind() == reflect.Pointer ||
-		val.Kind() == reflect.Interface) && val.IsNil()
 }

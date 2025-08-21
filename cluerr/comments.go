@@ -1,6 +1,9 @@
 package cluerr
 
-import "github.com/alcionai/clues/internal/node"
+import (
+	"github.com/alcionai/clues/internal/errs"
+	"github.com/alcionai/clues/internal/node"
+)
 
 // ------------------------------------------------------------
 // comments
@@ -13,7 +16,7 @@ func (err *Err) Comments() node.CommentHistory {
 
 // Comments retrieves all comments in the error.
 func Comments(err error) node.CommentHistory {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return node.CommentHistory{}
 	}
 
@@ -47,7 +50,7 @@ func Comments(err error) node.CommentHistory {
 // means comments are always added to the error and never clobber each other,
 // regardless of their location.
 func (err *Err) Comment(msg string, vs ...any) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 

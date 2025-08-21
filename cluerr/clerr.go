@@ -3,6 +3,7 @@ package cluerr
 import (
 	"context"
 
+	"github.com/alcionai/clues/internal/errs"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -51,7 +52,7 @@ func NewWC(ctx context.Context, msg string) *Err {
 // (such as error), callers should always return Wrap().OrNil() in cases
 // where the input error could be nil.
 func Wrap(err error, msg string) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -77,7 +78,7 @@ func Wrap(err error, msg string) *Err {
 // (such as error), callers should always return WrapWC().OrNil() in cases
 // where the input error could be nil.
 func WrapWC(ctx context.Context, err error, msg string) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -108,8 +109,8 @@ func WrapWC(ctx context.Context, err error, msg string) *Err {
 // footguns when returning nil structs as interfaces (such as error), callers
 // should always return Stack().OrNil() in cases where the input error could
 // be nil.
-func Stack(errs ...error) *Err {
-	return makeStack(1, errs...)
+func Stack(errStack ...error) *Err {
+	return makeStack(1, errStack...)
 }
 
 // StackWC composes a stack of one or more errors.  The first message in the
@@ -138,9 +139,9 @@ func Stack(errs ...error) *Err {
 // footguns when returning nil structs as interfaces (such as error), callers
 // should always return StackWC().OrNil() in cases where the input error could
 // be nil.
-func StackWC(ctx context.Context, errs ...error) *Err {
-	err := makeStack(1, errs...)
-	if isNilErrIface(err) {
+func StackWC(ctx context.Context, errStack ...error) *Err {
+	err := makeStack(1, errStack...)
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -185,7 +186,7 @@ func StackWrapWC(
 	msg string,
 ) *Err {
 	err := makeStackWrap(1, sentinel, wrapped, msg)
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -205,7 +206,7 @@ func StackWrapWC(
 // return clues.Wrap(maybeNilErrValue, "msg").OrNil()
 // ```
 func (err *Err) OrNil() error {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -219,7 +220,7 @@ func (err *Err) OrNil() error {
 // With adds every pair of values as a key,value pair to
 // the Err's data map.
 func (err *Err) With(kvs ...any) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -232,7 +233,7 @@ func (err *Err) With(kvs ...any) *Err {
 
 // WithMap copies the map to the Err's data map.
 func (err *Err) WithMap(m map[string]any) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -263,7 +264,7 @@ func (err *Err) WithMap(m map[string]any) *Err {
 // If err is not an *Err intance, returns the error wrapped
 // into an *Err struct.
 func SkipCaller(err error, depth int) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -294,7 +295,7 @@ func SkipCaller(err error, depth int) *Err {
 // cases where Wrap or Stack calls are handled in a helper
 // func and are not reporting the actual error origin.
 func (err *Err) SkipCaller(depth int) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -314,7 +315,7 @@ func (err *Err) SkipCaller(depth int) *Err {
 // This is particularly useful for global sentinels that get stacked
 // or wrapped into other error cases.
 func (err *Err) NoTrace() *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -358,7 +359,7 @@ func tryExtendErr(
 	m map[string]any,
 	traceDepth int,
 ) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -395,12 +396,12 @@ func toStack(
 // traceDepth should always be `1` or `depth+1`.
 func makeStack(
 	traceDepth int,
-	errs ...error,
+	errStack ...error,
 ) *Err {
 	filtered := []error{}
 
-	for _, err := range errs {
-		if !isNilErrIface(err) {
+	for _, err := range errStack {
+		if !errs.IsNilIface(err) {
 			filtered = append(filtered, err)
 		}
 	}
@@ -425,7 +426,7 @@ func makeStackWrap(
 	sentinel, wrapped error,
 	msg string,
 ) *Err {
-	if isNilErrIface(sentinel) && isNilErrIface(wrapped) {
+	if errs.IsNilIface(sentinel) && errs.IsNilIface(wrapped) {
 		return nil
 	}
 
@@ -433,11 +434,11 @@ func makeStackWrap(
 		return makeStack(traceDepth+1, sentinel, wrapped)
 	}
 
-	if isNilErrIface(sentinel) {
+	if errs.IsNilIface(sentinel) {
 		return newErr(wrapped, msg, nil, traceDepth+1)
 	}
 
-	if isNilErrIface(wrapped) {
+	if errs.IsNilIface(wrapped) {
 		return newErr(sentinel, msg, nil, traceDepth+1)
 	}
 
