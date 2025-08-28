@@ -441,3 +441,137 @@ func TestNewBaggageProps(t *testing.T) {
 		})
 	}
 }
+
+func TestEndSpanWithErrors(t *testing.T) {
+	table := []struct {
+		name string
+		err  error
+	}{
+		{
+			"an_err",
+			assert.AnError,
+		},
+		{
+			"nil",
+			nil,
+		},
+	}
+	for _, test := range table {
+		for _, init := range []bool{true, false} {
+			tname := fmt.Sprintf("%s-%v", test.name, init)
+
+			t.Run(tname, func(t *testing.T) {
+				ctx := t.Context()
+
+				if init {
+					ocfg := clues.OTELConfig{GRPCEndpoint: "localhost:4317"}
+
+					ictx, err := clues.InitializeOTEL(ctx, test.name, ocfg)
+					require.NoError(t, err, "initializing otel")
+
+					if err != nil {
+						return
+					}
+
+					ctx = ictx
+				}
+
+				ctx = clutel.NewSpan().
+					WithOpts(
+						trace.WithSpanKind(trace.SpanKindInternal),
+						trace.WithAttributes(attribute.String("clues_trace", test.name)),
+					).
+					Start(ctx, test.name)
+
+				// not testing much here; mostly catching panics and asserting usage.
+				defer clutel.EndSpanWithError(ctx, test.err)
+			})
+		}
+	}
+}
+
+func TestSetSpanError(t *testing.T) {
+	table := []struct {
+		name string
+		err  error
+	}{
+		{
+			"an_err",
+			assert.AnError,
+		},
+		{
+			"nil",
+			nil,
+		},
+	}
+	for _, test := range table {
+		for _, init := range []bool{true, false} {
+			tname := fmt.Sprintf("%s-%v", test.name, init)
+
+			t.Run(tname, func(t *testing.T) {
+				ctx := t.Context()
+
+				if init {
+					ocfg := clues.OTELConfig{GRPCEndpoint: "localhost:4317"}
+
+					ictx, err := clues.InitializeOTEL(ctx, test.name, ocfg)
+					require.NoError(t, err, "initializing otel")
+
+					if err != nil {
+						return
+					}
+
+					ctx = ictx
+				}
+
+				ctx = clutel.NewSpan().
+					Start(ctx, test.name)
+
+				clutel.SetSpanError(ctx, test.err)
+			})
+		}
+	}
+}
+
+func TestSetSpanErrorM(t *testing.T) {
+	table := []struct {
+		name string
+		msg  string
+	}{
+		{
+			"an_err",
+			assert.AnError.Error(),
+		},
+		{
+			"empty_message",
+			"",
+		},
+	}
+	for _, test := range table {
+		for _, init := range []bool{true, false} {
+			tname := fmt.Sprintf("%s-%v", test.name, init)
+
+			t.Run(tname, func(t *testing.T) {
+				ctx := t.Context()
+
+				if init {
+					ocfg := clues.OTELConfig{GRPCEndpoint: "localhost:4317"}
+
+					ictx, err := clues.InitializeOTEL(ctx, test.name, ocfg)
+					require.NoError(t, err, "initializing otel")
+
+					if err != nil {
+						return
+					}
+
+					ctx = ictx
+				}
+
+				ctx = clutel.NewSpan().
+					Start(ctx, test.name)
+
+				clutel.SetSpanErrorM(ctx, test.msg)
+			})
+		}
+	}
+}

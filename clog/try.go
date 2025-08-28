@@ -3,9 +3,6 @@ package clog
 import (
 	"context"
 
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -147,15 +144,7 @@ func (tb *tryBuilder) Catch(handler catchHandler) {
 		Comment(msg)
 
 	if tb.setSpanErr {
-		span := trace.SpanFromContext(tb.ctx)
-
-		if span != nil {
-			span.SetStatus(codes.Error, msg)
-			span.RecordError(
-				r.(error),
-				trace.WithStackTrace(true),
-			)
-		}
+		node.SetSpanError(tb.ctx, r.(error), msg)
 	}
 
 	if handler != nil {

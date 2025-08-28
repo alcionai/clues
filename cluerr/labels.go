@@ -1,13 +1,17 @@
 package cluerr
 
-import "maps"
+import (
+	"maps"
+
+	"github.com/alcionai/clues/internal/errs"
+)
 
 // ------------------------------------------------------------
 // labels
 // ------------------------------------------------------------
 
 func (err *Err) HasLabel(label string) bool {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return false
 	}
 
@@ -22,7 +26,7 @@ func (err *Err) HasLabel(label string) bool {
 }
 
 func HasLabel(err error, label string) bool {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return false
 	}
 
@@ -34,7 +38,7 @@ func HasLabel(err error, label string) bool {
 }
 
 func (err *Err) Label(labels ...string) *Err {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -54,7 +58,7 @@ func Label(err error, label string) *Err {
 }
 
 func (err *Err) Labels() map[string]struct{} {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return map[string]struct{}{}
 	}
 

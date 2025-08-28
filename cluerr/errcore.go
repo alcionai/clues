@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alcionai/clues/internal/errs"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -27,7 +28,7 @@ type ErrCore struct {
 // hierarchical storage of errors and data nodes into a flat, easily consumed
 // set of properties.
 func (err *Err) Core() *ErrCore {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 
@@ -46,7 +47,7 @@ func (err *Err) Core() *ErrCore {
 // hierarchical storage of errors and data nodes into a flat, easily consumed
 // set of properties.
 func ToCore(err error) *ErrCore {
-	if isNilErrIface(err) {
+	if errs.IsNilIface(err) {
 		return nil
 	}
 

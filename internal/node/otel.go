@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/contrib/processors/baggagecopy"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -28,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/alcionai/clues/internal/errs"
 	"github.com/alcionai/clues/internal/stringify"
 )
 
@@ -527,6 +529,41 @@ func AddSpanAttributes(
 	for k, v := range values {
 		span.SetAttributes(attribute.String(k, stringify.Marshal(v, false)))
 	}
+}
+
+// SetSpanError sets the span status to error and records the error
+// in the span. If the span is nil, this call no-ops.
+func SetSpanError(ctx context.Context, err error, msg string) {
+	span := getSpan(ctx)
+
+	if span == nil {
+		return
+	}
+
+	var m string
+
+	if !errs.IsNilIface(err) {
+		m = err.Error()
+	}
+
+	if len(msg) > 0 {
+		if len(m) > 0 {
+			m = msg + ": " + m
+		} else {
+			m = msg
+		}
+	}
+
+	if len(m) == 0 {
+		m = "unknown error"
+	}
+
+	span.SetStatus(codes.Error, m)
+	// todo: add attributes from the error itself.  Problem is that right now
+	// we don't know which are the ctx attrs and which are the error attrs which
+	// would lead to a lot of duplication.  Solving this means separating the
+	// ctx inherited attributes from the error attributes.  Simple, but tedious.
+	span.RecordError(err, trace.WithStackTrace(true))
 }
 
 type otelHTTPLabeler interface {
