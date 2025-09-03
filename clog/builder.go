@@ -92,6 +92,12 @@ func (b builder) log(l logLevel, msg string) {
 		if len(labels) > 0 {
 			cv["error_labels"] = cluerr.Labels(b.err)
 		}
+
+		errComments := cluerr.Comments(b.err)
+
+		if len(errComments) > 0 {
+			cv["error_comments"] = errComments
+		}
 	}
 
 	// attach the clog labels and comments
