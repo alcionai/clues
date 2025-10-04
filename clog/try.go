@@ -2,7 +2,10 @@ package clog
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
 
+	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -125,6 +128,10 @@ type catchHandler = func(ctx context.Context, recovered any)
 // Panics are always logged, so you only need to handle the panic if you want to
 // respond to the condition, hand the recovered value back to the caller, or
 // repanic.  No changes will be made to the recovered value.
+//
+// The recovered value is guaranteed to be a non-nil cluerr.Err containing the
+// panic stacktrace in the attribute `execution.stacktrace`, and with all other
+// attributes inherited from the ctx.
 func (tb *tryBuilder) Catch(handler catchHandler) {
 	r := recover()
 
@@ -138,13 +145,32 @@ func (tb *tryBuilder) Catch(handler catchHandler) {
 		msg += tb.msg
 	}
 
+	var (
+		err        *cluerr.Err
+		stackTrace = string(debug.Stack())
+	)
+
+	switch v := r.(type) {
+	case error:
+		err = cluerr.StackWC(tb.ctx, v)
+	case string:
+		err = cluerr.NewWC(tb.ctx, v)
+	default:
+		err = cluerr.NewWC(tb.ctx, fmt.Sprintf("%+v", v))
+	}
+
+	err = err.SkipCaller(1)
+
 	tb.logBuilder.
-		Err(r.(error)).
+		Err(err).
 		StackTrace("exception.stacktrace").
-		Comment(msg)
+		SkipCaller(1). // report the line calling this func
+		Error(msg)
+
+	err = err.With("execution.stacktrace", stackTrace)
 
 	if tb.setSpanErr {
-		node.SetSpanError(tb.ctx, r.(error), msg)
+		node.SetSpanError(tb.ctx, err, msg)
 	}
 
 	if handler != nil {
