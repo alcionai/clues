@@ -14,6 +14,7 @@ import (
 	otellog "go.opentelemetry.io/otel/log"
 	semconv "go.opentelemetry.io/otel/semconv/v1.32.0"
 	"go.uber.org/zap"
+	xmaps "golang.org/x/exp/maps"
 
 	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cluerr"
@@ -102,11 +103,11 @@ func (b builder) log(l logLevel, msg string) {
 
 	// attach the clog labels and comments
 	if len(b.labels) > 0 {
-		cv["clog_labels"] = maps.Keys(b.labels)
+		cv["clog_labels"] = xmaps.Keys(b.labels)
 	}
 
 	if len(b.comments) > 0 {
-		cv["clog_comments"] = maps.Keys(b.comments)
+		cv["clog_comments"] = xmaps.Keys(b.comments)
 	}
 
 	// check the context for any otel baggage

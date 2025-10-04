@@ -3,10 +3,10 @@ package cluerr_test
 import (
 	"context"
 	"fmt"
-	"maps"
 	"testing"
 
 	"github.com/pkg/errors"
+	xmaps "golang.org/x/exp/maps"
 
 	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cluerr"
@@ -154,7 +154,7 @@ func TestHasLabel(t *testing.T) {
 				t.Errorf(
 					"expected error to have label [%s] but got %v",
 					label,
-					maps.Keys(cluerr.Labels(test.initial)))
+					xmaps.Keys(cluerr.Labels(test.initial)))
 			}
 		})
 	}
