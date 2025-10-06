@@ -277,7 +277,7 @@ func (b *builder) SkipCaller(nSkips int) *builder {
 
 // StackTrace adds a stack trace as an attribute with the provided key.
 func (b *builder) StackTrace(key string) *builder {
-	return b.With(key, debug.Stack())
+	return b.With(key, string(debug.Stack()))
 }
 
 // getValue will return the value if not a pointer, or the dereferenced
