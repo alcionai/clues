@@ -65,12 +65,13 @@ func genLogger(set Settings) *zap.SugaredLogger {
 	case FormatToJSON:
 		zcfg = setLevel(zap.NewProductionConfig(), set.Level)
 		zcfg.OutputPaths = []string{toFile}
+		zcfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.StampMicro)
 		// by default we'll use the columnar non-json format, which uses tab
 		// separated values within each line, and may contain multiple json objs.
 	default:
 		zcfg = setLevel(zap.NewDevelopmentConfig(), set.Level)
 
-		zcfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.StampMilli)
+		zcfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.StampMicro)
 
 		// when printing to stdout/stderr, colorize things!
 		if toFile == Stderr || toFile == Stdout {
@@ -109,10 +110,14 @@ func zapcoreFallback(set Settings) *zap.Logger {
 		}
 	})
 
+	// ensure micro timestamps
+	encoderCfg := zap.NewDevelopmentEncoderConfig()
+	encoderCfg.EncodeTime = zapcore.TimeEncoderOfLayout(time.StampMicro)
+
 	// build out the zapcore fallback
 	var (
 		out            = zapcore.Lock(os.Stderr)
-		consoleEncoder = zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+		consoleEncoder = zapcore.NewConsoleEncoder(encoderCfg)
 		core           = zapcore.NewTee(zapcore.NewCore(consoleEncoder, out, levelFilter))
 	)
 
