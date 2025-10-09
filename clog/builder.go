@@ -16,7 +16,6 @@ import (
 	"go.uber.org/zap"
 	xmaps "golang.org/x/exp/maps"
 
-	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
@@ -44,7 +43,7 @@ type builder struct {
 
 func newBuilder(ctx context.Context) *builder {
 	clgr, _ := fromCtx(ctx)
-	ctxNode := clues.In(ctx)
+	ctxNode := node.FromCtx(ctx)
 
 	return &builder{
 		ctx:      ctx,
@@ -71,7 +70,7 @@ func (b builder) log(l logLevel, msg string) {
 	}
 
 	var (
-		cluesNode = clues.In(b.ctx)
+		cluesNode = node.FromCtx(b.ctx)
 		cv        = cluesNode.Map()
 		zsl       = b.zsl
 	)

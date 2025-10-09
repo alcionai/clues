@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/alcionai/clues/clog"
+	"github.com/alcionai/clues/clutel"
+	"github.com/alcionai/clues/ctats"
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
@@ -50,32 +53,28 @@ func Close(ctx context.Context) error {
 	return nil
 }
 
-// Inherit propagates all clients from one context to another.  This is particularly
-// useful for taking an initialized context from a main() func and ensuring its clients
-// are available for request-bound conetxts, such as in a http server pattern.
+// Inherit propagates all clients and attributes from one context to another.  This
+// is particularly useful for taking an initialized context from a main() func and
+// ensuring its clients are available for request-bound conetxts, such as in a http
+// server pattern.
 //
-// If the 'to' context already contains an initialized client, no change is made.
-// Callers can force a 'from' client to override a 'to' client by setting clobber=true.
+// If the 'to' context already contains initialized clients or attrs, no changes are
+// made. Callers can force a 'from' clie to override a 'to' client by setting
+// clobber=true.
 func Inherit(
 	from, to context.Context,
 	clobber bool,
 ) context.Context {
-	fromNode := node.FromCtx(from)
-	toNode := node.FromCtx(to)
-
 	if to == nil {
 		to = context.Background()
 	}
 
-	// if we have no fromNode OTEL, or are not clobbering, return the toNode.
-	if fromNode.OTEL == nil || (toNode.OTEL != nil && !clobber) {
-		return node.EmbedInCtx(to, toNode)
-	}
+	to = clutel.Inherit(from, to, clobber)
+	to = clog.Inherit(from, to, clobber)
+	to = ctats.Inherit(from, to, clobber)
+	to = node.InheritAttrs(from, to, clobber)
 
-	// otherwise pass along the fromNode OTEL client.
-	toNode.OTEL = fromNode.OTEL
-
-	return node.EmbedInCtx(to, toNode)
+	return to
 }
 
 // ---------------------------------------------------------------------------

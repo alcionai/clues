@@ -232,7 +232,7 @@ func (dn *Node) Slice() []any {
 // initialization
 // ---------------------------------------------------------------------------
 
-// Init sets up persistent clients in the clues ecosystem such as otel.
+// InitOTEL sets up persistent clients in the clues ecosystem such as otel.
 // Initialization is NOT required.  It is an optional step that end
 // users can take if and when they want those clients running in their
 // clues instance.
@@ -298,6 +298,28 @@ func FromCtx(ctx context.Context) *Node {
 // EmbedInCtx adds the node in the context, and returns the updated context.
 func EmbedInCtx(ctx context.Context, dn *Node) context.Context {
 	return context.WithValue(ctx, defaultCtxKey, dn)
+}
+
+// InheritAttrs propagates all attributes from one context to another.  Clients are
+// not propagated.  If attributes exists in the `to` ctx, it is returned unchanged
+// unless clobber=true.
+func InheritAttrs(from, to context.Context, clobber bool) context.Context {
+	if to == nil {
+		to = context.Background()
+	}
+
+	fromNode := FromCtx(from)
+	toNode := FromCtx(to)
+
+	// Map() produces a clone of all attributes.
+	fromMap := fromNode.Map()
+	toMap := toNode.Map()
+
+	if len(toMap) == 0 || clobber {
+		toNode.Values = fromMap
+	}
+
+	return EmbedInCtx(to, toNode)
 }
 
 // ---------------------------------------------------------------------------
