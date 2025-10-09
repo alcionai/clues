@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 
+	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/trace"
 
@@ -12,6 +13,48 @@ import (
 	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/stringify"
 )
+
+// ---------------------------------------------------------------------------
+// persistent client initialization
+// ---------------------------------------------------------------------------
+
+// Init will spin up the OTEL clients that are held by cluetel,
+// Clues will eagerly use these clients in the background to provide
+// additional telemetry hook-ins.
+//
+// Clues will operate as expected in the event of an error, or if OTEL is not
+// initialized. This is a purely optional step.
+func Init(
+	ctx context.Context,
+	serviceName string,
+	config OTELConfig,
+) (context.Context, error) {
+	nc := node.FromCtx(ctx)
+
+	err := nc.InitOTEL(ctx, serviceName, config.toInternalConfig())
+	if err != nil {
+		return ctx, err
+	}
+
+	return node.EmbedInCtx(ctx, nc), nil
+}
+
+// Close will flush all buffered data waiting to be read.  If Initialize was not
+// called, this call is a no-op.  Should be called in a defer after initializing.
+func Close(ctx context.Context) error {
+	nc := node.FromCtx(ctx)
+
+	if nc.OTEL == nil {
+		return nil
+	}
+
+	err := nc.OTEL.Close(ctx)
+	if err != nil {
+		return errors.Wrap(err, "closing otel client")
+	}
+
+	return nil
+}
 
 // ---------------------------------------------------------------------------
 // spans

@@ -1,4 +1,4 @@
-package clues
+package clutel
 
 import (
 	"errors"
@@ -16,7 +16,6 @@ const (
 	DefaultOTELGRPCEndpoint = "localhost:4317"
 )
 
-// DEPRECATED: use clutel.OTELConfig instead.
 type OTELConfig struct {
 	// Resource contains information about the thing sourcing logs, metrics, and
 	// traces in OTEL. This information will be available in backends on all logs
