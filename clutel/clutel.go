@@ -56,6 +56,42 @@ func Close(ctx context.Context) error {
 	return nil
 }
 
+// Inherit propagates all clients and otel data (ie: live trace and baggage) from
+// one context to another.  This is particularly useful for taking an initialized
+// context from a main() func and ensuring its clients are available for request-
+// bound conetxts, such as in a http server pattern.
+//
+// If the 'to' context already contains an initialized client, no change is made.
+// Callers can force a 'from' client to override a 'to' client by setting clobber=true.
+func Inherit(
+	from, to context.Context,
+	clobber bool,
+) context.Context {
+	fromNode := node.FromCtx(from)
+
+	if to == nil {
+		to = context.Background()
+	}
+
+	toNode := node.FromCtx(to)
+
+	// if we have no fromNode OTEL, or are not clobbering, return the toNode.
+	if fromNode.OTEL == nil || (toNode.OTEL != nil && !clobber) {
+		return node.EmbedInCtx(to, toNode)
+	}
+
+	// otherwise pass along the fromNode OTEL client.
+	toNode.OTEL = fromNode.OTEL
+
+	to = node.EmbedInCtx(to, toNode)
+
+	details := map[string]string{}
+	ReceiveTrace(from, details)
+	InjectTrace(to, details)
+
+	return to
+}
+
 // ---------------------------------------------------------------------------
 // spans
 // ---------------------------------------------------------------------------

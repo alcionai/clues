@@ -13,9 +13,9 @@ import (
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/alcionai/clues"
 	"github.com/alcionai/clues/cluerr"
 	"github.com/alcionai/clues/clutel"
+	"github.com/alcionai/clues/internal/node"
 	"github.com/alcionai/clues/internal/tester"
 )
 
@@ -144,9 +144,9 @@ func TestStartSpan(t *testing.T) {
 				ctx := context.Background()
 
 				if init {
-					ocfg := clues.OTELConfig{GRPCEndpoint: "localhost:4317"}
+					ocfg := clutel.OTELConfig{GRPCEndpoint: "localhost:4317"}
 
-					ictx, err := clues.InitializeOTEL(ctx, test.name, ocfg)
+					ictx, err := clutel.Init(ctx, test.name, ocfg)
 					require.NoError(t, err, "initializing otel")
 
 					if err != nil {
@@ -161,7 +161,7 @@ func TestStartSpan(t *testing.T) {
 				tester.MustEquals(
 					t,
 					tester.MSA{},
-					clues.In(ctx).Map(),
+					node.FromCtx(ctx).Map(),
 					false,
 				)
 
@@ -178,7 +178,7 @@ func TestStartSpan(t *testing.T) {
 					test.expectS, tester.SA{},
 				)
 
-				c := clues.In(ctx).Map()
+				c := node.FromCtx(ctx).Map()
 				if c["clues_trace"] != test.expectTrace {
 					t.Errorf(
 						"expected clues_trace to equal %q, got %q",
@@ -225,9 +225,9 @@ func TestNewSpan(t *testing.T) {
 				ctx := context.Background()
 
 				if init {
-					ocfg := clues.OTELConfig{GRPCEndpoint: "localhost:4317"}
+					ocfg := clutel.OTELConfig{GRPCEndpoint: "localhost:4317"}
 
-					ictx, err := clues.InitializeOTEL(ctx, test.name, ocfg)
+					ictx, err := clutel.Init(ctx, test.name, ocfg)
 					require.NoError(t, err, "initializing otel")
 
 					if err != nil {
@@ -242,7 +242,7 @@ func TestNewSpan(t *testing.T) {
 				tester.MustEquals(
 					t,
 					tester.MSA{},
-					clues.In(ctx).Map(),
+					node.FromCtx(ctx).Map(),
 					false,
 				)
 
@@ -321,10 +321,10 @@ func TestNewSpan_Uninitialized_Concurrent(t *testing.T) {
 }
 
 func TestAddBaggage(t *testing.T) {
-	ctx, err := clues.InitializeOTEL(
+	ctx, err := clutel.Init(
 		t.Context(),
 		"test",
-		clues.OTELConfig{},
+		clutel.OTELConfig{},
 	)
 	require.NoError(t, err)
 
@@ -378,10 +378,10 @@ func TestAddBaggage(t *testing.T) {
 }
 
 func TestNewBaggageProps(t *testing.T) {
-	ctx, err := clues.InitializeOTEL(
+	ctx, err := clutel.Init(
 		t.Context(),
 		"test",
-		clues.OTELConfig{},
+		clutel.OTELConfig{},
 	)
 	require.NoError(t, err)
 
@@ -464,9 +464,9 @@ func TestEndSpanWithErrors(t *testing.T) {
 				ctx := t.Context()
 
 				if init {
-					ocfg := clues.OTELConfig{GRPCEndpoint: "localhost:4317"}
+					ocfg := clutel.OTELConfig{GRPCEndpoint: "localhost:4317"}
 
-					ictx, err := clues.InitializeOTEL(ctx, test.name, ocfg)
+					ictx, err := clutel.Init(ctx, test.name, ocfg)
 					require.NoError(t, err, "initializing otel")
 
 					if err != nil {
@@ -512,9 +512,9 @@ func TestSetSpanError(t *testing.T) {
 				ctx := t.Context()
 
 				if init {
-					ocfg := clues.OTELConfig{GRPCEndpoint: "localhost:4317"}
+					ocfg := clutel.OTELConfig{GRPCEndpoint: "localhost:4317"}
 
-					ictx, err := clues.InitializeOTEL(ctx, test.name, ocfg)
+					ictx, err := clutel.Init(ctx, test.name, ocfg)
 					require.NoError(t, err, "initializing otel")
 
 					if err != nil {
@@ -555,9 +555,9 @@ func TestSetSpanErrorM(t *testing.T) {
 				ctx := t.Context()
 
 				if init {
-					ocfg := clues.OTELConfig{GRPCEndpoint: "localhost:4317"}
+					ocfg := clutel.OTELConfig{GRPCEndpoint: "localhost:4317"}
 
-					ictx, err := clues.InitializeOTEL(ctx, test.name, ocfg)
+					ictx, err := clutel.Init(ctx, test.name, ocfg)
 					require.NoError(t, err, "initializing otel")
 
 					if err != nil {
@@ -573,5 +573,176 @@ func TestSetSpanErrorM(t *testing.T) {
 				clutel.SetSpanErrorM(ctx, test.msg)
 			})
 		}
+	}
+}
+
+func TestInherit(t *testing.T) {
+	table := []struct {
+		name    string
+		from    func() context.Context
+		to      func() context.Context
+		clobber bool
+		assert  func(t *testing.T, ctx context.Context)
+	}{
+		{
+			name: "from: nil, to: nil",
+			from: func() context.Context { return nil },
+			to:   func() context.Context { return nil },
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.Nil(t, n.OTEL)
+			},
+		},
+		{
+			name: "from: background, to: nil",
+			from: func() context.Context { return context.Background() },
+			to:   func() context.Context { return nil },
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.Nil(t, n.OTEL)
+			},
+		},
+		{
+			name: "from: nil, to: background",
+			from: func() context.Context { return nil },
+			to:   func() context.Context { return context.Background() },
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.Nil(t, n.OTEL)
+			},
+		},
+		{
+			name: "from: background, to: background",
+			from: func() context.Context { return context.Background() },
+			to:   func() context.Context { return context.Background() },
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.Nil(t, n.OTEL)
+			},
+		},
+		{
+			name: "from: populated, to: nil",
+			from: func() context.Context {
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "test",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
+			},
+			to: func() context.Context { return nil },
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "test", n.OTEL.ServiceName)
+			},
+		},
+		{
+			name: "from: populated, to: background",
+			from: func() context.Context {
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "test",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
+			},
+			to: func() context.Context { return context.Background() },
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "test", n.OTEL.ServiceName)
+			},
+		},
+		{
+			name: "from: nil, to: populated",
+			from: func() context.Context { return nil },
+			to: func() context.Context {
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "to",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
+			},
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "to", n.OTEL.ServiceName)
+			},
+		},
+		{
+			name: "from: background, to: populated",
+			from: func() context.Context { return context.Background() },
+			to: func() context.Context {
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "to",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
+			},
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "to", n.OTEL.ServiceName)
+			},
+		},
+		{
+			name: "from: populated, to: populated",
+			from: func() context.Context {
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "from",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
+			},
+			to: func() context.Context {
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "to",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
+			},
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "to", n.OTEL.ServiceName)
+			},
+		},
+		{
+			name: "from: populated, to: populated, clobbered",
+			from: func() context.Context {
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "from",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
+			},
+			to: func() context.Context {
+				n := node.Node{
+					OTEL: &node.OTELClient{
+						ServiceName: "to",
+					},
+				}
+				return node.EmbedInCtx(context.Background(), &n)
+			},
+			clobber: true,
+			assert: func(t *testing.T, ctx context.Context) {
+				n := node.FromCtx(ctx)
+				require.NotNil(t, n.OTEL)
+				assert.Equal(t, "from", n.OTEL.ServiceName)
+			},
+		},
+	}
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			result := clutel.Inherit(test.from(), test.to(), test.clobber)
+			require.NotNil(t, result)
+			test.assert(t, result)
+		})
 	}
 }

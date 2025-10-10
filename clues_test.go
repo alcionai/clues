@@ -416,6 +416,14 @@ func concealed(a any) string {
 }
 
 func TestAdd_concealed(t *testing.T) {
+	// if not set here, test reordering in golang can cause
+	// cross contamination when other tests ste the global
+	// cecrets handler.
+	cecrets.SetHasher(cecrets.HashCfg{
+		HashAlg: cecrets.HMAC_SHA256,
+		HMACKey: []byte("gobbledeygook-believe-it-or-not-this-is-randomly-generated"),
+	})
+
 	table := []struct {
 		name       string
 		concealers [][]any
@@ -473,7 +481,8 @@ func TestAdd_concealed(t *testing.T) {
 	}
 	for _, test := range table {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.WithValue(context.Background(), tester.StubCtx{}, "instance")
+			ctx := context.WithValue(t.Context(), tester.StubCtx{}, "instance")
+
 			check := tester.MSA{}
 			tester.MustEquals(t, check, tester.ToMSA(clues.In(ctx).Map()), false)
 

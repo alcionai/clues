@@ -125,3 +125,72 @@ func TestBytes(t *testing.T) {
 		})
 	}
 }
+
+func TestInheritAttrs(t *testing.T) {
+	var (
+		ctx    = t.Context()
+		fooBar = map[string]any{"foo": "bar"}
+		baz    = map[string]any{"baz": 42}
+		alt    = EmbedInCtx(
+			ctx,
+			(&Node{}).AddValues(ctx, baz),
+		)
+	)
+
+	ctx = EmbedInCtx(
+		ctx,
+		(&Node{}).AddValues(ctx, fooBar),
+	)
+
+	table := []struct {
+		name    string
+		from    context.Context
+		to      context.Context
+		clobber bool
+		want    map[string]any
+	}{
+		{
+			name: "from: nil, to: nil",
+			from: nil,
+			to:   nil,
+			want: map[string]any{},
+		},
+		{
+			name: "from: ctx, to: nil",
+			from: ctx,
+			to:   nil,
+			want: fooBar,
+		},
+		{
+			name: "from: nil, to: ctx",
+			from: nil,
+			to:   ctx,
+			want: fooBar,
+		},
+		{
+			name: "from: ctx, to: alt, no clobber",
+			from: ctx,
+			to:   alt,
+			want: baz,
+		},
+		{
+			name:    "from: ctx, to: alt, clobber",
+			from:    ctx,
+			to:      alt,
+			clobber: true,
+			want:    fooBar,
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			n := FromCtx(test.to)
+			require.NotNil(t, n)
+
+			result := InheritAttrs(test.from, test.to, test.clobber)
+			require.NotNil(t, result)
+
+			assert.Equal(t, test.want, FromCtx(result).Map())
+		})
+	}
+}
