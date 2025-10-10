@@ -18,6 +18,8 @@ import (
 //
 // Clues will operate as expected in the event of an error, or if OTEL is not
 // initialized. This is a purely optional step.
+//
+// DEPRECATED: use clutel.Init instead.
 func InitializeOTEL(
 	ctx context.Context,
 	serviceName string,
