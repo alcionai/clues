@@ -5,11 +5,9 @@ import (
 	"net/http"
 
 	"github.com/alcionai/clues"
-	"github.com/alcionai/clues/clog"
-	"github.com/alcionai/clues/ctats"
 )
 
-// NewInheritorHTTPMiddleware builds a http middleware which automatically
+// InheritorMiddleware builds a http middleware which automatically
 // inherits initialized clients from the clues ecosystem and embeds them in
 // the request context.  Since clues prefers context-bound client propagation
 // over global singletons, this behavior is necessary to ensure request contexts
@@ -23,8 +21,6 @@ func InheritorMiddleware(
 
 			// always assume the request context needs to be clobbered.
 			rctx = clues.Inherit(ctx, rctx, true)
-			rctx = clog.Inherit(ctx, rctx, true)
-			rctx = ctats.Inherit(ctx, rctx, true)
 
 			r = r.WithContext(rctx)
 
