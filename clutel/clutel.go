@@ -213,12 +213,11 @@ func EndSpan(ctx context.Context) {
 // Error, but only if the provided error is not nil.  Should only be called
 // following a `clutel.StartSpan()` call.
 func EndSpanWithError(ctx context.Context, err error) {
-	if errs.IsNilIface(err) {
-		EndSpan(ctx)
-		return
-	}
+	defer EndSpan(ctx)
 
-	node.SetSpanError(ctx, err, "")
+	if !errs.IsNilIface(err) {
+		node.SetSpanError(ctx, err, "")
+	}
 }
 
 // SetSpanError sets the current span to Error, using the provided error.
