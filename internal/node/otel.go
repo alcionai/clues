@@ -285,7 +285,9 @@ func newMeterProvider(
 	exporter, err := otlpmetricgrpc.New(
 		ctx,
 		otlpmetricgrpc.WithGRPCConn(conn),
-		otlpmetricgrpc.WithCompressor("gzip"))
+		otlpmetricgrpc.WithCompressor("gzip"),
+		otlpmetricgrpc.WithTemporalitySelector(sdkMetric.DeltaTemporalitySelector),
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing a meter exporter")
 	}

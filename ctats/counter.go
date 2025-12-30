@@ -37,7 +37,7 @@ func getOrCreateCounter(
 		return nil, errors.New("no node in ctx")
 	}
 
-	ctr, err := nc.OTELMeter().Float64UpDownCounter(id)
+	ctr, err := nc.OTELMeter().Float64Counter(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "making new counter")
 	}
@@ -84,7 +84,7 @@ func RegisterCounter(
 		return ctx, cluerr.Stack(errNoNodeInCtx)
 	}
 
-	opts := []metric.Float64UpDownCounterOption{}
+	opts := []metric.Float64CounterOption{}
 
 	if len(description) > 0 {
 		opts = append(opts, metric.WithDescription(description))
@@ -95,7 +95,7 @@ func RegisterCounter(
 	}
 
 	// register the counter
-	ctr, err := nc.OTELMeter().Float64UpDownCounter(id, opts...)
+	ctr, err := nc.OTELMeter().Float64Counter(id, opts...)
 	if err != nil {
 		return ctx, errors.Wrap(err, "creating counter")
 	}
