@@ -57,36 +57,21 @@ func (cli *OTELClient) Close(ctx context.Context) error {
 	}
 
 	if cli.MeterProvider != nil {
-		err := cli.MeterProvider.ForceFlush(ctx)
-		if err != nil {
-			log.Println("forcing meter provider flush:", err)
-		}
-
-		err = cli.MeterProvider.Shutdown(ctx)
+		err := cli.MeterProvider.Shutdown(ctx)
 		if err != nil {
 			return fmt.Errorf("shutting down otel meterprovider: %w", err)
 		}
 	}
 
 	if cli.LoggerProvider != nil {
-		err := cli.LoggerProvider.ForceFlush(ctx)
-		if err != nil {
-			log.Println("forcing trace provider flush:", err)
-		}
-
-		err = cli.LoggerProvider.Shutdown(ctx)
+		err := cli.LoggerProvider.Shutdown(ctx)
 		if err != nil {
 			return fmt.Errorf("shutting down otel logger provider: %w", err)
 		}
 	}
 
 	if cli.TracerProvider != nil {
-		err := cli.TracerProvider.ForceFlush(ctx)
-		if err != nil {
-			log.Println("forcing trace provider flush:", err)
-		}
-
-		err = cli.TracerProvider.Shutdown(ctx)
+		err := cli.TracerProvider.Shutdown(ctx)
 		if err != nil {
 			return fmt.Errorf("shutting down otel trace provider: %w", err)
 		}
