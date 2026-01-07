@@ -98,13 +98,14 @@ import (
 
     "github.com/alcionai/clues"
     "github.com/alcionai/clues/clog"
+    "github.com/alcionai/clues/clutel"
 )
 
 func main() {
   ctx, err := clues.InitializeOTEL(
     context.Background(),
     myServiceName,
-    clues.OTELConfig{
+    clutel.OTELConfig{
       GRPCEndpoint: os.GetEnv(myconsts.OTELGRPCEndpoint),
     },
   )
@@ -137,6 +138,7 @@ func main() {
 - [Clog](https://github.com/alcionai/clues/blob/main/clog/README.md) - logging api.
 - [Ctats](https://github.com/alcionai/clues/blob/main/ctats/README.md) - OTEL metrics wraper.
 - [Cecrets](https://github.com/alcionai/clues/blob/main/cecrets/README.md) - pii-in-telemetry obfuscation.
+- [Clutel]((https://github.com/alcionai/clues/blob/main/clutel/README.md)) - OTEL trace/span wrapper.
 
 ---
 

@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
-	"sort"
+	"slices"
+	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -143,6 +144,15 @@ func NormalizeMap[K comparable, V any](m map[K]V) map[string]any {
 }
 
 // marshalSlogValue is a helper for iterating through slog.Value types.
+//
+// Output format should follow the pattern produced by spew Printf("%+v", v),
+// including the alphabetical ordering of keys (we assert this option for spew
+// prints as well).
+// see: https://pkg.go.dev/github.com/davecgh/go-spew/spew
+// That format isn't explicitly defined, but from observation the result is
+// generally modeled as {key:value}.
+//
+// Ex: {str:some string int:42 struct:{nested:true}}
 func marshalSlogValue(v slog.Value) string {
 	// assume any non-group can be stringified directly.
 	if v.Kind() != slog.KindGroup {
@@ -161,8 +171,8 @@ func marshalSlogValue(v slog.Value) string {
 	}
 
 	// order the attributes by key for consistency.
-	sort.SliceStable(attrs, func(i, j int) bool {
-		return attrs[i].Key < attrs[j].Key
+	slices.SortStableFunc(attrs, func(i, j slog.Attr) int {
+		return strings.Compare(i.Key, j.Key)
 	})
 
 	for i, attr := range attrs {
@@ -170,7 +180,6 @@ func marshalSlogValue(v slog.Value) string {
 			buf = append(buf, " "...)
 		}
 
-		attr.Key = max(attr.Key, fmt.Sprintf("attr-%d", i))
 		buf = appendVToSlogValueBuf(buf, attr)
 	}
 
@@ -179,12 +188,17 @@ func marshalSlogValue(v slog.Value) string {
 	return string(buf)
 }
 
+// appendVToSlogValueBuf appends the slog.Attr key and value to the provided
+// buffer, returning the appended buffer.  It is largely a convenience func
+// to separate out the logic of appending slog.Value types.
 func appendVToSlogValueBuf(buf []byte, attr slog.Attr) []byte {
 	buf = append(buf, attr.Key...)
 	buf = append(buf, ":"...)
 
 	v := attr.Value
 
+	// ensure we cover all kinds that are supported by slog.
+	//exhaustive:enforce
 	switch attr.Value.Kind() {
 	case slog.KindGroup:
 		return append(buf, marshalSlogValue(v)...)
@@ -201,6 +215,10 @@ func appendVToSlogValueBuf(buf []byte, attr slog.Attr) []byte {
 		return append(buf, v.String()...)
 
 	default:
+		// this is _extremely_ unlikely to happen, given that the slog.Value
+		// kind is determined by the actual value itself, and not a metadata tag.
+		// The result of String() is unknown in these cases.  This result gives
+		// a graceful-but-informative fallback to work with.
 		return append(buf, fmt.Sprintf("bad kind: %s; value: %s", v.Kind(), v.String())...)
 	}
 }

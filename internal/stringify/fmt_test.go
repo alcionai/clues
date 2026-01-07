@@ -73,7 +73,12 @@ var (
 	slogG = toSlogValuer(slog.GroupValue(
 		slog.String("innerS", "inner slog string"),
 		slog.Int("innerI", 7),
-		slog.Group("innerG", slog.Bool("innerB", false)),
+		slog.Group(
+			"innerG",
+			slog.Bool("innerB", false),
+			slog.Any("innerArr", []string{"fisher", "flannigan", "fitzbog"}),
+			slog.Any("innerLV", toSlogValuer(slog.StringValue("inner slog valuer"))),
+		),
 	))
 	slogNilValueNoKey = toSlogValuer(slog.GroupValue(
 		slog.Attr{
@@ -180,7 +185,7 @@ func TestFmt(t *testing.T) {
 		},
 		{
 			name:   "some struct",
-			input:  []any{someStruct{foo: "bar baz", bar: 42}},
+			input:  []any{someStruct{bar: 42, foo: "bar baz"}},
 			expect: []string{"{foo:bar baz bar:42}"},
 		},
 		{
@@ -204,9 +209,12 @@ func TestFmt(t *testing.T) {
 			expect: []string{slogT.v.String()},
 		},
 		{
-			name:   "slog group",
-			input:  []any{slogG},
-			expect: []string{"{innerG:{innerB:false} innerI:7 innerS:inner slog string}"},
+			name:  "slog group",
+			input: []any{slogG},
+			expect: []string{
+				//nolint:lll
+				"{innerG:{innerArr:[fisher flannigan fitzbog] innerB:false innerLV:inner slog valuer} innerI:7 innerS:inner slog string}",
+			},
 		},
 		{
 			name:   "slog nil value no key",
