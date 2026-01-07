@@ -216,7 +216,7 @@ func EndSpanWithError(ctx context.Context, err error) {
 	defer EndSpan(ctx)
 
 	if !errs.IsNilIface(err) {
-		node.SetSpanError(ctx, err, "")
+		node.SetSpanError(ctx, err, "", node.OTELExceptionTypeError)
 	}
 }
 
@@ -227,7 +227,7 @@ func SetSpanError(ctx context.Context, err error) {
 		return
 	}
 
-	node.SetSpanError(ctx, err, "")
+	node.SetSpanError(ctx, err, "", node.OTELExceptionTypeError)
 }
 
 // SetSpanErrorM sets the current span to Error, using the provided error message.
@@ -237,7 +237,7 @@ func SetSpanErrorM(ctx context.Context, msg string) {
 		return
 	}
 
-	node.SetSpanError(ctx, nil, msg)
+	node.SetSpanError(ctx, nil, msg, node.OTELExceptionTypeError)
 }
 
 // ---------------------------------------------------------------------------

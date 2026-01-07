@@ -180,10 +180,7 @@ func (b builder) log(l logLevel, msg string) {
 	}
 
 	// Add line number info to OTEL log.
-	callerSkip := b.skipCallerJumps
-	if callerSkip < 0 {
-		callerSkip = 0
-	}
+	callerSkip := max(b.skipCallerJumps, 0)
 
 	// This function is currently only called by other functions in this file. A
 	// skip of 2 here allows the system to get the stackframe of the function in
@@ -284,15 +281,15 @@ func (b *builder) StackTrace(key string) *builder {
 func getValue(v any) any {
 	rv := reflect.ValueOf(v)
 
-	if rv.Kind() == reflect.Ptr {
-		if rv.IsNil() {
-			return nil
-		}
-
-		return rv.Elem().Interface()
+	if rv.Kind() != reflect.Ptr {
+		return v
 	}
 
-	return v
+	if rv.IsNil() {
+		return nil
+	}
+
+	return rv.Elem().Interface()
 }
 
 // With is your standard "With" func.  Add data in K:V pairs here to have them

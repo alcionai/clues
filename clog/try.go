@@ -130,7 +130,7 @@ type catchHandler = func(ctx context.Context, recovered any)
 // repanic.  No changes will be made to the recovered value.
 //
 // The recovered value is guaranteed to be a non-nil cluerr.Err containing the
-// panic stacktrace in the attribute `execution.stacktrace`, and with all other
+// panic stacktrace in the attribute `exception.stacktrace`, and with all other
 // attributes inherited from the ctx.
 func (tb *tryBuilder) Catch(handler catchHandler) {
 	r := recover()
@@ -161,16 +161,21 @@ func (tb *tryBuilder) Catch(handler catchHandler) {
 
 	err = err.SkipCaller(1)
 
+	err = err.With(
+		"exception.stacktrace", stackTrace,
+		"exception.message", msg,
+		"exception.type", node.OTELExceptionTypePanic,
+	).
+		SkipCaller(1) // report the line calling this func
+
 	tb.logBuilder.
 		Err(err).
-		StackTrace("exception.stacktrace").
+		Err(err).
 		SkipCaller(1). // report the line calling this func
 		Error(msg)
 
-	err = err.With("execution.stacktrace", stackTrace)
-
 	if tb.setSpanErr {
-		node.SetSpanError(tb.ctx, err, msg)
+		node.SetSpanError(tb.ctx, err, msg, node.OTELExceptionTypePanic)
 	}
 
 	if handler != nil {
