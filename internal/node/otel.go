@@ -531,9 +531,21 @@ func AddSpanAttributes(
 	}
 }
 
+type otelExceptionTypes = string
+
+const (
+	OTELExceptionTypeError otelExceptionTypes = "error"
+	OTELExceptionTypePanic otelExceptionTypes = "panic"
+)
+
 // SetSpanError sets the span status to error and records the error
 // in the span. If the span is nil, this call no-ops.
-func SetSpanError(ctx context.Context, err error, msg string) {
+func SetSpanError(
+	ctx context.Context,
+	err error,
+	msg string,
+	exceptionType otelExceptionTypes,
+) {
 	span := getSpan(ctx)
 
 	if span == nil {
@@ -559,11 +571,20 @@ func SetSpanError(ctx context.Context, err error, msg string) {
 	}
 
 	span.SetStatus(codes.Error, m)
+	span.SetAttributes(attribute.String("error.type", exceptionType))
+
 	// todo: add attributes from the error itself.  Problem is that right now
 	// we don't know which are the ctx attrs and which are the error attrs which
 	// would lead to a lot of duplication.  Solving this means separating the
 	// ctx inherited attributes from the error attributes.  Simple, but tedious.
-	span.RecordError(err, trace.WithStackTrace(true))
+	span.RecordError(
+		err,
+		trace.WithStackTrace(true),
+		trace.WithAttributes(
+			attribute.String("exception.type", exceptionType),
+			attribute.String("exception.message", m),
+		),
+	)
 }
 
 type otelHTTPLabeler interface {
