@@ -2,7 +2,9 @@ package stringify
 
 import (
 	"fmt"
+	"log/slog"
 	"reflect"
+	"sort"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -50,9 +52,10 @@ func Fmt(vals ...any) []string {
 // 1. nil -> ""
 // 2. conceal all concealer interfaces
 // 3. flat string values
-// 4. string all stringer interfaces
-// 5. fmt.sprintf all formatter interfaces
-// 6. spew.Sprintf the rest
+// 4. Slog LogValuer interfaces
+// 5. string all stringer interfaces
+// 6. fmt.sprintf all formatter interfaces
+// 7. spew.Sprintf the rest
 func Marshal(a any, shouldConceal bool) string {
 	if a == nil {
 		return ""
@@ -70,6 +73,10 @@ func Marshal(a any, shouldConceal bool) string {
 
 	if as, ok := a.(string); ok {
 		return as
+	}
+
+	if as, ok := a.(slog.LogValuer); ok {
+		return marshalSlogValue(as.LogValue())
 	}
 
 	if as, ok := a.(fmt.Stringer); ok {
@@ -133,4 +140,67 @@ func NormalizeMap[K comparable, V any](m map[K]V) map[string]any {
 	}
 
 	return Normalize(kvs...)
+}
+
+// marshalSlogValue is a helper for iterating through slog.Value types.
+func marshalSlogValue(v slog.Value) string {
+	// assume any non-group can be stringified directly.
+	if v.Kind() != slog.KindGroup {
+		return v.String()
+	}
+
+	buf := make([]byte, 0, 2)
+	buf = append(buf, "{"...)
+
+	attrs := v.Group()
+
+	for i := range attrs {
+		if len(attrs[i].Key) == 0 {
+			attrs[i].Key = fmt.Sprintf("keyless-attr-%d", i)
+		}
+	}
+
+	// order the attributes by key for consistency.
+	sort.SliceStable(attrs, func(i, j int) bool {
+		return attrs[i].Key < attrs[j].Key
+	})
+
+	for i, attr := range attrs {
+		if i > 0 {
+			buf = append(buf, " "...)
+		}
+
+		attr.Key = max(attr.Key, fmt.Sprintf("attr-%d", i))
+		buf = appendVToSlogValueBuf(buf, attr)
+	}
+
+	buf = append(buf, "}"...)
+
+	return string(buf)
+}
+
+func appendVToSlogValueBuf(buf []byte, attr slog.Attr) []byte {
+	buf = append(buf, attr.Key...)
+	buf = append(buf, ":"...)
+
+	v := attr.Value
+
+	switch attr.Value.Kind() {
+	case slog.KindGroup:
+		return append(buf, marshalSlogValue(v)...)
+
+	case slog.KindLogValuer:
+		as, ok := v.Any().(slog.LogValuer)
+		if ok {
+			return append(buf, marshalSlogValue(as.LogValue())...)
+		}
+
+		fallthrough
+	case slog.KindString, slog.KindInt64, slog.KindUint64, slog.KindFloat64,
+		slog.KindBool, slog.KindDuration, slog.KindTime, slog.KindAny:
+		return append(buf, v.String()...)
+
+	default:
+		return append(buf, fmt.Sprintf("bad kind: %s; value: %s", v.Kind(), v.String())...)
+	}
 }

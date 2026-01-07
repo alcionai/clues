@@ -2,7 +2,9 @@ package stringify
 
 import (
 	"fmt"
+	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -43,6 +45,43 @@ type aFormatter struct {
 }
 
 func (a aFormatter) Format(fs fmt.State, verb rune) { fmt.Fprint(fs, "formatted") }
+
+type someStruct struct {
+	foo string
+	bar int
+}
+
+var _ slog.LogValuer = &slogValuer{}
+
+type slogValuer struct {
+	v slog.Value
+}
+
+func (s slogValuer) LogValue() slog.Value {
+	return s.v
+}
+
+func toSlogValuer(v slog.Value) slogValuer {
+	return slogValuer{v: v}
+}
+
+var (
+	slogS = toSlogValuer(slog.StringValue("slog string"))
+	slogI = toSlogValuer(slog.IntValue(42))
+	slogB = toSlogValuer(slog.BoolValue(true))
+	slogT = toSlogValuer(slog.TimeValue(time.Now()))
+	slogG = toSlogValuer(slog.GroupValue(
+		slog.String("innerS", "inner slog string"),
+		slog.Int("innerI", 7),
+		slog.Group("innerG", slog.Bool("innerB", false)),
+	))
+	slogNilValueNoKey = toSlogValuer(slog.GroupValue(
+		slog.Attr{
+			Key:   "",
+			Value: slog.Value{},
+		},
+	))
+)
 
 func TestFmt(t *testing.T) {
 	ptrTestString := "ptrString"
@@ -138,6 +177,41 @@ func TestFmt(t *testing.T) {
 			name:   "formatter",
 			input:  []any{aFormatter{ptrString}},
 			expect: []string{"formatted"},
+		},
+		{
+			name:   "some struct",
+			input:  []any{someStruct{foo: "bar baz", bar: 42}},
+			expect: []string{"{foo:bar baz bar:42}"},
+		},
+		{
+			name:   "slog string",
+			input:  []any{slogS},
+			expect: []string{slogS.v.String()},
+		},
+		{
+			name:   "slog int",
+			input:  []any{slogI},
+			expect: []string{slogI.v.String()},
+		},
+		{
+			name:   "slog bool",
+			input:  []any{slogB},
+			expect: []string{slogB.v.String()},
+		},
+		{
+			name:   "slog time",
+			input:  []any{slogT},
+			expect: []string{slogT.v.String()},
+		},
+		{
+			name:   "slog group",
+			input:  []any{slogG},
+			expect: []string{"{innerG:{innerB:false} innerI:7 innerS:inner slog string}"},
+		},
+		{
+			name:   "slog nil value no key",
+			input:  []any{slogNilValueNoKey},
+			expect: []string{"{keyless-attr-0:<nil>}"},
 		},
 	}
 
