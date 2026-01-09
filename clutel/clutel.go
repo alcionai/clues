@@ -124,14 +124,11 @@ func AddToOTELHTTPLabeler(
 
 // GetSpan retrieves the current OpenTelemetry span from the context.
 func GetSpan(ctx context.Context) trace.Span {
-	return trace.SpanFromContext(ctx)
+	return node.GetSpan(ctx)
 }
 
 func GetTraceID(ctx context.Context) string {
 	span := GetSpan(ctx)
-	if span == nil {
-		return ""
-	}
 
 	return span.SpanContext().TraceID().String()
 }

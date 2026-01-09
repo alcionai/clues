@@ -139,7 +139,7 @@ func (dn *Node) AddValues(
 	}
 
 	if !cfg.doNotAddToSpan && !cfg.addToOTELHTTPLabeler {
-		AddSpanAttributes(getSpan(ctx), m)
+		AddSpanAttributes(GetSpan(ctx), m)
 	}
 
 	return spawn
