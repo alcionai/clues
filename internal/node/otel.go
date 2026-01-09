@@ -475,9 +475,17 @@ func (dn *Node) ReceiveTrace(
 	return otel.GetTextMapPropagator().Extract(ctx, carrier)
 }
 
-// getSpan retrieves the current otel span from the context.
-func getSpan(ctx context.Context) trace.Span {
-	return trace.SpanFromContext(ctx)
+// GetSpan retrieves the current otel span from the context.
+// As a sanity measure, ensures the span is not nil.  If nil, it
+// returns a noop span.
+func GetSpan(ctx context.Context) trace.Span {
+	span := trace.SpanFromContext(ctx)
+	if span == nil {
+		// force creation of a noop span
+		span = trace.SpanFromContext(context.Background())
+	}
+
+	return span
 }
 
 // AddSpan adds a new otel span in a new node.  If the otel client is
@@ -511,11 +519,7 @@ func (dn *Node) AddSpan(
 // CloseSpan closes the otel span.
 // If no span is present, no ops.
 func CloseSpan(ctx context.Context) {
-	span := trace.SpanFromContext(ctx)
-
-	if span != nil {
-		span.End()
-	}
+	GetSpan(ctx).End()
 }
 
 // AddSpanAttributes adds the values to the current span.  If the span
@@ -549,13 +553,10 @@ func SetSpanError(
 	msg string,
 	exceptionType otelExceptionTypes,
 ) {
-	span := getSpan(ctx)
-
-	if span == nil {
-		return
-	}
-
-	var m string
+	var (
+		m    string
+		span = GetSpan(ctx)
+	)
 
 	if !errs.IsNilIface(err) {
 		m = err.Error()
