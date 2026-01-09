@@ -102,3 +102,24 @@ panic?
 You can't define your histogram buckets with Ctats. Why? Because
 [OTEL doesn't let you define them at runtime either](https://github.com/open-telemetry/opentelemetry-go/issues/3826).
 You'll have to take it up with the package authors, not us.
+
+## Sum vs Counter vs Gauge
+
+Feeling overwhelmed?  Not sure which type to pick?  Just answer
+these simple questions and you'll be a master in no time!
+
+* Sum -> OTEL Counter
+* Counter -> OTEL UpDownCounter
+* Gauge -> OTEL Gauge (who knew?)
+
+Do you need `Delta Temporality`? Use a Sum, it's your only option!
+
+Do you need to decrement values? Use a Counter!
+
+Do you need have a single threaded, single source of truth? Try
+a Gauge!
+
+Sums are the most foolproof option all around.  Plug one in,
+count away.  Counters are nearly as good, if it weren't for the
+temporality constraint.  For monotonically increasing values,
+you can't really go wrong either way.
