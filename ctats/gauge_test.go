@@ -22,6 +22,8 @@ func TestGauge(t *testing.T) {
 	assert.Equal(t, metricBus.gauges.Size(), 1)
 	assertNotContains(t, metricBus.histograms, "reg.g")
 	assert.Equal(t, metricBus.histograms.Size(), 0)
+	assertNotContains(t, metricBus.sums, "reg.g")
+	assert.Equal(t, metricBus.sums.Size(), 0)
 
 	Gauge[int64]("reg.g").Set(ctx, 1)
 	Gauge[float64]("reg.g").Set(ctx, 1)
@@ -32,6 +34,8 @@ func TestGauge(t *testing.T) {
 	assert.Equal(t, metricBus.gauges.Size(), 1)
 	assertNotContains(t, metricBus.histograms, "reg.g")
 	assert.Equal(t, metricBus.histograms.Size(), 0)
+	assertNotContains(t, metricBus.sums, "reg.g")
+	assert.Equal(t, metricBus.sums.Size(), 0)
 
 	Gauge[int8]("g").Set(ctx, 1)
 	Gauge[int]("g").Set(ctx, 0)
@@ -42,4 +46,6 @@ func TestGauge(t *testing.T) {
 	assert.Equal(t, metricBus.gauges.Size(), 2)
 	assertNotContains(t, metricBus.histograms, "g")
 	assert.Equal(t, metricBus.histograms.Size(), 0)
+	assertNotContains(t, metricBus.sums, "reg.g")
+	assert.Equal(t, metricBus.sums.Size(), 0)
 }
