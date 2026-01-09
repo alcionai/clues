@@ -106,4 +106,3 @@ the identity of the error itself.
 cluerr.Stack(errSetOTELSpanStatus, err)
 // when you can do this
 cluerr.Stack(err).Label(const.SetOTELSpanStatus)
-```
