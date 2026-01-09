@@ -37,6 +37,7 @@ type bus struct {
 	counters   *xsync.Map[string, adder]
 	gauges     *xsync.Map[string, recorder]
 	histograms *xsync.Map[string, recorder]
+	sums       *xsync.Map[string, adder]
 
 	// initializedToNoop is a testing convenience flag that identifies
 	// whether the OTEL client should be configured or not.
@@ -48,10 +49,11 @@ func newBus() *bus {
 		counters:   xsync.NewMap[string, adder](),
 		gauges:     xsync.NewMap[string, recorder](),
 		histograms: xsync.NewMap[string, recorder](),
+		sums:       xsync.NewMap[string, adder](),
 	}
 }
 
-// counterFromCtx retrieves the counter instance from the metrics bus
+// getCounter retrieves the counter instance from the metrics bus
 // in the context.  If the ctx has no metrics bus, or if the bus does
 // not have a counter for the provided ID, returns nil.
 func (b bus) getCounter(
@@ -71,7 +73,7 @@ func (b bus) getCounter(
 	return c
 }
 
-// gaugeFromCtx retrieves the gauge instance from the metrics bus
+// getGauge retrieves the gauge instance from the metrics bus
 // in the context.  If the ctx has no metrics bus, or if the bus does
 // not have a gauge for the provided ID, returns nil.
 func (b bus) getGauge(
@@ -91,7 +93,7 @@ func (b bus) getGauge(
 	return g
 }
 
-// histogramFromCtx retrieves the histogram instance from the metrics bus
+// getHistogram retrieves the histogram instance from the metrics bus
 // in the context.  If the ctx has no metrics bus, or if the bus does
 // not have a histogram for the provided ID, returns nil.
 func (b bus) getHistogram(
@@ -109,4 +111,24 @@ func (b bus) getHistogram(
 	h, _ := b.histograms.Load(formatID(id))
 
 	return h
+}
+
+// getSum retrieves the counter instance from the metrics bus
+// in the context.  If the ctx has no metrics bus, or if the bus does
+// not have a counter for the provided ID, returns nil.
+func (b bus) getSum(
+	id string,
+) adder {
+	if b.initializedToNoop {
+		c, _ := b.sums.LoadOrStore(formatID(id), &noopAdder{})
+		return c
+	}
+
+	if b.sums == nil {
+		return nil
+	}
+
+	c, _ := b.sums.Load(formatID(id))
+
+	return c
 }
