@@ -62,6 +62,7 @@ func TestInherit(t *testing.T) {
 						ServiceName: "test",
 					},
 				}
+
 				return node.EmbedInCtx(context.Background(), &n)
 			},
 			to: func() context.Context { return nil },
@@ -79,6 +80,7 @@ func TestInherit(t *testing.T) {
 						ServiceName: "test",
 					},
 				}
+
 				return node.EmbedInCtx(context.Background(), &n)
 			},
 			to: func() context.Context { return context.Background() },
@@ -97,6 +99,7 @@ func TestInherit(t *testing.T) {
 						ServiceName: "to",
 					},
 				}
+
 				return node.EmbedInCtx(context.Background(), &n)
 			},
 			assert: func(t *testing.T, ctx context.Context) {
@@ -114,6 +117,7 @@ func TestInherit(t *testing.T) {
 						ServiceName: "to",
 					},
 				}
+
 				return node.EmbedInCtx(context.Background(), &n)
 			},
 			assert: func(t *testing.T, ctx context.Context) {
@@ -130,6 +134,7 @@ func TestInherit(t *testing.T) {
 						ServiceName: "from",
 					},
 				}
+
 				return node.EmbedInCtx(context.Background(), &n)
 			},
 			to: func() context.Context {
@@ -138,6 +143,7 @@ func TestInherit(t *testing.T) {
 						ServiceName: "to",
 					},
 				}
+
 				return node.EmbedInCtx(context.Background(), &n)
 			},
 			assert: func(t *testing.T, ctx context.Context) {
@@ -154,6 +160,7 @@ func TestInherit(t *testing.T) {
 						ServiceName: "from",
 					},
 				}
+
 				return node.EmbedInCtx(context.Background(), &n)
 			},
 			to: func() context.Context {
@@ -162,6 +169,7 @@ func TestInherit(t *testing.T) {
 						ServiceName: "to",
 					},
 				}
+
 				return node.EmbedInCtx(context.Background(), &n)
 			},
 			clobber: true,

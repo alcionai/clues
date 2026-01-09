@@ -22,6 +22,8 @@ func TestHistogram(t *testing.T) {
 	assert.Equal(t, metricBus.gauges.Size(), 0)
 	assertContains(t, metricBus.histograms, "reg.h")
 	assert.Equal(t, metricBus.histograms.Size(), 1)
+	assertNotContains(t, metricBus.sums, "reg.h")
+	assert.Equal(t, metricBus.sums.Size(), 0)
 
 	Histogram[int64]("reg.h").Record(ctx, 1)
 	Histogram[float64]("reg.h").Record(ctx, 1)
@@ -32,6 +34,8 @@ func TestHistogram(t *testing.T) {
 	assert.Equal(t, metricBus.gauges.Size(), 0)
 	assertContains(t, metricBus.histograms, "reg.h")
 	assert.Equal(t, metricBus.histograms.Size(), 1)
+	assertNotContains(t, metricBus.sums, "reg.h")
+	assert.Equal(t, metricBus.sums.Size(), 0)
 
 	Histogram[int8]("h").Record(ctx, 1)
 	Histogram[int]("h").Record(ctx, -1)
@@ -43,4 +47,6 @@ func TestHistogram(t *testing.T) {
 	assert.Equal(t, metricBus.gauges.Size(), 0)
 	assertContains(t, metricBus.histograms, "h")
 	assert.Equal(t, metricBus.histograms.Size(), 2)
+	assertNotContains(t, metricBus.sums, "reg.h")
+	assert.Equal(t, metricBus.sums.Size(), 0)
 }

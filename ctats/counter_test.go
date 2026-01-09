@@ -22,6 +22,8 @@ func TestCounter(t *testing.T) {
 	assert.Equal(t, metricBus.gauges.Size(), 0)
 	assertNotContains(t, metricBus.histograms, "reg.c")
 	assert.Equal(t, metricBus.histograms.Size(), 0)
+	assertNotContains(t, metricBus.sums, "reg.c")
+	assert.Equal(t, metricBus.sums.Size(), 0)
 
 	Counter[int64]("reg.c").Add(ctx, 1)
 	Counter[float64]("reg.c").Add(ctx, 1)
@@ -36,6 +38,8 @@ func TestCounter(t *testing.T) {
 	assert.Equal(t, metricBus.gauges.Size(), 0)
 	assertNotContains(t, metricBus.histograms, "reg.c")
 	assert.Equal(t, metricBus.histograms.Size(), 0)
+	assertNotContains(t, metricBus.sums, "reg.c")
+	assert.Equal(t, metricBus.sums.Size(), 0)
 
 	Counter[int8]("c").Add(ctx, 1)
 	Counter[float32]("c").Inc(ctx)
@@ -48,4 +52,6 @@ func TestCounter(t *testing.T) {
 	assert.Equal(t, metricBus.gauges.Size(), 0)
 	assertNotContains(t, metricBus.histograms, "c")
 	assert.Equal(t, metricBus.histograms.Size(), 0)
+	assertNotContains(t, metricBus.sums, "reg.c")
+	assert.Equal(t, metricBus.sums.Size(), 0)
 }

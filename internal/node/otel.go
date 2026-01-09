@@ -57,36 +57,21 @@ func (cli *OTELClient) Close(ctx context.Context) error {
 	}
 
 	if cli.MeterProvider != nil {
-		err := cli.MeterProvider.ForceFlush(ctx)
-		if err != nil {
-			log.Println("forcing meter provider flush:", err)
-		}
-
-		err = cli.MeterProvider.Shutdown(ctx)
+		err := cli.MeterProvider.Shutdown(ctx)
 		if err != nil {
 			return fmt.Errorf("shutting down otel meterprovider: %w", err)
 		}
 	}
 
 	if cli.LoggerProvider != nil {
-		err := cli.LoggerProvider.ForceFlush(ctx)
-		if err != nil {
-			log.Println("forcing trace provider flush:", err)
-		}
-
-		err = cli.LoggerProvider.Shutdown(ctx)
+		err := cli.LoggerProvider.Shutdown(ctx)
 		if err != nil {
 			return fmt.Errorf("shutting down otel logger provider: %w", err)
 		}
 	}
 
 	if cli.TracerProvider != nil {
-		err := cli.TracerProvider.ForceFlush(ctx)
-		if err != nil {
-			log.Println("forcing trace provider flush:", err)
-		}
-
-		err = cli.TracerProvider.Shutdown(ctx)
+		err := cli.TracerProvider.Shutdown(ctx)
 		if err != nil {
 			return fmt.Errorf("shutting down otel trace provider: %w", err)
 		}
@@ -129,6 +114,9 @@ type OTELConfig struct {
 	// Filter contains the filter used when copying baggage to a span, by adding span
 	// attributes. If no filter is specified, all baggage is copied over to a span.
 	Filter baggagecopy.Filter
+
+	// MeterExporterOpts contains options to apply to the meter provider's exporter.
+	MeterExporterOpts []otlpmetricgrpc.Option
 }
 
 // ------------------------------------------------------------
@@ -218,7 +206,12 @@ func NewOTELClient(
 
 	// -- Metrics
 
-	client.MeterProvider, err = newMeterProvider(ctx, client.grpcConn, server)
+	client.MeterProvider, err = newMeterProvider(
+		ctx,
+		client.grpcConn,
+		server,
+		config.MeterExporterOpts...,
+	)
 	if err != nil {
 		closeClient()
 		return nil, errors.Wrap(err, "generating a meter provider")
@@ -287,6 +280,7 @@ func newMeterProvider(
 	ctx context.Context,
 	conn *grpc.ClientConn,
 	server *resource.Resource,
+	meterExporterOpts ...otlpmetricgrpc.Option,
 ) (*sdkMetric.MeterProvider, error) {
 	if ctx == nil {
 		return nil, errors.New("nil ctx")
@@ -299,24 +293,33 @@ func newMeterProvider(
 
 	exporter, err := otlpmetricgrpc.New(
 		ctx,
-		otlpmetricgrpc.WithGRPCConn(conn),
-		otlpmetricgrpc.WithCompressor("gzip"))
+		append(
+			[]otlpmetricgrpc.Option{
+				otlpmetricgrpc.WithGRPCConn(conn),
+				otlpmetricgrpc.WithCompressor("gzip"),
+			},
+			meterExporterOpts...,
+		)...,
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing a meter exporter")
 	}
 
-	periodicReader := sdkMetric.NewPeriodicReader(
-		exporter,
-		sdkMetric.WithInterval(1*time.Minute))
-
-	meterProvider := sdkMetric.NewMeterProvider(
+	opts := []sdkMetric.Option{
 		sdkMetric.WithResource(server),
 		// FIXME: need to investigate other options...
 		// * view
 		// * interval
 		// * aggregation
-		// * temporality
-		sdkMetric.WithReader(periodicReader))
+		sdkMetric.WithReader(
+			sdkMetric.NewPeriodicReader(
+				exporter,
+				sdkMetric.WithInterval(time.Minute),
+			),
+		),
+	}
+
+	meterProvider := sdkMetric.NewMeterProvider(opts...)
 
 	return meterProvider, nil
 }
