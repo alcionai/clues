@@ -828,6 +828,7 @@ func TestValuePriority(t *testing.T) {
 				err = cluerr.Stack(
 					cluerr.New("first in stack").With("in-err", 2),
 					err)
+
 				return err
 			}(),
 			expect: msa{"in-ctx": 1, "in-err": 1},
@@ -837,6 +838,7 @@ func TestValuePriority(t *testing.T) {
 			err: func() error {
 				ctx := clues.Add(context.Background(), "k", 1)
 				err := cluerr.NewWC(ctx, "last in stack").With("k", 2)
+
 				return err
 			}(),
 			expect: msa{"k": 2},
