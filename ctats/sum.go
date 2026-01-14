@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/alcionai/clues/cluerr"
@@ -116,22 +115,12 @@ func Sum[N number](id string) sum[N] {
 // sum provides access to the factory functions.
 type sum[N number] struct {
 	base
-	kvs []attribute.KeyValue
 }
 
 // With returns a sum that applies the provided attributes to future updates.
 // The receiver is not mutated; the returned instance carries the added attrs.
-func (c sum[N]) With(kvs ...attribute.KeyValue) sum[N] {
-	if len(kvs) == 0 {
-		return c
-	}
-
-	cloned := make([]attribute.KeyValue, len(c.kvs), len(c.kvs)+len(kvs))
-	copy(cloned, c.kvs)
-
-	c.kvs = append(cloned, kvs...)
-
-	return c
+func (c sum[N]) With(kvs ...any) sum[N] {
+	return sum[N]{base: c.base.with(kvs...)}
 }
 
 // Add increments the sum by n. n can be negative.
@@ -142,18 +131,17 @@ func (c sum[number]) Add(ctx context.Context, n number) {
 		return
 	}
 
-	ctr.Add(ctx, float64(n), c.addOptions()...)
+	attrs := c.attrs()
+
+	if len(attrs) == 0 {
+		ctr.Add(ctx, float64(n))
+		return
+	}
+
+	ctr.Add(ctx, float64(n), metric.WithAttributes(attrs...))
 }
 
 // Inc is shorthand for Add(ctx, 1).
 func (c sum[number]) Inc(ctx context.Context) {
 	c.Add(ctx, 1.0)
-}
-
-func (c sum[number]) addOptions() []metric.AddOption {
-	if len(c.kvs) == 0 {
-		return nil
-	}
-
-	return []metric.AddOption{metric.WithAttributes(c.kvs...)}
 }

@@ -538,6 +538,192 @@ func AddSpanAttributes(
 	}
 }
 
+// OTELAttributes flattens the node values into attribute.KeyValue entries.
+// Values are stringified using the shared stringify rules to keep consistency
+// across telemetry systems.
+func (dn *Node) OTELAttributes() []attribute.KeyValue {
+	if dn == nil {
+		return nil
+	}
+
+	return MapToOTELAttributes(dn.Map())
+}
+
+// MapToOTELAttributes converts a map to otel attributes using shared
+// stringification.
+func MapToOTELAttributes(m map[string]any) []attribute.KeyValue {
+	if len(m) == 0 {
+		return nil
+	}
+
+	attrs := make([]attribute.KeyValue, 0, len(m))
+
+	for k, v := range m {
+		switch tv := v.(type) {
+		case string:
+			attrs = append(attrs, attribute.String(k, tv))
+		case bool:
+			attrs = append(attrs, attribute.Bool(k, tv))
+		case int:
+			attrs = append(attrs, attribute.Int(k, tv))
+		case int8, int16, int32, int64:
+			attrs = append(attrs, attribute.Int64(k, toInt64(tv)))
+		case uint, uint8, uint16, uint32, uint64:
+			attrs = append(attrs, attribute.Int64(k, int64(toUint64(tv))))
+		case float32:
+			attrs = append(attrs, attribute.Float64(k, float64(tv)))
+		case float64:
+			attrs = append(attrs, attribute.Float64(k, tv))
+		case []string:
+			attrs = append(attrs, attribute.StringSlice(k, tv))
+		case []int, []int8, []int16, []int32, []int64:
+			attrs = append(attrs, attribute.Int64Slice(k, toInt64Slice(tv)))
+		case []uint, []uint8, []uint16, []uint32, []uint64:
+			attrs = append(attrs, attribute.Int64Slice(k, toInt64Slice(tv)))
+		case []float32, []float64:
+			attrs = append(attrs, attribute.Float64Slice(k, toFloat64Slice(tv)))
+		case []bool:
+			attrs = append(attrs, attribute.BoolSlice(k, tv))
+		default:
+			attrs = append(attrs, attribute.String(k, stringify.Marshal(v, false)))
+		}
+	}
+
+	return attrs
+}
+
+func toInt64(v any) int64 {
+	switch tv := v.(type) {
+	case int:
+		return int64(tv)
+	case int8:
+		return int64(tv)
+	case int16:
+		return int64(tv)
+	case int32:
+		return int64(tv)
+	case int64:
+		return tv
+	case uint:
+		return int64(tv)
+	case uint8:
+		return int64(tv)
+	case uint16:
+		return int64(tv)
+	case uint32:
+		return int64(tv)
+	case uint64:
+		return int64(tv)
+	default:
+		return 0
+	}
+}
+
+func toUint64(v any) uint64 {
+	switch tv := v.(type) {
+	case uint:
+		return uint64(tv)
+	case uint8:
+		return uint64(tv)
+	case uint16:
+		return uint64(tv)
+	case uint32:
+		return uint64(tv)
+	case uint64:
+		return tv
+	case int:
+		return uint64(tv)
+	case int8:
+		return uint64(tv)
+	case int16:
+		return uint64(tv)
+	case int32:
+		return uint64(tv)
+	case int64:
+		return uint64(tv)
+	default:
+		return 0
+	}
+}
+
+func toInt64Slice(v any) []int64 {
+	switch tv := v.(type) {
+	case []int:
+		out := make([]int64, len(tv))
+		for i, val := range tv {
+			out[i] = int64(val)
+		}
+		return out
+	case []int8:
+		out := make([]int64, len(tv))
+		for i, val := range tv {
+			out[i] = int64(val)
+		}
+		return out
+	case []int16:
+		out := make([]int64, len(tv))
+		for i, val := range tv {
+			out[i] = int64(val)
+		}
+		return out
+	case []int32:
+		out := make([]int64, len(tv))
+		for i, val := range tv {
+			out[i] = int64(val)
+		}
+		return out
+	case []int64:
+		return tv
+	case []uint:
+		out := make([]int64, len(tv))
+		for i, val := range tv {
+			out[i] = int64(val)
+		}
+		return out
+	case []uint8:
+		out := make([]int64, len(tv))
+		for i, val := range tv {
+			out[i] = int64(val)
+		}
+		return out
+	case []uint16:
+		out := make([]int64, len(tv))
+		for i, val := range tv {
+			out[i] = int64(val)
+		}
+		return out
+	case []uint32:
+		out := make([]int64, len(tv))
+		for i, val := range tv {
+			out[i] = int64(val)
+		}
+		return out
+	case []uint64:
+		out := make([]int64, len(tv))
+		for i, val := range tv {
+			out[i] = int64(val)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func toFloat64Slice(v any) []float64 {
+	switch tv := v.(type) {
+	case []float32:
+		out := make([]float64, len(tv))
+		for i, val := range tv {
+			out[i] = float64(val)
+		}
+		return out
+	case []float64:
+		return tv
+	default:
+		return nil
+	}
+}
+
 type otelExceptionTypes = string
 
 const (

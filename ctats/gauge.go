@@ -108,12 +108,16 @@ func RegisterGauge(
 // registered instance will be used.  If not, a new instance
 // will get generated.
 func Gauge[N number](id string) gauge[N] {
-	return gauge[N]{base{formatID(id)}}
+	return gauge[N]{base: base{id: formatID(id)}}
 }
 
 // gauge provides access to the factory functions.
 type gauge[N number] struct {
 	base
+}
+
+func (c gauge[N]) With(kvs ...any) gauge[N] {
+	return gauge[N]{base: c.base.with(kvs...)}
 }
 
 // Set sets the gauge to n.
@@ -124,5 +128,12 @@ func (c gauge[number]) Set(ctx context.Context, n number) {
 		return
 	}
 
-	gauge.Record(ctx, float64(n))
+	attrs := c.attrs()
+
+	if len(attrs) == 0 {
+		gauge.Record(ctx, float64(n))
+		return
+	}
+
+	gauge.Record(ctx, float64(n), metric.WithAttributes(attrs...))
 }

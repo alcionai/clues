@@ -76,10 +76,31 @@ func TestSumWithAttributes(t *testing.T) {
 
 	attrs := []attribute.KeyValue{attribute.String("key", "val")}
 
-	Sum[int64]("with.attrs").With(attrs...).Inc(ctx)
+	withAttrs := Sum[int64]("with.attrs").With("key", "val")
+
+	assert.Equal(t, attrs, withAttrs.attrs())
+
+	withAttrs.Inc(ctx)
 
 	assert.Equal(t, 1, recorder.calls)
 	assert.Equal(t, 1.0, recorder.lastIncr)
+	require.Len(t, recorder.lastOpts, 1)
+}
+
+func TestSumWithAttributeKeyValue(t *testing.T) {
+	ctx := InitializeNoop(context.Background(), t.Name())
+	metricBus := fromCtx(ctx)
+	recorder := &recordingAdder{}
+
+	metricBus.sums.Store("with.attr.kv", recorder)
+
+	withAttrs := Sum[int64]("with.attr.kv").With(attribute.Int("status_code", 500))
+
+	expected := []attribute.KeyValue{attribute.Int("status_code", 500)}
+	assert.Equal(t, expected, withAttrs.attrs())
+
+	withAttrs.Inc(ctx)
+
 	require.Len(t, recorder.lastOpts, 1)
 }
 
@@ -87,13 +108,13 @@ func TestSumWithDoesNotMutateBase(t *testing.T) {
 	baseSum := Sum[int64]("mutate")
 	attrs := []attribute.KeyValue{attribute.String("foo", "bar")}
 
-	withAttrs := baseSum.With(attrs...)
+	withAttrs := baseSum.With("foo", "bar")
 
-	assert.Empty(t, baseSum.kvs)
-	assert.Equal(t, attrs, withAttrs.kvs)
+	assert.Nil(t, baseSum.attrs())
+	assert.Equal(t, attrs, withAttrs.attrs())
 
-	second := withAttrs.With(attribute.String("baz", "qux"))
+	second := withAttrs.With("baz", "qux")
 
-	assert.Equal(t, attrs, withAttrs.kvs)
-	assert.Len(t, second.kvs, 2)
+	assert.Equal(t, attrs, withAttrs.attrs())
+	assert.Len(t, second.attrs(), 2)
 }
