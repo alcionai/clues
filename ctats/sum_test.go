@@ -78,7 +78,7 @@ func TestSumWithAttributes(t *testing.T) {
 
 	withAttrs := Sum[int64]("with.attrs").With("key", "val")
 
-	assert.Equal(t, attrs, withAttrs.attrs())
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
 
 	withAttrs.Inc(ctx)
 
@@ -94,10 +94,10 @@ func TestSumWithAttributeKeyValue(t *testing.T) {
 
 	metricBus.sums.Store("with.attr.kv", recorder)
 
-	withAttrs := Sum[int64]("with.attr.kv").With(attribute.Int("status_code", 500))
+	withAttrs := Sum[int64]("with.attr.kv").With("status_code", 500)
 
-	expected := []attribute.KeyValue{attribute.Int("status_code", 500)}
-	assert.Equal(t, expected, withAttrs.attrs())
+	expected := []attribute.KeyValue{attribute.String("status_code", "500")}
+	assert.Equal(t, expected, withAttrs.getOTELKVAttrs())
 
 	withAttrs.Inc(ctx)
 
@@ -110,11 +110,11 @@ func TestSumWithDoesNotMutateBase(t *testing.T) {
 
 	withAttrs := baseSum.With("foo", "bar")
 
-	assert.Nil(t, baseSum.attrs())
-	assert.Equal(t, attrs, withAttrs.attrs())
+	assert.Nil(t, baseSum.getOTELKVAttrs())
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
 
 	second := withAttrs.With("baz", "qux")
 
-	assert.Equal(t, attrs, withAttrs.attrs())
-	assert.Len(t, second.attrs(), 2)
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
+	assert.Len(t, second.getOTELKVAttrs(), 2)
 }

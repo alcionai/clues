@@ -64,7 +64,7 @@ func TestGaugeWithAttributes(t *testing.T) {
 
 	withAttrs := Gauge[int64]("with.gauge.attrs").With("key", "val")
 
-	assert.Equal(t, attrs, withAttrs.attrs())
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
 
 	withAttrs.Set(ctx, 1)
 
@@ -79,10 +79,10 @@ func TestGaugeWithAttributeKeyValue(t *testing.T) {
 
 	metricBus.gauges.Store("with.gauge.kv", recorder)
 
-	withAttrs := Gauge[int64]("with.gauge.kv").With(attribute.Int("status_code", 500))
+	withAttrs := Gauge[int64]("with.gauge.kv").With("status_code", 500)
 
-	expected := []attribute.KeyValue{attribute.Int("status_code", 500)}
-	assert.Equal(t, expected, withAttrs.attrs())
+	expected := []attribute.KeyValue{attribute.String("status_code", "500")}
+	assert.Equal(t, expected, withAttrs.getOTELKVAttrs())
 
 	withAttrs.Set(ctx, 1)
 
@@ -95,13 +95,13 @@ func TestGaugeWithDoesNotMutateBase(t *testing.T) {
 
 	withAttrs := baseGauge.With("foo", "bar")
 
-	assert.Nil(t, baseGauge.attrs())
-	assert.Equal(t, attrs, withAttrs.attrs())
+	assert.Nil(t, baseGauge.getOTELKVAttrs())
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
 
 	second := withAttrs.With("baz", "qux")
 
-	assert.Equal(t, attrs, withAttrs.attrs())
-	assert.Len(t, second.attrs(), 2)
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
+	assert.Len(t, second.getOTELKVAttrs(), 2)
 }
 
 type recordingRecorder struct {

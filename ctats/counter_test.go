@@ -69,7 +69,7 @@ func TestCounterWithAttributes(t *testing.T) {
 
 	withAttrs := Counter[int64]("with.counter.attrs").With("key", "val")
 
-	assert.Equal(t, attrs, withAttrs.attrs())
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
 
 	withAttrs.Inc(ctx)
 
@@ -84,10 +84,10 @@ func TestCounterWithAttributeKeyValue(t *testing.T) {
 
 	metricBus.counters.Store("with.counter.kv", recorder)
 
-	withAttrs := Counter[int64]("with.counter.kv").With(attribute.Int("status_code", 500))
+	withAttrs := Counter[int64]("with.counter.kv").With("status_code", 500)
 
-	expected := []attribute.KeyValue{attribute.Int("status_code", 500)}
-	assert.Equal(t, expected, withAttrs.attrs())
+	expected := []attribute.KeyValue{attribute.String("status_code", "500")}
+	assert.Equal(t, expected, withAttrs.getOTELKVAttrs())
 
 	withAttrs.Inc(ctx)
 
@@ -100,11 +100,11 @@ func TestCounterWithDoesNotMutateBase(t *testing.T) {
 
 	withAttrs := baseCounter.With("foo", "bar")
 
-	assert.Nil(t, baseCounter.attrs())
-	assert.Equal(t, attrs, withAttrs.attrs())
+	assert.Nil(t, baseCounter.getOTELKVAttrs())
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
 
 	second := withAttrs.With("baz", "qux")
 
-	assert.Equal(t, attrs, withAttrs.attrs())
-	assert.Len(t, second.attrs(), 2)
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
+	assert.Len(t, second.getOTELKVAttrs(), 2)
 }

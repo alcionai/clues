@@ -128,7 +128,7 @@ func (c gauge[number]) Set(ctx context.Context, n number) {
 		return
 	}
 
-	attrs := c.attrs()
+	attrs := c.getOTELKVAttrs()
 
 	if len(attrs) == 0 {
 		gauge.Record(ctx, float64(n))

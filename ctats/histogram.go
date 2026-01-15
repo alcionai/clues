@@ -136,7 +136,7 @@ func (c histogram[number]) Record(ctx context.Context, n number) {
 		return
 	}
 
-	attrs := c.attrs()
+	attrs := c.getOTELKVAttrs()
 
 	if len(attrs) == 0 {
 		hist.Record(ctx, float64(n))

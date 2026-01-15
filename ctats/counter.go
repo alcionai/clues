@@ -137,7 +137,7 @@ func (c counter[number]) Add(ctx context.Context, n number) {
 		return
 	}
 
-	attrs := c.attrs()
+	attrs := c.getOTELKVAttrs()
 
 	if len(attrs) == 0 {
 		ctr.Add(ctx, float64(n))

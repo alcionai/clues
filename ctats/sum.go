@@ -117,8 +117,7 @@ type sum[N number] struct {
 	base
 }
 
-// With returns a sum that applies the provided attributes to future updates.
-// The receiver is not mutated; the returned instance carries the added attrs.
+// With adds the provided attributes to the current builder.  These attrs will be provided to the metric when `.Ctx(ctx)` is caller.
 func (c sum[N]) With(kvs ...any) sum[N] {
 	return sum[N]{base: c.base.with(kvs...)}
 }
@@ -131,7 +130,7 @@ func (c sum[number]) Add(ctx context.Context, n number) {
 		return
 	}
 
-	attrs := c.attrs()
+	attrs := c.getOTELKVAttrs()
 
 	if len(attrs) == 0 {
 		ctr.Add(ctx, float64(n))

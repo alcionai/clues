@@ -109,71 +109,17 @@ func (b base) with(kvs ...any) base {
 		b.data = &node.Node{}
 	}
 
-	b.data = b.data.AddValues(context.Background(), normalizeKVs(kvs...))
+	b.data = b.data.AddValues(context.Background(), stringify.Normalize(kvs...))
 
 	return b
 }
 
-func (b base) attrs() []attribute.KeyValue {
+func (b base) getOTELKVAttrs() []attribute.KeyValue {
 	if b.data == nil {
 		return nil
 	}
 
 	return b.data.OTELAttributes()
-}
-
-func normalizeKVs(kvs ...any) map[string]any {
-	if len(kvs) == 0 {
-		return nil
-	}
-
-	result := map[string]any{}
-	remaining := make([]any, 0, len(kvs))
-
-	for _, kv := range kvs {
-		if attr, ok := kv.(attribute.KeyValue); ok {
-			result[string(attr.Key)] = attrValueToAny(attr.Value)
-			continue
-		}
-
-		remaining = append(remaining, kv)
-	}
-
-	if len(remaining) > 0 {
-		norm := stringify.Normalize(remaining...)
-		for k, v := range norm {
-			result[k] = v
-		}
-	}
-
-	if len(result) == 0 {
-		return nil
-	}
-
-	return result
-}
-
-func attrValueToAny(v attribute.Value) any {
-	switch v.Type() {
-	case attribute.BOOL:
-		return v.AsBool()
-	case attribute.INT64:
-		return v.AsInt64()
-	case attribute.FLOAT64:
-		return v.AsFloat64()
-	case attribute.STRING:
-		return v.AsString()
-	case attribute.BOOLSLICE:
-		return v.AsBoolSlice()
-	case attribute.INT64SLICE:
-		return v.AsInt64Slice()
-	case attribute.FLOAT64SLICE:
-		return v.AsFloat64Slice()
-	case attribute.STRINGSLICE:
-		return v.AsStringSlice()
-	default:
-		return stringify.Marshal(v.AsInterface(), false)
-	}
 }
 
 var camel = regexp.MustCompile("([a-z0-9])([A-Z])")

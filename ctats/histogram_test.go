@@ -64,7 +64,7 @@ func TestHistogramWithAttributes(t *testing.T) {
 
 	withAttrs := Histogram[int64]("with.hist.attrs").With("key", "val")
 
-	assert.Equal(t, attrs, withAttrs.attrs())
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
 
 	withAttrs.Record(ctx, 2)
 
@@ -79,10 +79,10 @@ func TestHistogramWithAttributeKeyValue(t *testing.T) {
 
 	metricBus.histograms.Store("with.hist.kv", recorder)
 
-	withAttrs := Histogram[int64]("with.hist.kv").With(attribute.Int("status_code", 500))
+	withAttrs := Histogram[int64]("with.hist.kv").With("status_code", 500)
 
-	expected := []attribute.KeyValue{attribute.Int("status_code", 500)}
-	assert.Equal(t, expected, withAttrs.attrs())
+	expected := []attribute.KeyValue{attribute.String("status_code", "500")}
+	assert.Equal(t, expected, withAttrs.getOTELKVAttrs())
 
 	withAttrs.Record(ctx, 2)
 
@@ -95,11 +95,11 @@ func TestHistogramWithDoesNotMutateBase(t *testing.T) {
 
 	withAttrs := baseHist.With("foo", "bar")
 
-	assert.Nil(t, baseHist.attrs())
-	assert.Equal(t, attrs, withAttrs.attrs())
+	assert.Nil(t, baseHist.getOTELKVAttrs())
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
 
 	second := withAttrs.With("baz", "qux")
 
-	assert.Equal(t, attrs, withAttrs.attrs())
-	assert.Len(t, second.attrs(), 2)
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
+	assert.Len(t, second.getOTELKVAttrs(), 2)
 }
