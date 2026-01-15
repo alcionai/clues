@@ -109,12 +109,16 @@ func RegisterCounter(
 // registered instance will be used.  If not, a new instance
 // will get generated.
 func Counter[N number](id string) counter[N] {
-	return counter[N]{base{formatID(id)}}
+	return counter[N]{base: base{id: formatID(id)}}
 }
 
 // counter provides access to the factory functions.
 type counter[N number] struct {
 	base
+}
+
+func (c counter[N]) With(kvs ...any) counter[N] {
+	return counter[N]{base: c.base.with(kvs...)}
 }
 
 type adder interface {
@@ -133,27 +137,24 @@ func (c counter[number]) Add(ctx context.Context, n number) {
 		return
 	}
 
-	ctr.Add(ctx, float64(n))
+	attrs := c.getOTELKVAttrs()
+
+	if len(attrs) == 0 {
+		ctr.Add(ctx, float64(n))
+		return
+	}
+
+	ctr.Add(ctx, float64(n), metric.WithAttributes(attrs...))
 }
 
 // Inc is shorthand for Add(ctx, 1).
 func (c counter[number]) Inc(ctx context.Context) {
-	ctr, err := getOrCreateCounter(ctx, c.getID())
-	if err != nil {
-		log.Printf("err getting counter: %+v\n", err)
-		return
-	}
-
-	ctr.Add(ctx, 1.0)
+	c.Add(ctx, 1.0)
 }
 
 // Dec is shorthand for Add(ctx, -1).
 func (c counter[number]) Dec(ctx context.Context) {
-	ctr, err := getOrCreateCounter(ctx, c.getID())
-	if err != nil {
-		log.Printf("err getting counter: %+v\n", err)
-		return
-	}
+	negOne := int64(-1)
 
-	ctr.Add(ctx, -1.0)
+	c.Add(ctx, number(negOne))
 }

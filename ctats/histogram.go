@@ -108,12 +108,16 @@ func RegisterHistogram(
 // registered instance will be used.  If not, a new instance
 // will get generated.
 func Histogram[N number](id string) histogram[N] {
-	return histogram[N]{base{formatID(id)}}
+	return histogram[N]{base: base{id: formatID(id)}}
 }
 
 // histogram provides access to the factory functions.
 type histogram[N number] struct {
 	base
+}
+
+func (c histogram[N]) With(kvs ...any) histogram[N] {
+	return histogram[N]{base: c.base.with(kvs...)}
 }
 
 type recorder interface {
@@ -132,5 +136,12 @@ func (c histogram[number]) Record(ctx context.Context, n number) {
 		return
 	}
 
-	hist.Record(ctx, float64(n))
+	attrs := c.getOTELKVAttrs()
+
+	if len(attrs) == 0 {
+		hist.Record(ctx, float64(n))
+		return
+	}
+
+	hist.Record(ctx, float64(n), metric.WithAttributes(attrs...))
 }

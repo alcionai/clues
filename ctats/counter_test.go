@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,4 +56,55 @@ func TestCounter(t *testing.T) {
 	assert.Equal(t, metricBus.histograms.Size(), 0)
 	assertNotContains(t, metricBus.sums, "reg.c")
 	assert.Equal(t, metricBus.sums.Size(), 0)
+}
+
+func TestCounterWithAttributes(t *testing.T) {
+	ctx := InitializeNoop(context.Background(), t.Name())
+	metricBus := fromCtx(ctx)
+	recorder := &recordingAdder{}
+
+	metricBus.counters.Store("with.counter.attrs", recorder)
+
+	attrs := []attribute.KeyValue{attribute.String("key", "val")}
+
+	withAttrs := Counter[int64]("with.counter.attrs").With("key", "val")
+
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
+
+	withAttrs.Inc(ctx)
+
+	assert.Equal(t, 1, recorder.calls)
+	require.Len(t, recorder.lastOpts, 1)
+}
+
+func TestCounterWithAttributeKeyValue(t *testing.T) {
+	ctx := InitializeNoop(context.Background(), t.Name())
+	metricBus := fromCtx(ctx)
+	recorder := &recordingAdder{}
+
+	metricBus.counters.Store("with.counter.kv", recorder)
+
+	withAttrs := Counter[int64]("with.counter.kv").With("status_code", 500)
+
+	expected := []attribute.KeyValue{attribute.String("status_code", "500")}
+	assert.Equal(t, expected, withAttrs.getOTELKVAttrs())
+
+	withAttrs.Inc(ctx)
+
+	require.Len(t, recorder.lastOpts, 1)
+}
+
+func TestCounterWithDoesNotMutateBase(t *testing.T) {
+	baseCounter := Counter[int64]("mutate.counter")
+	attrs := []attribute.KeyValue{attribute.String("foo", "bar")}
+
+	withAttrs := baseCounter.With("foo", "bar")
+
+	assert.Nil(t, baseCounter.getOTELKVAttrs())
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
+
+	second := withAttrs.With("baz", "qux")
+
+	assert.Equal(t, attrs, withAttrs.getOTELKVAttrs())
+	assert.Len(t, second.getOTELKVAttrs(), 2)
 }

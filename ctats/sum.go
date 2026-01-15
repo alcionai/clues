@@ -109,12 +109,17 @@ func RegisterSum(
 // registered instance will be used.  If not, a new instance
 // will get generated.
 func Sum[N number](id string) sum[N] {
-	return sum[N]{base{formatID(id)}}
+	return sum[N]{base: base{id: formatID(id)}}
 }
 
 // sum provides access to the factory functions.
 type sum[N number] struct {
 	base
+}
+
+// With adds the provided attributes to the current builder.  These attrs will be provided to the metric when `.Ctx(ctx)` is caller.
+func (c sum[N]) With(kvs ...any) sum[N] {
+	return sum[N]{base: c.base.with(kvs...)}
 }
 
 // Add increments the sum by n. n can be negative.
@@ -125,16 +130,17 @@ func (c sum[number]) Add(ctx context.Context, n number) {
 		return
 	}
 
-	ctr.Add(ctx, float64(n))
+	attrs := c.getOTELKVAttrs()
+
+	if len(attrs) == 0 {
+		ctr.Add(ctx, float64(n))
+		return
+	}
+
+	ctr.Add(ctx, float64(n), metric.WithAttributes(attrs...))
 }
 
 // Inc is shorthand for Add(ctx, 1).
 func (c sum[number]) Inc(ctx context.Context) {
-	ctr, err := getOrCreateSum(ctx, c.getID())
-	if err != nil {
-		log.Printf("err getting sum: %+v\n", err)
-		return
-	}
-
-	ctr.Add(ctx, 1.0)
+	c.Add(ctx, 1.0)
 }

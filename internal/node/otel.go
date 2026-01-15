@@ -538,6 +538,17 @@ func AddSpanAttributes(
 	}
 }
 
+// OTELAttributes flattens the node values into attribute.KeyValue entries.
+// Values are stringified using the shared stringify rules to keep consistency
+// across telemetry systems.
+func (dn *Node) OTELAttributes() []attribute.KeyValue {
+	if dn == nil {
+		return nil
+	}
+
+	return MapToOTELAttributes(dn.Map())
+}
+
 type otelExceptionTypes = string
 
 const (

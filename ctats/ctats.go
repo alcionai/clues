@@ -6,8 +6,10 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/alcionai/clues/internal/node"
+	"github.com/alcionai/clues/internal/stringify"
 )
 
 // ---------------------------------------------------------------------------
@@ -90,11 +92,34 @@ type number interface {
 
 // base contains the properties common to all metrics factories.
 type base struct {
-	id string
+	id   string
+	data *node.Node
 }
 
 func (b base) getID() string {
 	return formatID(b.id)
+}
+
+func (b base) with(kvs ...any) base {
+	if len(kvs) == 0 {
+		return b
+	}
+
+	if b.data == nil {
+		b.data = &node.Node{}
+	}
+
+	b.data = b.data.AddValues(context.Background(), stringify.Normalize(kvs...), node.DoNotAddToSpan())
+
+	return b
+}
+
+func (b base) getOTELKVAttrs() []attribute.KeyValue {
+	if b.data == nil {
+		return nil
+	}
+
+	return b.data.OTELAttributes()
 }
 
 var camel = regexp.MustCompile("([a-z0-9])([A-Z])")
