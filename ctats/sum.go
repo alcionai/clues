@@ -105,6 +105,7 @@ func RegisterSum(
 	return embedInCtx(ctx, b), nil
 }
 
+// Sum adds n to the current sum for the ID.
 // If a Sum instance has been registered for that ID, the
 // registered instance will be used.  If not, a new instance
 // will get generated.
@@ -117,9 +118,10 @@ type sum[N number] struct {
 	base
 }
 
-// With adds the provided attributes to the current builder.  These attrs will be provided to the metric when `.Ctx(ctx)` is caller.
+// With adds the provided attributes to the current builder.
+// These attrs will be provided to the metric when `.Ctx(ctx)` is caller.
 func (c sum[N]) With(kvs ...any) sum[N] {
-	return sum[N]{base: c.base.with(kvs...)}
+	return sum[N]{base: c.with(kvs...)}
 }
 
 // Add increments the sum by n. n can be negative.

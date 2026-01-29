@@ -118,7 +118,7 @@ type counter[N number] struct {
 }
 
 func (c counter[N]) With(kvs ...any) counter[N] {
-	return counter[N]{base: c.base.with(kvs...)}
+	return counter[N]{base: c.with(kvs...)}
 }
 
 type adder interface {

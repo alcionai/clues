@@ -24,6 +24,9 @@ func Comments(err error) node.CommentHistory {
 	result := node.CommentHistory{}
 
 	for _, ancestor := range ancs {
+		// this is not an equivalence assertion, and errors.As is not appropriate
+		// since we only want to build onto the most recent error.
+		//nolint:errorlint
 		ce, ok := ancestor.(*Err)
 		if !ok {
 			continue

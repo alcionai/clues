@@ -274,6 +274,9 @@ func SkipCaller(err error, depth int) *Err {
 		depth = 0
 	}
 
+	// this is not an equivalence assertion, and errors.As is not appropriate
+	// since we only want to build onto the most recent error.
+	//nolint:errorlint
 	e, ok := err.(*Err)
 	if !ok {
 		return newErr(err, "", map[string]any{}, depth+1)
@@ -363,6 +366,9 @@ func tryExtendErr(
 		return nil
 	}
 
+	// this is not an equivalence assertion, and errors.As is not appropriate
+	// since we only want to build onto the most recent error.
+	//nolint:errorlint
 	e, ok := err.(*Err)
 	if !ok {
 		e = newErr(err, msg, m, traceDepth+1)

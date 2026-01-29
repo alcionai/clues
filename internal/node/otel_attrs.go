@@ -93,9 +93,11 @@ func toFloat64Slice(v any) []float64 {
 		return tv
 	case []float32:
 		out := make([]float64, len(tv))
+
 		for i, val := range tv {
 			out[i] = float64(val)
 		}
+
 		return out
 	default:
 		return nil
