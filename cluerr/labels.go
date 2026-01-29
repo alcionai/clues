@@ -30,6 +30,9 @@ func HasLabel(err error, label string) bool {
 		return false
 	}
 
+	// this is not an equivalence assertion, and we want to control
+	// the unwrapping process ourselves.
+	//nolint:errorlint
 	if e, ok := err.(*Err); ok {
 		return e.HasLabel(label)
 	}
@@ -79,6 +82,9 @@ func (err *Err) Labels() map[string]struct{} {
 
 func Labels(err error) map[string]struct{} {
 	for err != nil {
+		// this is not an equivalence assertion, and we want to control
+		// the unwrapping process ourselves.
+		//nolint:errorlint
 		e, ok := err.(*Err)
 		if ok {
 			return e.Labels()

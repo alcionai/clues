@@ -117,7 +117,7 @@ type gauge[N number] struct {
 }
 
 func (c gauge[N]) With(kvs ...any) gauge[N] {
-	return gauge[N]{base: c.base.with(kvs...)}
+	return gauge[N]{base: c.with(kvs...)}
 }
 
 // Set sets the gauge to n.

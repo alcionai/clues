@@ -109,7 +109,11 @@ func (b base) with(kvs ...any) base {
 		b.data = &node.Node{}
 	}
 
-	b.data = b.data.AddValues(context.Background(), stringify.Normalize(kvs...), node.DoNotAddToSpan())
+	b.data = b.data.AddValues(
+		context.Background(),
+		stringify.Normalize(kvs...),
+		node.DoNotAddToSpan(),
+	)
 
 	return b
 }

@@ -856,6 +856,8 @@ func TestUnwrap(t *testing.T) {
 	we := cluerr.Wrap(e, "outer")
 
 	ce := we.Unwrap()
+
+	//nolint:errorlint // strict equivalence required to properly check unwrap
 	if ce != e {
 		t.Errorf("expected result error [%v] to be base error [%v]\n", ce, e)
 	}
@@ -863,6 +865,8 @@ func TestUnwrap(t *testing.T) {
 	se := cluerr.Stack(e)
 
 	ce = se.Unwrap()
+
+	//nolint:errorlint // strict equivalence required to properly check unwrap
 	if ce != e {
 		t.Errorf("expected result error [%v] to be base error [%v]\n", ce, e)
 	}

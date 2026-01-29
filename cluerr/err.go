@@ -74,6 +74,9 @@ func stackAncestorsOntoSelf(err error) []error {
 
 	errStack := []error{}
 
+	// this is not an equivalence assertion, and errors.As is not appropriate
+	// since we only want to build onto the most recent error.
+	//nolint:errorlint
 	ce, ok := err.(*Err)
 
 	if ok {
@@ -314,6 +317,9 @@ func unwrap(err error) error {
 		return nil
 	}
 
+	// this is not an equivalence assertion, and we want to control
+	// the unwrapping process ourselves.
+	//nolint:errorlint
 	if e, ok := err.(*Err); ok {
 		return e.e
 	}
@@ -371,6 +377,9 @@ func cluesIn(err error) map[string]any {
 		return map[string]any{}
 	}
 
+	// this is not an equivalence assertion, and we want to control
+	// the unwrapping process ourselves.
+	//nolint:errorlint
 	if e, ok := err.(*Err); ok {
 		return e.values()
 	}

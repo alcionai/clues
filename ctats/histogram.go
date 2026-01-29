@@ -117,7 +117,7 @@ type histogram[N number] struct {
 }
 
 func (c histogram[N]) With(kvs ...any) histogram[N] {
-	return histogram[N]{base: c.base.with(kvs...)}
+	return histogram[N]{base: c.with(kvs...)}
 }
 
 type recorder interface {

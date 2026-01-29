@@ -4,11 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 func TestGauge(t *testing.T) {
@@ -110,7 +109,11 @@ type recordingRecorder struct {
 	calls     int
 }
 
-func (r *recordingRecorder) Record(_ context.Context, v float64, opts ...metric.RecordOption) {
+func (r *recordingRecorder) Record(
+	_ context.Context,
+	v float64,
+	opts ...metric.RecordOption,
+) {
 	r.calls++
 	r.lastValue = v
 	r.lastOpts = opts

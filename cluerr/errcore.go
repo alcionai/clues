@@ -51,6 +51,9 @@ func ToCore(err error) *ErrCore {
 		return nil
 	}
 
+	// this is not an equivalence assertion, and errors.As is not appropriate
+	// since we only want to build onto the most recent error.
+	//nolint:errorlint
 	e, ok := err.(*Err)
 	if !ok {
 		e = newErr(err, "", nil, 1)
