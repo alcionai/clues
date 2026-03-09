@@ -16,9 +16,9 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.41.0
 	go.opentelemetry.io/otel/log v0.17.0
 	go.opentelemetry.io/otel/metric v1.42.0
-	go.opentelemetry.io/otel/sdk v1.41.0
+	go.opentelemetry.io/otel/sdk v1.42.0
 	go.opentelemetry.io/otel/sdk/log v0.17.0
-	go.opentelemetry.io/otel/sdk/metric v1.41.0
+	go.opentelemetry.io/otel/sdk/metric v1.42.0
 	go.opentelemetry.io/otel/trace v1.42.0
 	go.uber.org/zap v1.27.1
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
