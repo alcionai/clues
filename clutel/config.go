@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	sdkMetric "go.opentelemetry.io/otel/sdk/metric"
+	sdkTrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/resource"
 
 	"github.com/alcionai/clues/internal/node"
@@ -45,6 +46,9 @@ type OTELConfig struct {
 
 	// meterExporterOpts contains options to apply to the meter provider's default reader.
 	meterExporterOpts []otlpmetricgrpc.Option
+
+	// sampler controls trace sampling. Defaults to AlwaysSample when nil.
+	sampler sdkTrace.Sampler
 }
 
 // NewConfig creates a new OTELConfig with the given parameters and options.  All
@@ -53,7 +57,7 @@ type OTELConfig struct {
 func NewConfig(
 	rsrc *resource.Resource,
 	grpcEndpoint string,
-	opts ...option,
+	opts ...Option,
 ) OTELConfig {
 	oc := &OTELConfig{
 		Resource:     rsrc,
@@ -65,18 +69,28 @@ func NewConfig(
 	return *oc
 }
 
-type option func(o *OTELConfig)
+// Option configures an OTELConfig.
+type Option func(o *OTELConfig)
 
-func (oc *OTELConfig) applyOptions(opts ...option) {
+func (oc *OTELConfig) applyOptions(opts ...Option) {
 	for _, o := range opts {
 		o(oc)
+	}
+}
+
+// WithTraceSampler sets the trace sampler used by the TracerProvider.
+// Defaults to AlwaysSample when not specified.
+// Use sdktrace.ParentBased(sdktrace.TraceIDRatioBased(rate)) for probabilistic sampling.
+func WithTraceSampler(sampler sdkTrace.Sampler) Option {
+	return func(o *OTELConfig) {
+		o.sampler = sampler
 	}
 }
 
 // WithDeltaTemporalityMeter sets the OTLP metric exporter to use delta temporality
 // for the MeterProvider instrument.  This only affects Sum (ie: OTELCounter) type
 // metric aggregations.
-func WithDeltaTemporalityMeter() option {
+func WithDeltaTemporalityMeter() Option {
 	return func(o *OTELConfig) {
 		o.meterExporterOpts = append(
 			o.meterExporterOpts,
@@ -91,7 +105,7 @@ var BlockAllBaggage baggagecopy.Filter = func(baggage.Member) bool { return fals
 
 // WithBlockAllBaggage sets the OTELConfig to block copying all memebers of baggage to
 // a span.
-func WithBlockAllBaggage() option {
+func WithBlockAllBaggage() Option {
 	return func(o *OTELConfig) {
 		o.Filter = BlockAllBaggage
 	}
@@ -103,7 +117,7 @@ var AllowAllBaggage baggagecopy.Filter = func(baggage.Member) bool { return true
 
 // WithAllowAllBaggage sets the OTELConfig to allow copying all memebers of baggage to
 // a span.
-func WithAllowAllBaggage() option {
+func WithAllowAllBaggage() Option {
 	return func(o *OTELConfig) {
 		o.Filter = AllowAllBaggage
 	}
@@ -116,5 +130,6 @@ func (oc OTELConfig) toInternalConfig() node.OTELConfig {
 		GRPCEndpoint:      oc.GRPCEndpoint,
 		Filter:            oc.Filter,
 		MeterExporterOpts: oc.meterExporterOpts,
+		Sampler:           oc.sampler,
 	}
 }
