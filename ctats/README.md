@@ -97,11 +97,48 @@ values are `float64`s behind the scenes. Easier to avoid the problem
 of potential conflicts altogether. What, would you prefer that we
 panic?
 
-## Corner Case: histogram bucket definitions
+## Histogram bucket boundaries
 
-You can't define your histogram buckets with Ctats. Why? Because
-[OTEL doesn't let you define them at runtime either](https://github.com/open-telemetry/opentelemetry-go/issues/3826).
-You'll have to take it up with the package authors, not us.
+The OTel Go SDK uses explicit bucket boundaries that top out at **10,000**
+by default Any observation above that ceiling lands in the `+Inf` overflow bucket.
+
+Boundaries can be passed to the OTel SDK at instrument creation time.
+They take effect only when **no matching View** has been configured on the
+`MeterProvider`; a View always takes precedence (per the OTel spec).
+
+Pass `WithBoundaries` when constructing a histogram to supply
+[explicit bucket boundaries](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation):
+
+`ctats.DefaultLatencyBoundariesMs` provides 20 logarithmically-spaced buckets from
+**1 to 60,000**. This is suitable for measuring latencies in milliseconds up to 60 seconds, with finer resolution and the low end of the range.
+
+```go
+ctats.Histogram[int64](
+    "op.latency_ms",
+    ctats.WithBoundaries(ctats.DefaultLatencyBoundariesMs...),
+).Record(ctx, elapsed)
+```
+
+Use `ExponentialBoundaries(min, max float64, count int)` to generate
+logarithmically-spaced buckets between any min/max with any resolution:
+
+```go
+boundaries := ctats.ExponentialBoundaries(1, 120_000, 30)
+
+ctats.Histogram[int64](
+    "op.latency_ms",
+    ctats.WithBoundaries(boundaries...),
+).Record(ctx, elapsed)
+```
+
+### Future: automatic exponential histograms
+
+The better long-term solution might be
+[`AggregationBase2ExponentialHistogram`](https://pkg.go.dev/go.opentelemetry.io/otel/sdk/metric#AggregationBase2ExponentialHistogram)
+— it auto-scales and has no ceiling. However, the
+Elasticsearch [`exponential_histogram`](https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/exponential-histogram)
+field type does **not yet support the `percentiles` aggregation**. Until ES ships that support, explicit bucket boundaries remain
+the only viable approach for percentile queries in Kibana.
 
 ## Sum vs Counter vs Gauge
 

@@ -3,6 +3,7 @@ package ctats
 import (
 	"context"
 	"log"
+	"math"
 
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
@@ -11,12 +12,55 @@ import (
 	"github.com/alcionai/clues/internal/node"
 )
 
-// getOrCreateHistogram attempts to retrieve a histogram from the
-// context with the given ID.  If it is unable to find a histogram
-// with that ID, a new histogram is generated.
+// DefaultLatencyBoundariesMs are logarithmically-spaced bucket boundaries from
+// 1 to 60_000, suitable for measuring operation latency in milliseconds up to 60s.
+// Use with WithBoundaries to avoid the OTel SDK default ceiling of 10,000.
+var DefaultLatencyBoundariesMs = ExponentialBoundaries(1, 60_000, 20)
+
+// ExponentialBoundaries returns count boundaries spaced logarithmically between
+// min and max (both inclusive), mirroring Prometheus's ExponentialBucketsRange:
+// https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#ExponentialBucketsRange
+//
+// Example:
+//
+//	ExponentialBoundaries(1, 60_000, 20)
+//	// → [1 2 3 6 10 18 32 58 103 183 327 584 1042 1859 3317 5919 10561 18845 33626 60000]
+func ExponentialBoundaries(min, max float64, count int) []float64 {
+	if count < 2 {
+		return []float64{min, max}
+	}
+
+	factor := math.Pow(max/min, 1/float64(count-1))
+	b := make([]float64, count)
+
+	for i := range b {
+		b[i] = math.Round(min * math.Pow(factor, float64(i)))
+	}
+
+	b[count-1] = max // guarantee exact ceiling, no rounding drift
+
+	return b
+}
+
+type HistogramOption func(*histogramConfig)
+
+type histogramConfig struct {
+	boundaries []float64
+}
+
+// WithBoundaries sets explicit bucket boundaries on the histogram.
+// Boundaries are passed to the OTel SDK at instrument creation time and are
+// ignored if a matching MeterProvider View is already configured.
+func WithBoundaries(boundaries ...float64) HistogramOption {
+	return func(c *histogramConfig) {
+		c.boundaries = boundaries
+	}
+}
+
 func getOrCreateHistogram(
 	ctx context.Context,
 	id string,
+	boundaries []float64,
 ) (recorder, error) {
 	id = formatID(id)
 	b := fromCtx(ctx)
@@ -36,7 +80,12 @@ func getOrCreateHistogram(
 		return nil, cluerr.Stack(errNoNodeInCtx)
 	}
 
-	hist, err := nc.OTELMeter().Float64Histogram(id)
+	var opts []metric.Float64HistogramOption
+	if len(boundaries) > 0 {
+		opts = append(opts, metric.WithExplicitBucketBoundaries(boundaries...))
+	}
+
+	hist, err := nc.OTELMeter().Float64Histogram(id, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "making new histogram")
 	}
@@ -61,6 +110,7 @@ func RegisterHistogram(
 	// (optional) a short description about the metric.
 	// Ex: "number of times we saw the fnords".
 	description string,
+	opts ...HistogramOption,
 ) (context.Context, error) {
 	id = formatID(id)
 
@@ -82,18 +132,26 @@ func RegisterHistogram(
 		return ctx, errors.New("no clues in ctx")
 	}
 
-	opts := []metric.Float64HistogramOption{}
+	cfg := &histogramConfig{}
+	for _, o := range opts {
+		o(cfg)
+	}
+
+	var instrumentOpts []metric.Float64HistogramOption
 
 	if len(description) > 0 {
-		opts = append(opts, metric.WithDescription(description))
+		instrumentOpts = append(instrumentOpts, metric.WithDescription(description))
 	}
 
 	if len(unit) > 0 {
-		opts = append(opts, metric.WithUnit(unit))
+		instrumentOpts = append(instrumentOpts, metric.WithUnit(unit))
 	}
 
-	// register the histogram
-	hist, err := nc.OTELMeter().Float64Histogram(id, opts...)
+	if len(cfg.boundaries) > 0 {
+		instrumentOpts = append(instrumentOpts, metric.WithExplicitBucketBoundaries(cfg.boundaries...))
+	}
+
+	hist, err := nc.OTELMeter().Float64Histogram(id, instrumentOpts...)
 	if err != nil {
 		return ctx, errors.Wrap(err, "creating histogram")
 	}
@@ -103,21 +161,29 @@ func RegisterHistogram(
 	return embedInCtx(ctx, b), nil
 }
 
-// Histogram returns a histogram factory for the provided id.
-// If a Histogram instance has been registered for that ID, the
-// registered instance will be used.  If not, a new instance
-// will get generated.
-func Histogram[N number](id string) histogram[N] {
-	return histogram[N]{base: base{id: formatID(id)}}
+// Histogram returns a histogram factory for the given id. If the id was
+// previously registered via RegisterHistogram that instance is reused;
+// otherwise a new one is created on the first Record call.
+func Histogram[N number](id string, opts ...HistogramOption) histogram[N] {
+	cfg := &histogramConfig{}
+	for _, o := range opts {
+		o(cfg)
+	}
+
+	return histogram[N]{
+		base:       base{id: formatID(id)},
+		boundaries: cfg.boundaries,
+	}
 }
 
 // histogram provides access to the factory functions.
 type histogram[N number] struct {
 	base
+	boundaries []float64
 }
 
 func (c histogram[N]) With(kvs ...any) histogram[N] {
-	return histogram[N]{base: c.with(kvs...)}
+	return histogram[N]{base: c.with(kvs...), boundaries: c.boundaries}
 }
 
 type recorder interface {
@@ -130,7 +196,7 @@ func (n noopRecorder) Record(context.Context, float64, ...metric.RecordOption) {
 
 // Add increments the histogram by n. n can be negative.
 func (c histogram[number]) Record(ctx context.Context, n number) {
-	hist, err := getOrCreateHistogram(ctx, c.getID())
+	hist, err := getOrCreateHistogram(ctx, c.getID(), c.boundaries)
 	if err != nil {
 		log.Printf("err getting histogram: %+v\n", err)
 		return
