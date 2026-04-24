@@ -7,8 +7,8 @@ import (
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	sdkMetric "go.opentelemetry.io/otel/sdk/metric"
-	sdkTrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdkTrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/alcionai/clues/internal/node"
 )
