@@ -48,7 +48,7 @@ type OTELConfig struct {
 	meterExporterOpts []otlpmetricgrpc.Option
 
 	// sampler controls trace sampling. Defaults to AlwaysSample when nil.
-	sampler sdkTrace.Sampler
+	traceSampler sdkTrace.Sampler
 }
 
 // NewConfig creates a new OTELConfig with the given parameters and options.  All
@@ -81,9 +81,9 @@ func (oc *OTELConfig) applyOptions(opts ...Option) {
 // WithTraceSampler sets the trace sampler used by the TracerProvider.
 // Defaults to AlwaysSample when not specified.
 // Use sdktrace.ParentBased(sdktrace.TraceIDRatioBased(rate)) for probabilistic sampling.
-func WithTraceSampler(sampler sdkTrace.Sampler) Option {
+func WithTraceSampler(traceSampler sdkTrace.Sampler) Option {
 	return func(o *OTELConfig) {
-		o.sampler = sampler
+		o.traceSampler = traceSampler
 	}
 }
 
@@ -130,6 +130,6 @@ func (oc OTELConfig) toInternalConfig() node.OTELConfig {
 		GRPCEndpoint:      oc.GRPCEndpoint,
 		Filter:            oc.Filter,
 		MeterExporterOpts: oc.meterExporterOpts,
-		Sampler:           oc.sampler,
+		Sampler:           oc.traceSampler,
 	}
 }
