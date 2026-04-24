@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
+	sdkTrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/alcionai/clues/cluerr"
@@ -573,6 +574,50 @@ func TestSetSpanErrorM(t *testing.T) {
 				clutel.SetSpanErrorM(ctx, test.msg)
 			})
 		}
+	}
+}
+
+func TestWithTraceSampler(t *testing.T) {
+	table := []struct {
+		name            string
+		sampler         sdkTrace.Sampler
+		expectRecording bool
+	}{
+		{
+			name:            "default_always_samples",
+			sampler:         nil,
+			expectRecording: true,
+		},
+		{
+			name:            "explicit_always_sample",
+			sampler:         sdkTrace.AlwaysSample(),
+			expectRecording: true,
+		},
+		{
+			name:            "never_sample",
+			sampler:         sdkTrace.NeverSample(),
+			expectRecording: false,
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.name, func(t *testing.T) {
+			var cfg clutel.OTELConfig
+			if test.sampler != nil {
+				cfg = clutel.NewConfig(nil, "localhost:4317", clutel.WithTraceSampler(test.sampler))
+			} else {
+				cfg = clutel.NewConfig(nil, "localhost:4317")
+			}
+
+			ctx, err := clutel.Init(t.Context(), "test", cfg)
+			require.NoError(t, err)
+
+			ctx = clutel.StartSpan(ctx, "test-span")
+			defer clutel.EndSpan(ctx)
+
+			span := clutel.GetSpan(ctx)
+			assert.Equal(t, test.expectRecording, span.IsRecording())
+		})
 	}
 }
 

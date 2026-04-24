@@ -117,6 +117,9 @@ type OTELConfig struct {
 
 	// MeterExporterOpts contains options to apply to the meter provider's exporter.
 	MeterExporterOpts []otlpmetricgrpc.Option
+
+	// Sampler controls trace sampling. Defaults to AlwaysSample when nil.
+	Sampler sdkTrace.Sampler
 }
 
 // ------------------------------------------------------------
@@ -173,7 +176,8 @@ func NewOTELClient(
 	client.TracerProvider, err = newTracerProvider(ctx,
 		client.grpcConn,
 		server,
-		config.Filter)
+		config.Filter,
+		config.Sampler)
 	if err != nil {
 		closeClient()
 		return nil, errors.Wrap(err, "generating a tracer provider")
@@ -231,6 +235,7 @@ func newTracerProvider(
 	conn *grpc.ClientConn,
 	server *resource.Resource,
 	filter baggagecopy.Filter,
+	sampler sdkTrace.Sampler,
 ) (*sdkTrace.TracerProvider, error) {
 	if ctx == nil {
 		return nil, errors.New("nil ctx")
@@ -252,14 +257,13 @@ func newTracerProvider(
 
 	baggageCopySpanProcessor := baggagecopy.NewSpanProcessor(filter)
 
+	if sampler == nil {
+		sampler = sdkTrace.AlwaysSample()
+	}
+
 	tracerProvider := sdkTrace.NewTracerProvider(
 		sdkTrace.WithResource(server),
-		// FIXME: need to investigate other options...
-		// * case handling for parent-not-sampled
-		// * blocking on full queue
-		// * max queue size
-		// FIXME: need to refine trace sampling.
-		sdkTrace.WithSampler(sdkTrace.AlwaysSample()),
+		sdkTrace.WithSampler(sampler),
 		sdkTrace.WithSpanProcessor(batchSpanProcessor),
 		sdkTrace.WithSpanProcessor(baggageCopySpanProcessor),
 		sdkTrace.WithRawSpanLimits(sdkTrace.SpanLimits{
