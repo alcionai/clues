@@ -133,7 +133,7 @@ Still optional though. Pass `WithBoundaries` directly to the `Histogram`
 factory and the instrument is created on the first `Record` call. Just keep
 in mind that the first creation wins — if the same id was already registered
 or recorded against with different boundaries, the new ones are silently
-ignored. Again, would you prefer that we panic?
+ignored.
 
 ### Picking your boundaries
 
