@@ -106,7 +106,7 @@ about your data's distribution first. This is because the OTEL histograms
 store observations in pre-defined buckets. The default boundaries top out at
 **10,000** — anything above that disappears into an overflow bucket.
 
-[this explainer](https://signoz.io/blog/opentelemetry-histogram/) is a good read
+[This explainer](https://signoz.io/blog/opentelemetry-histogram/) is a good read
 if you want a deeper understanding of OTEL Histograms.
 
 However, the `ctats` API is just as easy to use as other metric types. The

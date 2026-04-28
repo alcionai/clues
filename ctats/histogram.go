@@ -22,8 +22,8 @@ var PresetLatencyBoundariesMs = ExponentialBoundaries(1, 60_000, 15)
 //
 // Example:
 //
-//	ExponentialBoundaries(1, 60_000, 20)
-//	// → [1 2 3 6 10 18 32 58 103 183 327 584 1042 1859 3317 5919 10561 18845 33626 60000]
+//	ExponentialBoundaries(1, 60_000, 15)
+//	// → [1 2 5 11 23 51 112 245 537 1179 2588 5679 12461 27344 60000]
 func ExponentialBoundaries(min, max float64, count int) []float64 {
 	if count < 2 {
 		return []float64{min, max}
@@ -56,6 +56,9 @@ func WithBoundaries(boundaries ...float64) HistogramOption {
 	}
 }
 
+// getOrCreateHistogram attempts to retrieve a histogram from the
+// context with the given ID.  If it is unable to find a histogram
+// with that ID, a new histogram is generated.
 func getOrCreateHistogram(
 	ctx context.Context,
 	id string,
@@ -84,6 +87,7 @@ func getOrCreateHistogram(
 		opts = append(opts, metric.WithExplicitBucketBoundaries(boundaries...))
 	}
 
+	// register the histogram
 	hist, err := nc.OTELMeter().Float64Histogram(id, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "making new histogram")
@@ -161,9 +165,10 @@ func RegisterHistogram(
 	return embedInCtx(ctx, b), nil
 }
 
-// Histogram returns a histogram factory for the given id. If the id was
-// previously registered via RegisterHistogram that instance is reused;
-// otherwise a new one is created on the first Record call.
+// Histogram returns a histogram factory for the provided id.
+// If a Histogram instance has been registered for that ID, the
+// registered instance will be used.  If not, a new instance
+// will get generated.
 func Histogram[N number](id string, opts ...HistogramOption) histogram[N] {
 	hgm := histogram[N]{base: base{id: formatID(id)}}
 	for _, o := range opts {
