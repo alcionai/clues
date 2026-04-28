@@ -42,17 +42,17 @@ func ExponentialBoundaries(min, max float64, count int) []float64 {
 	return b
 }
 
-type HistogramOption func(*histogramConfig)
-
-type histogramConfig struct {
+type histogramCfg struct {
 	boundaries []float64
 }
+
+type HistogramOption func(*histogramCfg)
 
 // WithBoundaries sets explicit bucket boundaries on the histogram.
 // Boundaries are passed to the OTel SDK at instrument creation time and are
 // ignored if a matching MeterProvider View is already configured.
 func WithBoundaries(boundaries ...float64) HistogramOption {
-	return func(c *histogramConfig) {
+	return func(c *histogramCfg) {
 		c.boundaries = boundaries
 	}
 }
@@ -99,17 +99,18 @@ func getOrCreateHistogram(
 
 // RegisterHistogram introduces a new histogram with the given unit and description.
 // If RegisterHistogram is not called before updating a metric value, a histogram with
-// no unit or description is created.  If RegisterHistogram is called for an ID that
+// no unit or description is created. If RegisterHistogram is called for an ID that
 // has already been registered, it no-ops.
 func RegisterHistogram(
 	ctx context.Context,
-	// all lowercase, period delimited id of the histogram. Ex: "http.response.status_code"
+	// all lowercase, period delimited id of the histogram. Ex: "http.response.size"
 	id string,
 	// (optional) the unit of measurement.  Ex: "byte", "kB", "fnords"
 	unit string,
 	// (optional) a short description about the metric.
 	// Ex: "number of times we saw the fnords".
 	description string,
+	// (optional) histogram specific options
 	opts ...HistogramOption,
 ) (context.Context, error) {
 	id = formatID(id)
@@ -132,26 +133,26 @@ func RegisterHistogram(
 		return ctx, errors.New("no clues in ctx")
 	}
 
-	cfg := &histogramConfig{}
+	var cfg histogramCfg
 	for _, o := range opts {
-		o(cfg)
+		o(&cfg)
 	}
 
-	var instrumentOpts []metric.Float64HistogramOption
+	var metricHistogramOpts []metric.Float64HistogramOption
 
 	if len(description) > 0 {
-		instrumentOpts = append(instrumentOpts, metric.WithDescription(description))
+		metricHistogramOpts = append(metricHistogramOpts, metric.WithDescription(description))
 	}
 
 	if len(unit) > 0 {
-		instrumentOpts = append(instrumentOpts, metric.WithUnit(unit))
+		metricHistogramOpts = append(metricHistogramOpts, metric.WithUnit(unit))
 	}
 
 	if len(cfg.boundaries) > 0 {
-		instrumentOpts = append(instrumentOpts, metric.WithExplicitBucketBoundaries(cfg.boundaries...))
+		metricHistogramOpts = append(metricHistogramOpts, metric.WithExplicitBucketBoundaries(cfg.boundaries...))
 	}
 
-	hist, err := nc.OTELMeter().Float64Histogram(id, instrumentOpts...)
+	hist, err := nc.OTELMeter().Float64Histogram(id, metricHistogramOpts...)
 	if err != nil {
 		return ctx, errors.Wrap(err, "creating histogram")
 	}
@@ -165,25 +166,22 @@ func RegisterHistogram(
 // previously registered via RegisterHistogram that instance is reused;
 // otherwise a new one is created on the first Record call.
 func Histogram[N number](id string, opts ...HistogramOption) histogram[N] {
-	cfg := &histogramConfig{}
+	hgm := histogram[N]{base: base{id: formatID(id)}}
 	for _, o := range opts {
-		o(cfg)
+		o(&hgm.histogramCfg)
 	}
 
-	return histogram[N]{
-		base:       base{id: formatID(id)},
-		boundaries: cfg.boundaries,
-	}
+	return hgm
 }
 
 // histogram provides access to the factory functions.
 type histogram[N number] struct {
 	base
-	boundaries []float64
+	histogramCfg
 }
 
 func (c histogram[N]) With(kvs ...any) histogram[N] {
-	return histogram[N]{base: c.with(kvs...), boundaries: c.boundaries}
+	return histogram[N]{base: c.with(kvs...), histogramCfg: c.histogramCfg}
 }
 
 type recorder interface {
@@ -194,7 +192,7 @@ type noopRecorder struct{}
 
 func (n noopRecorder) Record(context.Context, float64, ...metric.RecordOption) {}
 
-// Add increments the histogram by n. n can be negative.
+// Record records the measurement of n in the histogram.
 func (c histogram[number]) Record(ctx context.Context, n number) {
 	hist, err := getOrCreateHistogram(ctx, c.getID(), c.boundaries)
 	if err != nil {
