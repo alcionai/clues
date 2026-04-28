@@ -109,13 +109,13 @@ They take effect only when **no matching View** has been configured on the
 Pass `WithBoundaries` when constructing a histogram to supply
 [explicit bucket boundaries](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation):
 
-`ctats.DefaultLatencyBoundariesMs` provides 20 logarithmically-spaced buckets from
+`ctats.PresetLatencyBoundariesMs` provides 20 logarithmically-spaced buckets from
 **1 to 60,000**. This is suitable for measuring latencies in milliseconds up to 60 seconds, with finer resolution and the low end of the range.
 
 ```go
 ctats.Histogram[int64](
     "op.latency_ms",
-    ctats.WithBoundaries(ctats.DefaultLatencyBoundariesMs...),
+    ctats.WithBoundaries(ctats.PresetLatencyBoundariesMs...),
 ).Record(ctx, elapsed)
 ```
 

@@ -180,19 +180,19 @@ func TestExponentialBoundariesDefaultLatencyValues(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DefaultLatencyBoundariesMs
+// PresetLatencyBoundariesMs
 // ---------------------------------------------------------------------------
 
-func TestDefaultLatencyBoundariesMs(t *testing.T) {
-	assert.Len(t, DefaultLatencyBoundariesMs, 20, "should have 20 buckets")
-	assert.Equal(t, float64(1), DefaultLatencyBoundariesMs[0], "first boundary is 1 ms")
-	assert.Equal(t, float64(60_000), DefaultLatencyBoundariesMs[19], "last boundary is 60,000 ms")
+func TestPresetLatencyBoundariesMs(t *testing.T) {
+	assert.Len(t, PresetLatencyBoundariesMs, 20, "should have 20 buckets")
+	assert.Equal(t, float64(1), PresetLatencyBoundariesMs[0], "first boundary is 1 ms")
+	assert.Equal(t, float64(60_000), PresetLatencyBoundariesMs[19], "last boundary is 60,000 ms")
 
-	for i := 1; i < len(DefaultLatencyBoundariesMs); i++ {
+	for i := 1; i < len(PresetLatencyBoundariesMs); i++ {
 		assert.Greater(
 			t,
-			DefaultLatencyBoundariesMs[i],
-			DefaultLatencyBoundariesMs[i-1],
+			PresetLatencyBoundariesMs[i],
+			PresetLatencyBoundariesMs[i-1],
 			"boundaries must be strictly increasing at index %d",
 			i,
 		)
@@ -301,7 +301,7 @@ func TestRecordWithDefaultLatencyBoundaries(t *testing.T) {
 	reader := sdkMetric.NewManualReader()
 	ctx := ctatsCtx(t, reader)
 
-	Histogram[int64]("op.latency", WithBoundaries(DefaultLatencyBoundariesMs...)).Record(ctx, 15_000)
+	Histogram[int64]("op.latency", WithBoundaries(PresetLatencyBoundariesMs...)).Record(ctx, 15_000)
 
 	dp := collectHistogram(t, reader, "op.latency")
 

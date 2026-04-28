@@ -12,10 +12,9 @@ import (
 	"github.com/alcionai/clues/internal/node"
 )
 
-// DefaultLatencyBoundariesMs are logarithmically-spaced bucket boundaries from
+// PresetLatencyBoundariesMs are logarithmically-spaced bucket boundaries from
 // 1 to 60_000, suitable for measuring operation latency in milliseconds up to 60s.
-// Use with WithBoundaries to avoid the OTel SDK default ceiling of 10,000.
-var DefaultLatencyBoundariesMs = ExponentialBoundaries(1, 60_000, 20)
+var PresetLatencyBoundariesMs = ExponentialBoundaries(1, 60_000, 20)
 
 // ExponentialBoundaries returns count boundaries spaced logarithmically between
 // min and max (both inclusive), mirroring Prometheus's ExponentialBucketsRange:
