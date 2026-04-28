@@ -148,7 +148,7 @@ cluster near `min`, giving finer resolution where data is most likely to
 concentrate.
 
 ```go
-// example 1: measuring http server latencies in ms up to 60s
+// example: measuring http server latencies in ms up to 60s
 boundaries := ctats.MakeExponentialHistogramBoundaries(1, 60_000, 15, 1)
 
 ctats.Histogram[int64](
