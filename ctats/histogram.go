@@ -58,6 +58,14 @@ type histogramCfg struct {
 	boundaries []float64
 }
 
+func (c histogramCfg) appendOpts(opts []metric.Float64HistogramOption) []metric.Float64HistogramOption {
+	if len(c.boundaries) > 0 {
+		opts = append(opts, metric.WithExplicitBucketBoundaries(c.boundaries...))
+	}
+
+	return opts
+}
+
 type HistogramOption func(*histogramCfg)
 
 // WithBoundaries sets explicit bucket boundaries on the histogram.
@@ -75,7 +83,7 @@ func WithBoundaries(boundaries ...float64) HistogramOption {
 func getOrCreateHistogram(
 	ctx context.Context,
 	id string,
-	boundaries []float64,
+	cfg histogramCfg,
 ) (recorder, error) {
 	id = formatID(id)
 	b := fromCtx(ctx)
@@ -95,10 +103,7 @@ func getOrCreateHistogram(
 		return nil, cluerr.Stack(errNoNodeInCtx)
 	}
 
-	var opts []metric.Float64HistogramOption
-	if len(boundaries) > 0 {
-		opts = append(opts, metric.WithExplicitBucketBoundaries(boundaries...))
-	}
+	opts := cfg.appendOpts(nil)
 
 	// register the histogram
 	hist, err := nc.OTELMeter().Float64Histogram(id, opts...)
@@ -164,9 +169,7 @@ func RegisterHistogram(
 		metricHistogramOpts = append(metricHistogramOpts, metric.WithUnit(unit))
 	}
 
-	if len(cfg.boundaries) > 0 {
-		metricHistogramOpts = append(metricHistogramOpts, metric.WithExplicitBucketBoundaries(cfg.boundaries...))
-	}
+	metricHistogramOpts = cfg.appendOpts(metricHistogramOpts)
 
 	hist, err := nc.OTELMeter().Float64Histogram(id, metricHistogramOpts...)
 	if err != nil {
@@ -211,7 +214,7 @@ func (n noopRecorder) Record(context.Context, float64, ...metric.RecordOption) {
 
 // Record records the measurement of n in the histogram.
 func (c histogram[number]) Record(ctx context.Context, n number) {
-	hist, err := getOrCreateHistogram(ctx, c.getID(), c.boundaries)
+	hist, err := getOrCreateHistogram(ctx, c.getID(), c.histogramCfg)
 	if err != nil {
 		log.Printf("err getting histogram: %+v\n", err)
 		return
