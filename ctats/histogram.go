@@ -12,30 +12,42 @@ import (
 	"github.com/alcionai/clues/internal/node"
 )
 
-// PresetLatencyBoundariesMs are logarithmically-spaced bucket boundaries from
-// 1 to 60_000, suitable for measuring operation latency in milliseconds up to 60s.
-var PresetLatencyBoundariesMs = ExponentialBoundaries(1, 60_000, 15)
-
-// ExponentialBoundaries returns count boundaries spaced logarithmically between
-// min and max (both inclusive), mirroring Prometheus's ExponentialBucketsRange:
+// MakeExponentialHistogramBoundaries returns count boundaries spaced logarithmically
+// between min and max (both inclusive), mirroring Prometheus's ExponentialBucketsRange:
 // https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#ExponentialBucketsRange
+//
+// scalingFactor controls how densely buckets are packed toward the low end of the
+// range. At 1 (the default for any value ≤ 1), positions are uniformly log-spaced —
+// constant growth ratio between consecutive buckets. Values greater than 1 warp the
+// position distribution so that more bucket edges cluster near min.
 //
 // Example:
 //
-//	ExponentialBoundaries(1, 60_000, 15)
+//	MakeExponentialHistogramBoundaries(1, 60_000, 15, 1)
 //	// → [1 2 5 11 23 51 112 245 537 1179 2588 5679 12461 27344 60000]
-func ExponentialBoundaries(min, max float64, count int) []float64 {
+//
+//	MakeExponentialHistogramBoundaries(10, 1000, 5, 1)
+//	// → [10 32 100 316 1000]   (uniform log-spacing)
+//
+//	MakeExponentialHistogramBoundaries(10, 1000, 5, 2)
+//	// → [10 13 32 133 1000]    (denser at low end, same range)
+func MakeExponentialHistogramBoundaries(min, max float64, count int, scalingFactor float64) []float64 {
+	if scalingFactor <= 1 {
+		scalingFactor = 1
+	}
+
 	if count < 2 {
 		return []float64{min, max}
 	}
 
-	factor := math.Pow(max/min, 1/float64(count-1))
 	b := make([]float64, count)
 
 	for i := range b {
-		b[i] = math.Round(min * math.Pow(factor, float64(i)))
+		t := math.Pow(float64(i)/float64(count-1), scalingFactor)
+		b[i] = math.Round(min * math.Pow(max/min, t))
 	}
 
+	b[0] = min       // guarantee exact floor, no rounding drift
 	b[count-1] = max // guarantee exact ceiling, no rounding drift
 
 	return b

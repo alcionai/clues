@@ -108,7 +108,7 @@ func TestHistogramWithDoesNotMutateBase(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ExponentialBoundaries and preset variables
+// MakeExponentialHistogramBoundaries
 // ---------------------------------------------------------------------------
 
 func TestBoundaries(t *testing.T) {
@@ -118,24 +118,54 @@ func TestBoundaries(t *testing.T) {
 		want []float64
 	}{
 		{
-			name: "20-bucket latency range",
-			got:  ExponentialBoundaries(1, 60_000, 20),
-			want: []float64{1, 2, 3, 6, 10, 18, 32, 58, 103, 183, 327, 584, 1042, 1859, 3317, 5919, 10561, 18845, 33626, 60000},
-		},
-		{
-			name: "5-bucket range",
-			got:  ExponentialBoundaries(10, 1000, 5),
-			want: []float64{10, 32, 100, 316, 1000},
-		},
-		{
-			name: "count less than 2 returns min and max",
-			got:  ExponentialBoundaries(1, 100, 1),
+			name: "count less than 2 returns [min, max]",
+			got:  MakeExponentialHistogramBoundaries(1, 100, 1, 0),
 			want: []float64{1, 100},
 		},
 		{
-			name: "PresetLatencyBoundariesMs",
-			got:  PresetLatencyBoundariesMs,
+			name: "count less than 2 ignores scaling factor",
+			got:  MakeExponentialHistogramBoundaries(1, 100, 1, 5),
+			want: []float64{1, 100},
+		},
+		{
+			name: "scaling factor 0 treated as 1 (no-op)",
+			got:  MakeExponentialHistogramBoundaries(10, 1000, 5, 0),
+			want: []float64{10, 32, 100, 316, 1000},
+		},
+		{
+			name: "negative scaling factor treated as 1 (no-op)",
+			got:  MakeExponentialHistogramBoundaries(10, 1000, 5, -3),
+			want: []float64{10, 32, 100, 316, 1000},
+		},
+		{
+			name: "5 buckets, uniform log-spacing",
+			got:  MakeExponentialHistogramBoundaries(10, 1000, 5, 1),
+			want: []float64{10, 32, 100, 316, 1000},
+		},
+		{
+			name: "15 buckets, uniform log-spacing",
+			got:  MakeExponentialHistogramBoundaries(1, 60_000, 15, 1),
 			want: []float64{1, 2, 5, 11, 23, 51, 112, 245, 537, 1179, 2588, 5679, 12461, 27344, 60000},
+		},
+		{
+			name: "20 buckets, uniform log-spacing",
+			got:  MakeExponentialHistogramBoundaries(1, 60_000, 20, 1),
+			want: []float64{1, 2, 3, 6, 10, 18, 32, 58, 103, 183, 327, 584, 1042, 1859, 3317, 5919, 10561, 18845, 33626, 60000},
+		},
+		{
+			name: "scaling factor 2: finer resolution at low end, min and max preserved",
+			got:  MakeExponentialHistogramBoundaries(10, 1000, 5, 2),
+			want: []float64{10, 13, 32, 133, 1000},
+		},
+		{
+			name: "scaling factor 3: even finer resolution at low end",
+			got:  MakeExponentialHistogramBoundaries(10, 1000, 5, 3),
+			want: []float64{10, 11, 18, 70, 1000},
+		},
+		{
+			name: "scaling factor 5: extreme skewness, first intermediate bucket saturates to min",
+			got:  MakeExponentialHistogramBoundaries(10, 1000, 5, 5),
+			want: []float64{10, 10, 12, 30, 1000},
 		},
 	}
 
@@ -287,7 +317,8 @@ func TestRecordWithDefaultLatencyBoundaries(t *testing.T) {
 	reader := sdkMetric.NewManualReader()
 	ctx := ctatsCtx(t, reader)
 
-	Histogram[int64]("op.latency", WithBoundaries(PresetLatencyBoundariesMs...)).Record(ctx, 15_000)
+	boundaries := MakeExponentialHistogramBoundaries(1, 60_000, 15, 1)
+	Histogram[int64]("op.latency", WithBoundaries(boundaries...)).Record(ctx, 15_000)
 
 	dp := collectHistogram(t, reader, "op.latency")
 

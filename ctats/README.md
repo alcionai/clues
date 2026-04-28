@@ -115,12 +115,13 @@ Just register your buckets on init!  Simple as that.
 
 ```go
 func main() {
+  boundaries := ctats.MakeExponentialHistogramBoundaries(1, 60_000, 15, 1)
   ctx, err := ctats.RegisterHistogram(
     ctx,
     "op.latency",
     "ms",
     "End-to-end operation latency.",
-    ctats.WithBoundaries(ctats.PresetLatencyBoundariesMs...),
+    ctats.WithBoundaries(boundaries...),
   )
 }
 
@@ -137,17 +138,18 @@ ignored.
 
 ### Picking your boundaries
 
-For latency in milliseconds, `PresetLatencyBoundariesMs` is a sensible
-default: 15 logarithmically-spaced buckets from **1 ms to 60,000 ms**, with
-finer resolution at the low end where most data clusters.
+Use `MakeExponentialHistogramBoundaries` to generate logarithmically-spaced
+buckets. `min` and `max` determines the supported range of your metric.
 
-If your data has a different shape, use `ExponentialBoundaries` to generate
-your own range. Note that `min` must be greater than zero — the boundaries
-are log-spaced so zero has no meaningful place in the range:
+The optional `scalingFactor` controls how densely buckets are packed toward
+the low end of the range. At 1 (the default for any value ≤ 1) you get uniform
+log-spacing. Values greater than 1 warp the distribution so more bucket edges
+cluster near `min`, giving finer resolution where data is most likely to
+concentrate.
 
 ```go
-// background job duration in seconds: expected to time out at 1 hour
-boundaries := ctats.ExponentialBoundaries(1, 3_600, 10)
+// example 1: measuring http server latencies in ms up to 60s
+boundaries := ctats.MakeExponentialHistogramBoundaries(1, 60_000, 15, 1)
 
 ctats.Histogram[int64](
     "job.duration",
