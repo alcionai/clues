@@ -163,7 +163,7 @@ these simple questions and you'll be a master in no time!
 * Sum -> OTEL Counter
 * Counter -> OTEL UpDownCounter
 * Gauge -> OTEL Gauge (who knew?)
-* Histogram -> OTEL Histogram
+* Histogram -> OTEL Histogram (surprise!)
 
 Do you need `Delta Temporality`? Use a Sum, it's your only option!
 
