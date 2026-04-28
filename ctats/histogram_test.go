@@ -108,94 +108,41 @@ func TestHistogramWithDoesNotMutateBase(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ExponentialBoundaries
+// ExponentialBoundaries and preset variables
 // ---------------------------------------------------------------------------
 
-func TestExponentialBoundaries(t *testing.T) {
+func TestBoundaries(t *testing.T) {
 	testCases := []struct {
-		name    string
-		min     float64
-		max     float64
-		count   int
-		wantLen int
-		wantMin float64
-		wantMax float64
+		name string
+		got  []float64
+		want []float64
 	}{
 		{
-			name:    "standard 20-bucket latency range",
-			min:     1,
-			max:     60_000,
-			count:   20,
-			wantLen: 20,
-			wantMin: 1,
-			wantMax: 60_000,
+			name: "20-bucket latency range",
+			got:  ExponentialBoundaries(1, 60_000, 20),
+			want: []float64{1, 2, 3, 6, 10, 18, 32, 58, 103, 183, 327, 584, 1042, 1859, 3317, 5919, 10561, 18845, 33626, 60000},
 		},
 		{
-			name:    "small count",
-			min:     10,
-			max:     1000,
-			count:   5,
-			wantLen: 5,
-			wantMin: 10,
-			wantMax: 1000,
+			name: "5-bucket range",
+			got:  ExponentialBoundaries(10, 1000, 5),
+			want: []float64{10, 32, 100, 316, 1000},
 		},
 		{
-			name:    "count less than 2 returns min and max",
-			min:     1,
-			max:     100,
-			count:   1,
-			wantLen: 2,
-			wantMin: 1,
-			wantMax: 100,
+			name: "count less than 2 returns min and max",
+			got:  ExponentialBoundaries(1, 100, 1),
+			want: []float64{1, 100},
+		},
+		{
+			name: "PresetLatencyBoundariesMs",
+			got:  PresetLatencyBoundariesMs,
+			want: []float64{1, 2, 5, 11, 23, 51, 112, 245, 537, 1179, 2588, 5679, 12461, 27344, 60000},
 		},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			got := ExponentialBoundaries(test.min, test.max, test.count)
-
-			require.Len(t, got, test.wantLen, "boundary count")
-			assert.Equal(t, test.wantMin, got[0], "first boundary must equal min")
-			assert.Equal(t, test.wantMax, got[len(got)-1], "last boundary must equal max")
-
-			for i := 1; i < len(got); i++ {
-				assert.Greater(t, got[i], got[i-1], "boundaries must be strictly increasing at index %d", i)
-			}
+			assert.Equal(t, test.want, test.got)
 		})
-	}
-}
-
-func TestExponentialBoundariesDefaultLatencyValues(t *testing.T) {
-	// Spot-check the documented example output for ExponentialBoundaries(1, 60_000, 20).
-	got := ExponentialBoundaries(1, 60_000, 20)
-
-	require.Len(t, got, 20)
-	assert.Equal(t, float64(1), got[0])
-	assert.Equal(t, float64(60_000), got[19])
-
-	// Mid-range spot checks.
-	assert.Equal(t, float64(10), got[4])
-	assert.Equal(t, float64(327), got[10])
-	assert.Equal(t, float64(10561), got[16])
-}
-
-// ---------------------------------------------------------------------------
-// PresetLatencyBoundariesMs
-// ---------------------------------------------------------------------------
-
-func TestPresetLatencyBoundariesMs(t *testing.T) {
-	assert.Len(t, PresetLatencyBoundariesMs, 20, "should have 20 buckets")
-	assert.Equal(t, float64(1), PresetLatencyBoundariesMs[0], "first boundary is 1 ms")
-	assert.Equal(t, float64(60_000), PresetLatencyBoundariesMs[19], "last boundary is 60,000 ms")
-
-	for i := 1; i < len(PresetLatencyBoundariesMs); i++ {
-		assert.Greater(
-			t,
-			PresetLatencyBoundariesMs[i],
-			PresetLatencyBoundariesMs[i-1],
-			"boundaries must be strictly increasing at index %d",
-			i,
-		)
 	}
 }
 
@@ -296,7 +243,7 @@ func collectHistogram(
 // TestRecordWithDefaultLatencyBoundaries records a 15,000 ms value through the
 // full ctats.Record path.
 //
-// 15,000 falls between bounds[16]=10,561 and bounds[17]=18,845 → bucket index 17.
+// 15,000 falls between bounds[12]=12,461 and bounds[13]=27,344 → bucket index 13.
 func TestRecordWithDefaultLatencyBoundaries(t *testing.T) {
 	reader := sdkMetric.NewManualReader()
 	ctx := ctatsCtx(t, reader)
@@ -308,8 +255,8 @@ func TestRecordWithDefaultLatencyBoundaries(t *testing.T) {
 	assert.Equal(t, float64(60_000), dp.Bounds[len(dp.Bounds)-1], "last boundary is 60,000 ms")
 	assert.Equal(t, uint64(0), dp.BucketCounts[len(dp.BucketCounts)-1], "no overflow")
 
-	// 15,000 ms sits between bounds[16]=10,561 and bounds[17]=18,845
-	assert.Equal(t, uint64(1), dp.BucketCounts[17], "15,000 ms lands in bucket 17 (10561–18845 ms)")
+	// 15,000 ms sits between bounds[12]=12,461 and bounds[13]=27,344
+	assert.Equal(t, uint64(1), dp.BucketCounts[13], "15,000 ms lands in bucket 13 (12461–27344 ms)")
 }
 
 // TestRecordDefaultOTelBoundariesOverflow shows that without WithBoundaries,
