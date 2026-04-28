@@ -109,9 +109,8 @@ store observations in pre-defined buckets. The default boundaries top out at
 [This explainer](https://signoz.io/blog/opentelemetry-histogram/) is a good read
 if you want a deeper understanding of OTEL Histograms.
 
-However, the `ctats` API is just as easy to use as other metric types. The
-cleanest solution is to declare your histogram at startup with
-`RegisterHistogram`.
+So, how do you set yourself up for histogram success using ctats?
+Just register your buckets on init!  Simple as that.
 
 ```go
 func main() {
