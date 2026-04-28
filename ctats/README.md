@@ -106,8 +106,9 @@ about your data's distribution first. This is because the OTEL histograms
 store observations in pre-defined buckets. The default boundaries top out at
 **10,000** — anything above that disappears into an overflow bucket.
 
-[This explainer](https://signoz.io/blog/opentelemetry-histogram/) is a good read
-if you want a deeper understanding of OTEL Histograms.
+In case you're new to all this business,
+[here's a good read](https://signoz.io/blog/opentelemetry-histogram/)
+to catch you up with how histograms work under the hood.
 
 So, how do you set yourself up for histogram success using ctats?
 Just register your buckets on init!  Simple as that.
