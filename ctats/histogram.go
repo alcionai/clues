@@ -14,7 +14,7 @@ import (
 
 // PresetLatencyBoundariesMs are logarithmically-spaced bucket boundaries from
 // 1 to 60_000, suitable for measuring operation latency in milliseconds up to 60s.
-var PresetLatencyBoundariesMs = ExponentialBoundaries(1, 60_000, 20)
+var PresetLatencyBoundariesMs = ExponentialBoundaries(1, 60_000, 15)
 
 // ExponentialBoundaries returns count boundaries spaced logarithmically between
 // min and max (both inclusive), mirroring Prometheus's ExponentialBucketsRange:
