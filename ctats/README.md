@@ -129,7 +129,7 @@ func handler(ctx context.Context) {
 }
 ```
 
-Still optional though. Pass `WithBoundaries` directly to the `Histogram`
+Registering is optional. You can also pass `WithBoundaries` directly to the
 factory and the instrument is created on the first `Record` call. Just keep
 in mind that the first creation wins — if the same id was already registered
 or recorded against with different boundaries, the new ones are silently
