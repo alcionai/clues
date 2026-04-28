@@ -12,7 +12,7 @@ _noun_
 
 OTEL metrics, despite being an invaluable addition to service telemetry,
 require an obnoxiously verbose setup and implementation. Ctats isn't
-here to provide any new features. Instead in wants to make the current
+here to provide any new features. Instead it wants to make the current
 features more accessible and less painful.
 
 ### Step 1: Init OTEL with Clues
@@ -36,7 +36,7 @@ func main() {
 ```go
 func main() {
   // ...
-   ctx, err = ctats.Initialize(ctx)
+  ctx, err = ctats.Initialize(ctx)
   // ...
 }
 ```
@@ -46,11 +46,11 @@ func main() {
 ```go
 func main() {
   // We're not kidding, this step is purely optional.
-  ctx, err := ctats.RegisterHistogram(
+  ctx, err := ctats.RegisterSum(
     ctx,
-    "http.server.latency", // Name
-    "ms", // Unit
-    "New user additions.", // Description
+    "http.server.requests", // Name
+    "1",                    // Unit
+    "Incoming HTTP requests by status code.", // Description
   )
 }
 ```
@@ -59,10 +59,12 @@ func main() {
 
 ```go
 func handler(ctx context.Context) {
-  //...
-  ctats.Histogram[int64]("http.server.latency").Record(latency)
-  //...
-
+  // ...
+  ctats.Sum[int64]("http.server.requests").
+    With("status_code", statusCode).
+    Inc(ctx)
+  // ...
+}
 ```
 
 ## How it works
@@ -97,50 +99,63 @@ values are `float64`s behind the scenes. Easier to avoid the problem
 of potential conflicts altogether. What, would you prefer that we
 panic?
 
-## Histogram bucket boundaries
+## Histograms
 
-The OTel Go SDK uses explicit bucket boundaries that top out at **10,000**
-by default Any observation above that ceiling lands in the `+Inf` overflow bucket.
+Histograms are a bit more work than the other types because you have to think
+about your data's distribution first. This is because the OTEL histograms
+store observations in pre-defined buckets. The default boundaries top out at
+**10,000** — anything above that disappears into an overflow bucket.
 
-Boundaries can be passed to the OTel SDK at instrument creation time.
-They take effect only when **no matching View** has been configured on the
-`MeterProvider`; a View always takes precedence (per the OTel spec).
+[this explainer](https://signoz.io/blog/opentelemetry-histogram/) is a good read
+if you want a deeper understanding of OTEL Histograms.
 
-Pass `WithBoundaries` when constructing a histogram to supply
-[explicit bucket boundaries](https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation):
-
-`ctats.PresetLatencyBoundariesMs` provides 20 logarithmically-spaced buckets from
-**1 to 60,000**. This is suitable for measuring latencies in milliseconds up to 60 seconds, with finer resolution and the low end of the range.
+However, the `ctats` API is just as easy to use as other metric types. The
+cleanest solution is to declare your histogram at startup with
+`RegisterHistogram`.
 
 ```go
-ctats.Histogram[int64](
-    "op.latency_ms",
+func main() {
+  ctx, err := ctats.RegisterHistogram(
+    ctx,
+    "op.latency",
+    "ms",
+    "End-to-end operation latency.",
     ctats.WithBoundaries(ctats.PresetLatencyBoundariesMs...),
-).Record(ctx, elapsed)
+  )
+}
+
+func handler(ctx context.Context) {
+  ctats.Histogram[int64]("op.latency").Record(ctx, elapsed)
+}
 ```
 
-Use `ExponentialBoundaries(min, max float64, count int)` to generate
-logarithmically-spaced buckets between any min/max with any resolution:
+Still optional though. Pass `WithBoundaries` directly to the `Histogram`
+factory and the instrument is created on the first `Record` call. Just keep
+in mind that the first creation wins — if the same id was already registered
+or recorded against with different boundaries, the new ones are silently
+ignored. Again, would you prefer that we panic?
+
+### Picking your boundaries
+
+For latency in milliseconds, `PresetLatencyBoundariesMs` is a sensible
+default: 15 logarithmically-spaced buckets from **1 ms to 60,000 ms**, with
+finer resolution at the low end where most data clusters.
+
+If your data has a different shape, use `ExponentialBoundaries` to generate
+your own range. Note that `min` must be greater than zero — the boundaries
+are log-spaced so zero has no meaningful place in the range:
 
 ```go
-boundaries := ctats.ExponentialBoundaries(1, 120_000, 30)
+// background job duration in seconds: expected to time out at 1 hour
+boundaries := ctats.ExponentialBoundaries(1, 3_600, 10)
 
 ctats.Histogram[int64](
-    "op.latency_ms",
+    "job.duration",
     ctats.WithBoundaries(boundaries...),
 ).Record(ctx, elapsed)
 ```
 
-### Future: automatic exponential histograms
-
-The better long-term solution might be
-[`AggregationBase2ExponentialHistogram`](https://pkg.go.dev/go.opentelemetry.io/otel/sdk/metric#AggregationBase2ExponentialHistogram)
-— it auto-scales and has no ceiling. However, the
-Elasticsearch [`exponential_histogram`](https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/exponential-histogram)
-field type does **not yet support the `percentiles` aggregation**. Until ES ships that support, explicit bucket boundaries remain
-the only viable approach for percentile queries in Kibana.
-
-## Sum vs Counter vs Gauge
+## Which metric type should I use?
 
 Feeling overwhelmed?  Not sure which type to pick?  Just answer
 these simple questions and you'll be a master in no time!
@@ -148,6 +163,7 @@ these simple questions and you'll be a master in no time!
 * Sum -> OTEL Counter
 * Counter -> OTEL UpDownCounter
 * Gauge -> OTEL Gauge (who knew?)
+* Histogram -> OTEL Histogram
 
 Do you need `Delta Temporality`? Use a Sum, it's your only option!
 
@@ -155,6 +171,8 @@ Do you need to decrement values? Use a Counter!
 
 Do you need have a single threaded, single source of truth? Try
 a Gauge!
+
+Do you need statistics such as percentiles? Use a Histogram!
 
 Sums are the most foolproof option all around.  Plug one in,
 count away.  Counters are nearly as good, if it weren't for the
