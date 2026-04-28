@@ -13,8 +13,9 @@ import (
 )
 
 // MakeExponentialHistogramBoundaries returns count boundaries spaced logarithmically
-// between min and max (both inclusive), mirroring Prometheus's ExponentialBucketsRange:
-// https://pkg.go.dev/github.com/prometheus/client_golang/prometheus#ExponentialBucketsRange
+// between min and max (both inclusive). For background on explicit bucket histograms
+// and how boundaries map to OTel buckets, see the OTel metrics SDK spec:
+// https://opentelemetry.io/docs/specs/otel/metrics/sdk/#explicit-bucket-histogram-aggregation
 //
 // scalingFactor controls how densely buckets are packed toward the low end of the
 // range. At 1 (the default for any value ≤ 1), positions are uniformly log-spaced —
