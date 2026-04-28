@@ -101,10 +101,10 @@ panic?
 
 ## Histograms
 
-Histograms are a bit more work than the other types because you have to think
-about your data's distribution first. This is because the OTEL histograms
-store observations in pre-defined buckets. The default boundaries top out at
-**10,000** — anything above that disappears into an overflow bucket.
+Histograms can be a bit more work than the other types because you have to think
+about your data's distribution ahead of time.  Sure, you can run with whatever
+OTEL uses as the default (15 buckets, scaling exponentially up to 10000), but is that
+really the best showcase for your data?  Probably not.
 
 In case you're new to all this business,
 [here's a good read](https://signoz.io/blog/opentelemetry-histogram/)
