@@ -186,6 +186,45 @@ func TestHistogramNoBoundariesByDefault(t *testing.T) {
 	assert.Nil(t, h.boundaries, "no boundaries by default")
 }
 
+func TestHistogramFirstBoundariesWin(t *testing.T) {
+	first := []float64{1, 10, 100}
+	second := []float64{500, 1000, 5000}
+
+	testCases := []struct {
+		name  string
+		setup func(t *testing.T, ctx context.Context) context.Context
+	}{
+		{
+			name: "first via factory Record",
+			setup: func(t *testing.T, ctx context.Context) context.Context {
+				Histogram[int64]("first.wins", WithBoundaries(first...)).Record(ctx, 50)
+				return ctx
+			},
+		},
+		{
+			name: "first via RegisterHistogram",
+			setup: func(t *testing.T, ctx context.Context) context.Context {
+				ctx, err := RegisterHistogram(ctx, "first.wins", "", "", WithBoundaries(first...))
+				require.NoError(t, err)
+				return ctx
+			},
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			reader := sdkMetric.NewManualReader()
+			ctx := ctatsCtx(t, reader)
+			ctx = test.setup(t, ctx)
+
+			Histogram[int64]("first.wins", WithBoundaries(second...)).Record(ctx, 50)
+
+			dp := collectHistogram(t, reader, "first.wins")
+			assert.Equal(t, float64(100), dp.Bounds[len(dp.Bounds)-1], "second boundaries ignored, first wins")
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Record end-to-end with real OTel MeterProvider
 // ---------------------------------------------------------------------------
