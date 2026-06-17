@@ -85,9 +85,14 @@ func Inherit(
 
 	to = node.EmbedInCtx(to, toNode)
 
+	// Carry the OTEL trace context (and baggage) from `from` onto `to`:
+	// serialize it out of `from` into the carrier, then extract it into `to`,
+	// capturing the returned context. The previous order (ReceiveTrace(from)
+	// then InjectTrace(to)) round-tripped through an empty carrier and dropped
+	// both return values, so no trace context was ever propagated.
 	details := map[string]string{}
-	ReceiveTrace(from, details)
-	InjectTrace(to, details)
+	InjectTrace(from, details)
+	to = ReceiveTrace(to, details)
 
 	return to
 }

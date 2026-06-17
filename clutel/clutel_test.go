@@ -799,3 +799,35 @@ func TestInherit(t *testing.T) {
 		})
 	}
 }
+
+// TestInherit_PropagatesTraceContext guards the trace-propagation half of
+// Inherit. The surrounding TestInherit only asserts the inherited OTEL client
+// (n.OTEL.ServiceName); it never inspects the span, so a regression in trace
+// propagation would go unnoticed. This detaches onto context.Background() (as a
+// fire-and-forget goroutine would) and asserts the originating trace.id - and
+// baggage - survive.
+func TestInherit_PropagatesTraceContext(t *testing.T) {
+	// Init registers the composite TraceContext+Baggage propagator and an OTEL
+	// client on the context (so Inherit's fromNode.OTEL != nil guard passes).
+	from, err := clutel.Init(t.Context(), "test", clutel.NewConfig(nil, "localhost:4317"))
+	require.NoError(t, err)
+
+	from = clutel.StartSpan(from, "originating-span")
+	defer clutel.EndSpan(from)
+
+	from, err = clutel.AddBaggage(from, "tenant", "acme")
+	require.NoError(t, err)
+
+	want := clutel.GetSpan(from).SpanContext().TraceID()
+	require.True(t, want.IsValid(),
+		"test setup: originating span must have a valid trace id")
+
+	// Detach onto a fresh background context, severed from cancellation.
+	detached := clutel.Inherit(from, context.Background(), true)
+
+	got := trace.SpanContextFromContext(detached).TraceID()
+	assert.Equal(t, want.String(), got.String(),
+		"trace.id must survive Inherit onto context.Background()")
+	assert.Equal(t, "acme", baggage.FromContext(detached).Member("tenant").Value(),
+		"baggage must survive Inherit onto context.Background()")
+}
