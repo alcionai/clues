@@ -29,6 +29,9 @@ type Concealer interface {
 	PlainString() string
 }
 
+// to appease the linter
+const reflectPtr = reflect.Pointer
+
 // ---------------------------------------------------------------------------
 // funcs
 // ---------------------------------------------------------------------------
@@ -64,7 +67,7 @@ func Marshal(a any, shouldConceal bool) string {
 
 	// protect against nil pointer values with value-receiver funcs
 	rvo := reflect.ValueOf(a)
-	if rvo.Kind() == reflect.Ptr && rvo.IsNil() {
+	if rvo.Kind() == reflectPtr && rvo.IsNil() {
 		return ""
 	}
 

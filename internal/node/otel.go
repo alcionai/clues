@@ -390,23 +390,23 @@ func (a Annotation) IsAttribute() bool {
 	return a.kind == "attribute"
 }
 
-func (a Annotation) KV() otelLog.KeyValue {
+func (a Annotation) KV() attribute.KeyValue {
 	if a.kind != "attribute" {
-		return otelLog.KeyValue{}
+		return attribute.KeyValue{}
 	}
 
 	// FIXME: needs extensive type support
 	switch a.v.(type) {
 	case int:
-		return otelLog.Int(a.k, a.v.(int))
+		return attribute.Int(a.k, a.v.(int))
 	case int64:
-		return otelLog.Int64(a.k, a.v.(int64))
+		return attribute.Int64(a.k, a.v.(int64))
 	case string:
-		return otelLog.String(a.k, a.v.(string))
+		return attribute.String(a.k, a.v.(string))
 	case bool:
-		return otelLog.Bool(a.k, a.v.(bool))
+		return attribute.Bool(a.k, a.v.(bool))
 	default: // everything else gets stringified
-		return otelLog.String(a.k, stringify.Marshal(a.v, false))
+		return attribute.String(a.k, stringify.Marshal(a.v, false))
 	}
 }
 
