@@ -9,7 +9,7 @@ require (
 	github.com/puzpuzpuz/xsync/v4 v4.5.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0
-	go.opentelemetry.io/contrib/processors/baggagecopy v0.16.1
+	go.opentelemetry.io/contrib/processors/baggagecopy v0.16.2
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.21.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.45.0

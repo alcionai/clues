@@ -1,5 +1,7 @@
 package clog
 
+import "reflect"
+
 // Default / Example labels
 const (
 	// good for categorizing debugging-level api call info.
@@ -29,3 +31,6 @@ const (
 	// who needs a logging level when you can use a label instead?
 	Warning = "clabel_warning"
 )
+
+// to appease the linter
+const reflectPtr = reflect.Pointer

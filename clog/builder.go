@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
 	otellog "go.opentelemetry.io/otel/log"
 	semconv "go.opentelemetry.io/otel/semconv/v1.32.0"
@@ -78,7 +79,7 @@ func (b builder) log(l logLevel, msg string) {
 	// set up an otel logging record
 	// if otelLog is nil, this will eventually no-op
 	record := otellog.Record{}
-	record.SetBody(otellog.StringValue(msg))
+	record.SetBody(attribute.StringValue(msg))
 	record.SetSeverity(toOTELSeverity(l))
 
 	// attach the error and its labels
@@ -189,9 +190,9 @@ func (b builder) log(l logLevel, msg string) {
 	pc, file, lineno, ok := runtime.Caller(callerSkip + 2)
 	if ok {
 		record.AddAttributes(
-			otellog.KeyValueFromAttribute(semconv.CodeFilePath(file)),
-			otellog.KeyValueFromAttribute(semconv.CodeLineNumber(lineno)),
-			otellog.String(
+			semconv.CodeFilePath(file),
+			semconv.CodeLineNumber(lineno),
+			attribute.String(
 				"log.caller",
 				strings.Join(
 					[]string{
@@ -206,7 +207,7 @@ func (b builder) log(l logLevel, msg string) {
 
 		if f := runtime.FuncForPC(pc); f != nil {
 			record.AddAttributes(
-				otellog.KeyValueFromAttribute(semconv.CodeFunctionName(f.Name())),
+				semconv.CodeFunctionName(f.Name()),
 			)
 		}
 	}
@@ -281,7 +282,7 @@ func (b *builder) StackTrace(key string) *builder {
 func getValue(v any) any {
 	rv := reflect.ValueOf(v)
 
-	if rv.Kind() != reflect.Ptr {
+	if rv.Kind() != reflectPtr {
 		return v
 	}
 
