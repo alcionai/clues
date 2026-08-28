@@ -14,6 +14,11 @@ _verb_
 ---
 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/alcionai/clues)](https://pkg.go.dev/github.com/alcionai/clues) [![goreportcard](https://goreportcard.com/badge/github.com/alcionai/clues)](https://goreportcard.com/report/github.com/alcionai/clues)
+## Deprecation notice
+
+alcionai/clues is deprecated as of August 28, 2026.
+
+## About
 
 Clues is a golang telemetry aid designed to simplify debugging down to an O(1) operation.
 What is O(1) debugging? That's when a single event provides all the runtime
